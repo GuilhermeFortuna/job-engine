@@ -1,0 +1,45 @@
+# Local secrets and environment
+.env
+.env.local
+.env.*.local
+
+# Python virtual environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+.pnpm-debug.log
+
+# Coverage and test output
+coverage/
+*.lcov
+
+# Build output
+dist/
+build/
+out/
+.next/
+.turbo/
+
+# IDE and OS noise
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini

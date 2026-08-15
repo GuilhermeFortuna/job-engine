@@ -1,6 +1,6 @@
 # CROSS-001: Repository and Local-Development Foundation
 
-**Status:** `READY`
+**Status:** `REVIEW`
 
 **Owner:** Unassigned
 
@@ -95,12 +95,119 @@ git diff --check
 
 ## Dispatch record
 
-- Worker: Unassigned
-- Branch/worktree: Unassigned
-- Dispatched at: Not dispatched
+- Worker: Cursor agent
+- Branch/worktree: `feat/cross-001-repository-foundation`
+- Dispatched at: 2026-08-15T19:54:00-03:00
 
 ## Completion record
 
-- Commit: Pending
-- Evidence: Pending
+- Commit: Pending until this branch is committed; SHA will be recorded after the foundation commit
+- Evidence: See below
 - Independent reviewer: Pending
+
+### Changed-file list
+
+- `README.md`
+- `.gitignore`
+- `.env.example`
+- `.node-version`
+- `.python-version`
+- `package.json`
+- `pnpm-workspace.yaml`
+- `pnpm-lock.yaml`
+- `compose.yaml`
+- `docs/development.md`
+- `docs/work-orders/cross-repo/CROSS-001-repository-foundation.md` (status/dispatch/completion)
+- `docs/work-orders/STATUS.md` (status/dispatch)
+- `docs/work-orders/cross-repo/README.md` (status)
+
+No `.env` file was created or committed. `.env.example` contains only local development placeholders.
+
+### Exact runtime/tool versions
+
+- Node.js `v24.18.0`
+- pnpm `10.34.5` (`packageManager` field and Corepack)
+- CPython `3.13.14` (`.python-version`; `uv python install 3.13.14`)
+- PostgreSQL image `postgres:17.11`
+
+### Required-validation transcript
+
+```text
+$ corepack pnpm --version
+10.34.5
+
+$ node --version
+v24.18.0
+
+$ python3 --version
+Python 3.13.14
+
+$ corepack pnpm install --frozen-lockfile
+Already up to date
+Done in 240ms using pnpm v10.34.5
+
+$ docker compose config
+name: job-engine
+services:
+  postgres:
+    environment:
+      POSTGRES_DB: job_engine
+      POSTGRES_PASSWORD: job_engine
+      POSTGRES_USER: job_engine
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      timeout: 5s
+      interval: 5s
+      retries: 10
+      start_period: 10s
+    image: postgres:17.11
+    ports:
+      - published: "5432"
+        target: 5432
+    volumes:
+      - source: postgres_data
+        target: /var/lib/postgresql/data
+volumes:
+  postgres_data:
+    name: job-engine_postgres_data
+
+$ docker compose up -d postgres
+Image postgres:17.11 Pulled
+Volume job-engine_postgres_data Created
+Container job-engine-postgres-1 Started
+
+$ docker compose ps
+NAME                    IMAGE            COMMAND                  SERVICE    CREATED         STATUS                   PORTS
+job-engine-postgres-1   postgres:17.11   "docker-entrypoint.s…"   postgres   8 seconds ago   Up 6 seconds (healthy)   0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+
+$ docker compose exec -T postgres pg_isready -U job_engine -d job_engine
+/var/run/postgresql:5432 - accepting connections
+
+$ corepack pnpm run check
+> job-engine@ check /home/gui/projects/job-engine
+> pnpm recursive --if-present run check
+No projects matched the filters in "/home/gui/projects/job-engine"
+
+$ docker compose down
+Container job-engine-postgres-1 Removed
+Network job-engine_default Removed
+
+$ docker volume ls --filter name=postgres_data
+local     job-engine_postgres_data
+
+$ git diff --check
+(no whitespace errors)
+
+$ git status --short
+(no .env; only owned foundation files and status/dispatch records)
+```
+
+### Health evidence
+
+`docker compose ps` reported `Up 6 seconds (healthy)` for `postgres:17.11`. `pg_isready -U job_engine -d job_engine` reported `accepting connections`. After `docker compose down` (without `-v`), named volume `job-engine_postgres_data` remained.
+
+### Secrets confirmation
+
+No `.env` file exists in the worktree. No credential beyond the documented local placeholder `job_engine` appears in committed files. `.gitignore` ignores `.env`.

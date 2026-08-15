@@ -1,0 +1,11 @@
+{
+  "name": "job-engine",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "scripts": {
+    "dev": "pnpm recursive --parallel --if-present run dev",
+    "check": "pnpm recursive --if-present run check",
+    "test": "pnpm recursive --if-present run test",
+    "build": "pnpm recursive --if-present run build"
+  }
+}
