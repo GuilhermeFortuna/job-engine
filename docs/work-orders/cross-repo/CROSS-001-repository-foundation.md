@@ -101,7 +101,7 @@ git diff --check
 
 ## Completion record
 
-- Commit: Pending until this branch is committed; SHA will be recorded after the foundation commit
+- Commit: `5a464cbdf9a4254cbd373ee8fef1431bdd08833d`
 - Evidence: See below
 - Independent reviewer: Pending
 
