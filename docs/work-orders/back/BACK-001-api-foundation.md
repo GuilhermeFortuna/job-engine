@@ -93,7 +93,7 @@ git diff --check
 
 ## Completion record
 
-- Commit: Pending (recorded after the implementation commit on `feat/back-001-api-foundation`)
+- Commit: `86f06602d0a82920974ea4c58ba54f8c5e879ef9`
 - Evidence: See below
 - Independent reviewer: Pending
 
