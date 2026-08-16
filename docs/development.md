@@ -79,6 +79,8 @@ corepack pnpm run check
 
 ## Database
 
+Compose publishes PostgreSQL only on IPv4 localhost (`127.0.0.1:${POSTGRES_PORT:-5432}`), matching `DATABASE_URL`.
+
 Start only the local PostgreSQL service:
 
 ```bash

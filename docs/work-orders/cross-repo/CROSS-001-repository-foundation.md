@@ -211,3 +211,33 @@ $ git status --short
 ### Secrets confirmation
 
 No `.env` file exists in the worktree. No credential beyond the documented local placeholder `job_engine` appears in committed files. `.gitignore` ignores `.env`.
+
+### Independent-review remediation (2026-08-16)
+
+CROSS-001 remains `REVIEW`. The original transcript above recorded `0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp` because the Compose port mapping had no host bind. Remediation binds the published port to IPv4 loopback only:
+
+```text
+ports:
+  - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+```
+
+Remediation validation (2026-08-16):
+
+```text
+$ docker compose config
+# ports[0].host_ip: 127.0.0.1  (yq unavailable; confirmed via rendered YAML)
+
+$ docker compose up -d postgres
+$ docker compose ps
+NAME                    IMAGE            COMMAND                  SERVICE    CREATED                  STATUS                                     PORTS
+job-engine-postgres-1   postgres:17.11   "docker-entrypoint.s…"   postgres   Less than a second ago   Up Less than a second (health: starting)   127.0.0.1:5432->5432/tcp
+
+$ docker compose exec -T postgres pg_isready -U job_engine -d job_engine
+/var/run/postgresql:5432 - accepting connections
+
+$ docker compose down
+$ docker volume ls --filter name=postgres_data
+local     job-engine_postgres_data
+```
+
+The named volume, health check, image pin, and environment interpolation are unchanged. This order is not marked `DONE`.
