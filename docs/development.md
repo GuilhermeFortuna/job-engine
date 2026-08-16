@@ -1,6 +1,6 @@
 # Local development
 
-This document covers the repository foundation: supported runtimes, environment keys, and the local PostgreSQL service. Application packages are added by later Work Orders (`BACK-001`, `FRONT-001`) and are not required to use these commands.
+This document covers supported runtimes, environment keys, the local PostgreSQL service, and backend package commands. The frontend application package is added by `FRONT-001`.
 
 ## Exact versions
 
@@ -20,7 +20,7 @@ These pins are also recorded in `.node-version`, `.python-version`, the root `pa
 - CPython 3.13.14 (`.python-version`; uv, pyenv, or an equivalent version manager)
 - Docker with Compose v2+
 
-Python dependencies are not installed at the repository root. `BACK-001` will manage them inside `apps/api`.
+Python dependencies are not installed at the repository root. They are managed with uv inside `apps/api`.
 
 ### Corepack on Fedora Node.js packages
 
@@ -71,7 +71,7 @@ Do not commit `.env`. The example contains only local development placeholders:
 corepack pnpm install --frozen-lockfile
 ```
 
-The root workspace currently has no application packages. Root scripts `dev`, `check`, `test`, and `build` run `pnpm recursive --if-present` over `apps/*` and `packages/*` and succeed while those directories are empty. Later package scripts are picked up automatically.
+Root scripts `dev`, `check`, `test`, and `build` run `pnpm recursive --if-present` over `apps/*` and `packages/*`. The backend wrapper package `@job-engine/api` is included automatically. Python dependencies stay in `apps/api` (`uv.lock`); they are not added to the root pnpm lockfile.
 
 ```bash
 corepack pnpm run check
@@ -109,3 +109,35 @@ docker compose down -v
 ```
 
 Only run this when you intentionally want an empty database on the next `docker compose up -d postgres`.
+
+## Backend (`apps/api`)
+
+Install Python dependencies from the locked uv environment (does not mutate a global Python installation):
+
+```bash
+cd apps/api && uv sync --frozen
+```
+
+`Settings` reads `DATABASE_URL` from the process environment only. It does not load `.env`. The documented default matches `.env.example`. To apply a local `.env` for the API process, export the variables or pass `--env-file ../../.env` to `uv run`.
+
+Workspace wrappers (also invoked by root `pnpm run check` / `test` / `build` / `dev`):
+
+```bash
+corepack pnpm --filter @job-engine/api run dev
+corepack pnpm --filter @job-engine/api run check
+corepack pnpm --filter @job-engine/api run test
+corepack pnpm --filter @job-engine/api run build
+```
+
+Equivalent uv commands from `apps/api`:
+
+```bash
+uv run uvicorn job_engine.main:create_app --factory --reload --host 127.0.0.1 --port 8000
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy src tests
+uv run pytest
+uv run python -c "from job_engine.main import create_app; create_app()"
+```
+
+`dev` serves `GET /api/v1/health` on `http://127.0.0.1:8000`. That route reports process health (`{"status":"ok"}`) and does not query PostgreSQL. `build` verifies that `create_app()` imports; it does not create a container.

@@ -4,7 +4,7 @@ Backend orders own Python/FastAPI domain behavior, source ingestion, PostgreSQL 
 
 | ID | Title | Status |
 | --- | --- | --- |
-| [BACK-001](BACK-001-api-foundation.md) | API foundation | `BLOCKED` |
+| [BACK-001](BACK-001-api-foundation.md) | API foundation | `REVIEW` |
 | [BACK-002](BACK-002-canonical-model-persistence.md) | Canonical model and persistence | `BLOCKED` |
 | [BACK-003](BACK-003-normalization-deduplication.md) | Normalization and deduplication | `BLOCKED` |
 | [BACK-004](BACK-004-adapter-contract-source-one.md) | Adapter contract and source one | `BLOCKED` |

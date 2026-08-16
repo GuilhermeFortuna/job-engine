@@ -1,0 +1,36 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Literal
+
+from fastapi import FastAPI
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncEngine
+
+from job_engine.config import Settings
+from job_engine.db.session import create_engine, create_session_factory
+
+
+class HealthResponse(BaseModel):
+    status: Literal["ok"]
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    yield
+    engine: AsyncEngine = app.state.engine
+    await engine.dispose()
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    resolved = Settings() if settings is None else settings
+    engine = create_engine(resolved.database_url)
+    app = FastAPI(lifespan=_lifespan, title="Job Engine API")
+    app.state.settings = resolved
+    app.state.engine = engine
+    app.state.session_factory = create_session_factory(engine)
+
+    @app.get("/api/v1/health", response_model=HealthResponse)
+    async def health() -> HealthResponse:
+        return HealthResponse(status="ok")
+
+    return app

@@ -1,0 +1,10 @@
+{
+  "name": "@job-engine/api",
+  "private": true,
+  "scripts": {
+    "dev": "uv run uvicorn job_engine.main:create_app --factory --reload --host 127.0.0.1 --port 8000",
+    "check": "uv run ruff check . && uv run ruff format --check . && uv run mypy src tests",
+    "test": "uv run pytest",
+    "build": "uv run python -c \"from job_engine.main import create_app; create_app()\""
+  }
+}
