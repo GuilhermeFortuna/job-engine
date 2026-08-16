@@ -15,7 +15,7 @@ This is the single status authority for all current and future Job Engine Work O
 | [CROSS-001](cross-repo/CROSS-001-repository-foundation.md) | Cross | `REVIEW` | None | Reproducible monorepo and local-development foundation |
 | [CROSS-002](cross-repo/CROSS-002-source-feasibility.md) | Cross | `REVIEW` | None | Approved three-source register with access evidence |
 | [BACK-001](back/BACK-001-api-foundation.md) | Backend | `BLOCKED` | CROSS-001 | FastAPI service and backend test foundation |
-| [FRONT-001](front/FRONT-001-web-foundation.md) | Frontend | `BLOCKED` | CROSS-001 | Next.js application and frontend test foundation |
+| [FRONT-001](front/FRONT-001-web-foundation.md) | Frontend | `REVIEW` | CROSS-001 | Next.js application and frontend test foundation |
 | [BACK-002](back/BACK-002-canonical-model-persistence.md) | Backend | `BLOCKED` | BACK-001 | Canonical job catalog models, migrations, and repositories |
 | [BACK-003](back/BACK-003-normalization-deduplication.md) | Backend | `BLOCKED` | BACK-002 | Deterministic normalization and duplicate grouping |
 | [BACK-004](back/BACK-004-adapter-contract-source-one.md) | Backend | `BLOCKED` | CROSS-002, BACK-002, BACK-003 | Adapter contract and first approved source |
@@ -50,6 +50,7 @@ Batch 01 is complete only when `CROSS-003` is `DONE`. Backend or frontend automa
 | --- | --- | --- | --- | --- |
 | [CROSS-001](cross-repo/CROSS-001-repository-foundation.md) | Cursor agent | `feat/cross-001-repository-foundation` | 2026-08-15T19:54:00-03:00 | Repository and local-development foundation |
 | [CROSS-002](cross-repo/CROSS-002-source-feasibility.md) | Cursor agent | `development` | not recorded | Source feasibility research; implementation commit `82e2147`; independent-review remediation on this branch |
+| [FRONT-001](front/FRONT-001-web-foundation.md) | Cursor agent | `feat/front-001-web-foundation` | 2026-08-16T20:15:00-03:00 | Next.js application and frontend test foundation |
 
 ## Project decision and exception record
 

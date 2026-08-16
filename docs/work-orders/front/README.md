@@ -4,7 +4,7 @@ Frontend orders own the Next.js/React interface, browser URL state, accessibilit
 
 | ID | Title | Status |
 | --- | --- | --- |
-| [FRONT-001](FRONT-001-web-foundation.md) | Web foundation | `BLOCKED` |
+| [FRONT-001](FRONT-001-web-foundation.md) | Web foundation | `REVIEW` |
 | [FRONT-002](FRONT-002-unified-search-ui.md) | Unified search UI | `BLOCKED` |
 | [FRONT-003](FRONT-003-job-details-resilience.md) | Job details and resilience | `BLOCKED` |
 

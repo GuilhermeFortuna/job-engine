@@ -1,6 +1,6 @@
 # Local development
 
-This document covers the repository foundation: supported runtimes, environment keys, and the local PostgreSQL service. Application packages are added by later Work Orders (`BACK-001`, `FRONT-001`) and are not required to use these commands.
+This document covers supported runtimes, environment keys, the local PostgreSQL service, and frontend package commands. The backend application package is added by `BACK-001`.
 
 ## Exact versions
 
@@ -62,6 +62,7 @@ Do not commit `.env`. The example contains only local development placeholders:
 | `POSTGRES_PASSWORD` | `job_engine` |
 | `POSTGRES_PORT` | `5432` |
 | `DATABASE_URL` | `postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine` |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://127.0.0.1:8000` |
 
 `compose.yaml` interpolates the same defaults, so `docker compose` also works before `.env` exists. Copying the example is still the normal local setup step.
 
@@ -71,7 +72,7 @@ Do not commit `.env`. The example contains only local development placeholders:
 corepack pnpm install --frozen-lockfile
 ```
 
-The root workspace currently has no application packages. Root scripts `dev`, `check`, `test`, and `build` run `pnpm recursive --if-present` over `apps/*` and `packages/*` and succeed while those directories are empty. Later package scripts are picked up automatically.
+Root scripts `dev`, `check`, `test`, and `build` run `pnpm recursive --if-present` over `apps/*` and `packages/*`. The frontend package `@job-engine/web` is included automatically. There is one lockfile, at the repository root.
 
 ```bash
 corepack pnpm run check
@@ -109,3 +110,23 @@ docker compose down -v
 ```
 
 Only run this when you intentionally want an empty database on the next `docker compose up -d postgres`.
+
+## Frontend (`apps/web`)
+
+`NEXT_PUBLIC_API_BASE_URL` is the public backend origin. It is validated in `apps/web/src/lib/env.ts` and defaults to `http://127.0.0.1:8000` only in local development. Do not put credentials in this variable.
+
+Workspace commands:
+
+```bash
+corepack pnpm --filter @job-engine/web run dev
+corepack pnpm --filter @job-engine/web run check
+corepack pnpm --filter @job-engine/web run test
+corepack pnpm --filter @job-engine/web run build
+```
+
+- `dev` serves the App Router foundation page (not a live job catalog).
+- `check` runs `next typegen`, strict `tsc --noEmit`, and ESLint. No separate formatter is installed.
+- `test` runs Vitest once (`vitest run`).
+- `build` produces the production Next.js build.
+
+The foundation page does not call the API. Later UI orders will read `getApiBaseUrl()` from `src/lib/env.ts`.
