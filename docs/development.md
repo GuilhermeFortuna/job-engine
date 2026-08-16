@@ -1,6 +1,6 @@
 # Local development
 
-This document covers supported runtimes, environment keys, the local PostgreSQL service, and backend package commands. The frontend application package is added by `FRONT-001`.
+This document covers supported runtimes, environment keys, the local PostgreSQL service, and backend and frontend package commands.
 
 ## Exact versions
 
@@ -62,6 +62,7 @@ Do not commit `.env`. The example contains only local development placeholders:
 | `POSTGRES_PASSWORD` | `job_engine` |
 | `POSTGRES_PORT` | `5432` |
 | `DATABASE_URL` | `postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine` |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://127.0.0.1:8000` |
 
 `compose.yaml` interpolates the same defaults, so `docker compose` also works before `.env` exists. Copying the example is still the normal local setup step.
 
@@ -71,7 +72,7 @@ Do not commit `.env`. The example contains only local development placeholders:
 corepack pnpm install --frozen-lockfile
 ```
 
-Root scripts `dev`, `check`, `test`, and `build` run `pnpm recursive --if-present` over `apps/*` and `packages/*`. The backend wrapper package `@job-engine/api` is included automatically. Python dependencies stay in `apps/api` (`uv.lock`); they are not added to the root pnpm lockfile.
+Root scripts `dev`, `check`, `test`, and `build` run `pnpm recursive --if-present` over `apps/*` and `packages/*`. The backend wrapper package `@job-engine/api` and the frontend package `@job-engine/web` are included automatically. Python dependencies stay in `apps/api` (`uv.lock`); they are not added to the root pnpm lockfile. There is one pnpm lockfile, at the repository root.
 
 ```bash
 corepack pnpm run check
@@ -141,3 +142,23 @@ uv run python -c "from job_engine.main import create_app; create_app()"
 ```
 
 `dev` serves `GET /api/v1/health` on `http://127.0.0.1:8000`. That route reports process health (`{"status":"ok"}`) and does not query PostgreSQL. `build` verifies that `create_app()` imports; it does not create a container.
+
+## Frontend (`apps/web`)
+
+`NEXT_PUBLIC_API_BASE_URL` is the public backend origin. It is validated in `apps/web/src/lib/env.ts` and defaults to `http://127.0.0.1:8000` only in local development. Do not put credentials in this variable.
+
+Workspace commands:
+
+```bash
+corepack pnpm --filter @job-engine/web run dev
+corepack pnpm --filter @job-engine/web run check
+corepack pnpm --filter @job-engine/web run test
+corepack pnpm --filter @job-engine/web run build
+```
+
+- `dev` serves the App Router foundation page (not a live job catalog).
+- `check` runs `next typegen`, strict `tsc --noEmit`, and ESLint. No separate formatter is installed.
+- `test` runs Vitest once (`vitest run`).
+- `build` produces the production Next.js build.
+
+The foundation page does not call the API. Later UI orders will read `getApiBaseUrl()` from `src/lib/env.ts`.

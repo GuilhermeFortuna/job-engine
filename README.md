@@ -14,16 +14,16 @@ The intended user is a software developer living in Brazil who is primarily look
 - [Work Order status](docs/work-orders/STATUS.md)
 - [Local development](docs/development.md)
 
-## Foundation-stage startup
+## Local startup
 
-This repository currently provides the monorepo root and a local PostgreSQL service. Backend and frontend application packages are not part of this foundation.
+This repository provides the monorepo root, a local PostgreSQL service, the FastAPI health service in `apps/api`, and the Next.js web foundation in `apps/web`. The foundation page is not a live job catalog; search UI belongs to later Work Orders.
 
 ```bash
 cp .env.example .env
 corepack pnpm install --frozen-lockfile
 docker compose up -d postgres
 docker compose exec -T postgres pg_isready -U job_engine -d job_engine
-corepack pnpm run check
+corepack pnpm --filter @job-engine/web run dev
 ```
 
-Stop the database with `docker compose down`. That command keeps the named volume. See [local development](docs/development.md) for prerequisites, exact versions, health checks, and the separately documented destructive volume reset.
+`corepack pnpm run check` typechecks, lints, and tests workspace packages that define those scripts. Stop the database with `docker compose down`. That command keeps the named volume. See [local development](docs/development.md) for prerequisites, exact versions, backend and frontend commands, health checks, and the separately documented destructive volume reset.

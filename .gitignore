@@ -33,6 +33,7 @@ build/
 out/
 .next/
 .turbo/
+*.tsbuildinfo
 
 # IDE and OS noise
 .idea/
