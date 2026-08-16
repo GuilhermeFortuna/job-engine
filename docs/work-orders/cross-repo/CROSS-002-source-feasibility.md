@@ -1,6 +1,6 @@
 # CROSS-002: V1 Source Feasibility and Selection
 
-**Status:** `READY`
+**Status:** `REVIEW`
 
 **Owner:** Unassigned
 
@@ -103,13 +103,16 @@ The handoff must also include a manual link check for every primary source's off
 
 ## Dispatch record
 
-- Worker: Unassigned
-- Branch/worktree: Unassigned
-- Dispatched at: Not dispatched
+- Worker: Cursor agent (original dispatch identity was not recorded in this Work Order)
+- Branch/worktree: `development`
+- Dispatched at: not recorded
 
 ## Completion record
 
-- Commit: Pending
-- Evidence: Pending
+- Implementation commit: `82e214707983dd5cb17e4f9ed7d79ad0617a5ddd`
+- Remediation commit: the `fix(cross-002): correct source evidence and review records` commit on `development` immediately after `64cea1a`
+- Evidence: [`docs/sources/v1-source-register.md`](../../sources/v1-source-register.md) §1–§3 (decision, mapping, classification rule, historical correction), §4.3 (WWR reclassification), §8–§10 (trio math, utility, staleness/closure defaults), §12–§14 (gates and review request)
 - Independent reviewer: Pending
+
+This order is `REVIEW`, not `DONE`. Owner acceptance of the source set is still required. BACK-004, BACK-005, and BACK-006 remain `BLOCKED` with adapter placeholders unbound.
 

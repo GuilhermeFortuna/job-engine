@@ -2,7 +2,7 @@
 
 **Work order:** [CROSS-002](../work-orders/cross-repo/CROSS-002-source-feasibility.md)
 
-**Retrieved:** 2026-08-15 (UTC)
+**Retrieved:** 2026-08-15 (UTC); WWR programming RSS re-retrieved and reclassified 2026-08-16T22:54:56Z
 
 **Owner-review status:** `PENDING_OWNER`
 
@@ -12,33 +12,40 @@ This register is the CROSS-002 research record. It does not implement adapters, 
 
 ## 1. Decision summary
 
-Proposed V1 primary trio:
+Proposed V1 primaries (two of three seats):
 
-| Rank | Source ID | Operator | Access |
+| Rank | Source ID | Operator | Access | Decision |
+| --- | --- | --- | --- | --- |
+| 1 | `himalayas` | Himalayas Remote Jobs Pty Ltd | Public JSON API with pagination and country/worldwide search | `APPROVED_PRIMARY` |
+| 2 | `jobicy` | Jobicy | Public JSON API, latest 100 per request, explicit `jobGeo` including Brazil/LATAM | `APPROVED_PRIMARY` |
+
+Third seat: **unresolved owner/legal gate**. Candidates:
+
+| Candidate | Operator | Access | Decision |
 | --- | --- | --- | --- |
-| 1 | `himalayas` | Himalayas Remote Jobs Pty Ltd | Public JSON API with pagination and country/worldwide search |
-| 2 | `jobicy` | Jobicy | Public JSON API, latest 100 per request, explicit `jobGeo` including Brazil/LATAM |
-| 3 | `weworkremotely` | We Work Remotely | Official public programming RSS feed |
+| `weworkremotely` | We Work Remotely | Official public programming RSS feed | `PENDING_OWNER` (not approved) |
+| `remoteok` | Remote OK | Public JSON snapshot | `APPROVED_BACKUP` (rank 1) |
 
 Ranked backups:
 
-1. `remoteok` — public JSON snapshot, strongest software density among remaining remote aggregators; weak geographic evidence.
+1. `remoteok` — public JSON snapshot, strongest software density among remaining remote aggregators; weak geographic evidence. Same conservative classification as WWR; **0** sampled software jobs with explicit Brazil/LATAM/worldwide evidence.
 2. `remotive` — official public API with a good schema, but the live public feed returned only 16 jobs on 2026-08-15. Revisit if inventory recovers.
 
-Why this trio is sufficient for V1:
+Why two primaries are supportable now:
 
-- All three have first-party machine-readable access (JSON or RSS). No HTML scraping is required.
+- Himalayas and Jobicy have first-party JSON access. No HTML scraping is required.
 - Himalayas supplies catalog depth (`totalCount` 101,077), structured `locationRestrictions`, salary, seniority, employment type, and `expiryDate`.
 - Jobicy supplies explicit Brazil/LATAM eligibility text (`jobGeo`) and a documented `geo=brazil` / `geo=latam` filter. A `geo=brazil` request returned 100 listings whose geos included `Brazil`, `LATAM, Brazil`, and related LATAM combinations.
-- We Work Remotely's programming RSS is 100% software in the sampled window and every item carried `region: Anywhere in the World`, which is explicit worldwide eligibility.
-- Pairwise URL/(company, title, location) overlap in the sampled windows was **zero**. Recent inventory is complementary at snapshot level.
-- Together they cover paginated catalog search, geo-filtered latest listings, and a curated programming feed.
+- Pairwise URL/(company, title, location) overlap in the 2026-08-15 windows was **zero**.
 
-Strongest alternative trio: `himalayas` + `jobicy` + `remoteok`.
+Why the third seat is not accepted in this register:
 
-Why the alternative lost: it produced more sampled software jobs (84 vs 61) and more unique companies (184 vs 110), but only **7** sampled software jobs with explicit Brazil/LATAM/worldwide evidence versus **32** for the selected trio. Remote OK's recent window is software-heavy and company-diverse, but almost never states worldwide/LATAM/Brazil eligibility. V1 search treats remote and Brazil eligibility as separate; a third source that does not help eligibility is the weaker complement.
+- The 2026-08-15 register treated every WWR programming-feed item as software because it appeared in that feed. Independent review rejected that rule. Re-retrieval on 2026-08-16 (`n=25`) and title/description classification found **6** software roles (density **0.24**) and **5** software roles that remain Brazil/worldwide-eligible after geographic vetoes. Representative contamination includes marketing, legal, operations, underwriting, and general program-management titles filed under `Full-Stack Programming`.
+- RSS docs invite feed use with attribution. JSON API terms prohibit storing “API” data and require a partner token for JSON. That is an unresolved owner/legal gate, not permission. WWR is not unconditionally approved while that gate is open.
+- Promoting `remoteok` without the same conservative rules would be invalid. With those rules it remains software-dense (48/100) and contributes **0** sampled software jobs with explicit Brazil/LATAM/worldwide evidence. Remote status is not Brazil eligibility.
+- Corrected trio math: `himalayas` + `jobicy` + `weworkremotely` union software **45**, software-eligible **12**; `himalayas` + `jobicy` + `remoteok` union software **87**, software-eligible **7**. Eligibility still favors WWR, but the margin no longer outweighs feed-category contamination, a ~26-day median age, and the storage gate. CROSS-002 therefore does not name a final third primary.
 
-Arbeitnow was the complementary EU/ATS candidate. It failed the user-fit test: 0/100 sampled jobs had explicit Brazil/LATAM/worldwide evidence, and 0/100 were remote software.
+Arbeitnow remains unfit: 0/100 sampled jobs had explicit Brazil/LATAM/worldwide evidence, and 0/100 were remote software.
 
 ---
 
@@ -47,10 +54,12 @@ Arbeitnow was the complementary EU/ATS candidate. It failed the user-fit test: 0
 ```text
 BACK-004 -> himalayas
 BACK-005 -> jobicy
-BACK-006 -> weworkremotely
+BACK-006 -> unbound (owner chooses weworkremotely or remoteok after legal/quality review)
 ```
 
-Mapping order: richest paginated JSON contract first (`himalayas`), then a second JSON source with Brazil/LATAM filters (`jobicy`), then a different access method (RSS) (`weworkremotely`).
+Mapping order: richest paginated JSON contract first (`himalayas`), then a second JSON source with Brazil/LATAM filters (`jobicy`). BACK-006 is not bound. Adapter Work Orders stay `BLOCKED` with placeholders unbound until the owner accepts a third source.
+
+Do not treat this mapping as adapter dispatch. A worker must not choose or rename the third source.
 
 ---
 
@@ -58,10 +67,11 @@ Mapping order: richest paginated JSON contract first (`himalayas`), then a secon
 
 ### Retrieval
 
-- Date/time: 2026-08-15, approximately 23:20–23:27 UTC.
+- Date/time: 2026-08-15, approximately 23:20–23:27 UTC (all candidates except the WWR reclassification below).
+- WWR programming RSS re-retrieved: 2026-08-16T22:54:56Z, HTTP 200, `n=25`.
 - User-Agent: `JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; CROSS-002 source feasibility research)`
 - Public GET only. No accounts, API keys, or HTML listing scrapes.
-- First-party documentation and terms pages were fetched the same day. Jobicy HTML docs returned HTTP 403 to this User-Agent; the JSON API and GitHub README succeeded, and the HTML docs page was also retrieved successfully via a separate browser-class fetch.
+- First-party documentation and terms pages were fetched on 2026-08-15. Jobicy HTML docs returned HTTP 403 to this User-Agent; the JSON API and GitHub README succeeded, and the HTML docs page was also retrieved successfully via a separate browser-class fetch.
 
 ### Samples
 
@@ -76,13 +86,15 @@ Where a public interface permitted it, up to 100 recent records were used. Exact
 | Jobicy | 100 | `count=100` unfiltered latest. Additional filtered pulls: `geo=brazil` (100), `geo=latam` (100), `industry=engineering` (100). |
 | Arbeitnow | 100 | First 100 of page 1 (`per_page` 175). Page 1 had 8 remote jobs out of 175. |
 | Remote OK | 100 | Public `/api` list minus the leading legal object (101 objects total). |
-| We Work Remotely | 25 | Programming category RSS. All-jobs RSS contained 100 items and was not mixed into density math. |
+| We Work Remotely | 25 | Programming category RSS, re-retrieved 2026-08-16T22:54:56Z. All-jobs RSS (2026-08-15) contained 100 items and was not mixed into density math. |
 | Greenhouse | 578 | Single public board (`stripe`) to prove schema, not catalog coverage. |
 | Adzuna | none | Live jobs calls require `ADZUNA_APP_ID` / `ADZUNA_APP_KEY`. No account was created. |
 
 ### Software classification
 
-A job counted as software-development when source category/industry/tags indicated engineering/software/devops/data/QA/cybersecurity, or the title matched a conservative developer/engineer regex. Himalayas recent-window density is therefore lower than a dedicated Engineering search would be; Jobicy unfiltered density is similarly mixed. We Work Remotely programming RSS was treated as software by feed membership.
+A job counted as software-development when the **role title** showed product/platform software, data, or similar engineering work. When the title was ambiguous, the description was read. Source category, industry, or tags may support classification and must **not** override a clearly non-software title such as marketing, legal, operations, underwriting, creative, communications, general program-management, country-director, pre-sales/partner solutions, customer professional-services architect, or internal enterprise-IT architect.
+
+Himalayas, Jobicy, Remote OK, Remotive, and Arbeitnow samples from 2026-08-15 already used title/category evidence other than “feed membership” and were not re-sampled. We Work Remotely is no longer treated as software by programming-feed membership.
 
 ### Geographic eligibility
 
@@ -93,9 +105,17 @@ Explicit evidence only:
 - Jobicy: `jobGeo` tokens (`Anywhere`, `Brazil`, `LATAM`, and related country names).
 - Arbeitnow: `location` + tags. `remote=true` did **not** count.
 - Remote OK: `location` + tags.
-- We Work Remotely: RSS `region` (`Anywhere in the World`).
+- We Work Remotely: RSS `region` is the primary signal (`Anywhere in the World` in this sample). A title or description that clearly restricts geography (for example `Remote in Europe`, `Based in Bangalore`, `Country Director, India`) **vetoes** worldwide/Brazil eligibility even when `region` is worldwide. Headquarters strings alone do not imply eligibility.
 
 A generic remote flag never implied Brazil eligibility.
+
+### Historical correction (CROSS-002 independent review)
+
+The 2026-08-15 register treated the WWR programming RSS as software by feed membership. Obsolete figures that must not be used as current evidence: 100% software; Software 25; software density 1.00; WWR utility 0.805; union software 61 / software-eligible 32 for `himalayas` + `jobicy` + `weworkremotely`; claim that that trio wins selection.
+
+Corrected WWR window (2026-08-16T22:54:56Z, `n=25`): software 6 (0.24); software Brazil/worldwide-eligible 5; utility 0.614. See §4.3, §6, §8, and §9.
+
+The same 2026-08-15 text also reported union job counts such as 208 for `himalayas` + `jobicy` + `weworkremotely` while pairwise job matches were 0 and sample sizes were 100 + 100 + 25. Union job counts below are recomputed as `n1+n2+n3` when pairwise URL/tuple matches are 0. Unique-company columns for non-WWR trios are unchanged from 2026-08-15; WWR unique companies in the 2026-08-16 sample are 7.
 
 ### Overlap
 
@@ -126,8 +146,8 @@ Field completeness is `PRESENT=1`, `PARTIAL=0.5`, `ABSENT/UNKNOWN=0` over 15 can
 - Zero snapshot overlap does not prove catalogs never syndicate the same employer roles over longer periods.
 - Himalayas unfiltered recent 100 is US-restriction heavy (59/100 first restriction `United States`); Brazil usefulness is in the **search** API, not the unfiltered browse head.
 - Jobicy returns at most 100 latest rows; there is no documented deep pagination.
-- We Work Remotely JSON API requires a partner token; RSS is the unauthenticated method. API terms also prohibit “saving or storing” API data. RSS vs API-terms storage is an owner/legal gate.
-- Software regex/category mapping is conservative and will miss some roles and include some adjacent AI/contractor gigs.
+- We Work Remotely JSON API requires a partner token; RSS is the unauthenticated method. API terms also prohibit “saving or storing” API data. RSS vs API-terms storage is an owner/legal gate, not permission.
+- WWR programming-feed membership is not software evidence. Title/description classification is conservative and will miss some roles and include some adjacent data/AI work.
 - Adzuna was not live-sampled.
 
 ---
@@ -263,7 +283,7 @@ V1 ingestion should use search (`country=Brazil`, `worldwide=true`, and possibly
 
 - `count` 1–100 (default 100). Latest matching jobs only. No deep pagination.
 - Filters: `geo`, `industry`, `tag`. Taxonomies: `?get=locations`, `?get=industries`.
-- Closure: none in schema. Absence from a later latest-100 window is a last-seen signal only.
+- Closure: none in schema. Absence from a later latest-100 window is a last-seen signal only and is **not** authoritative closure. See §10.
 - Stable ID: integer `id` (also `jobSlug`).
 - Original URL: `url` (Jobicy canonical).
 
@@ -331,7 +351,7 @@ Filtered pulls (not mixed into the unfiltered density table):
 
 ---
 
-### 4.3 We Work Remotely (`weworkremotely`) — `APPROVED_PRIMARY`
+### 4.3 We Work Remotely (`weworkremotely`) — `PENDING_OWNER`
 
 #### Identity
 
@@ -345,21 +365,21 @@ Filtered pulls (not mixed into the unfiltered density table):
 | RSS docs | https://weworkremotely.com/remote-job-rss-feed |
 | API terms | https://weworkremotely.com/api-terms-and-guidelines |
 | JSON API | https://weworkremotely.com/api (partner token; posting-oriented) |
-| Retrieval | 2026-08-15 |
+| Retrieval | 2026-08-15 (docs/terms); programming RSS re-retrieved 2026-08-16T22:54:56Z |
 
 #### Access
 
-- Method for V1: **official public RSS**. RSS docs: “Anyone can use the feed, all we ask is that you attribute the links back to We Work Remotely.”
+- Method for V1 if accepted: **official public RSS**. RSS docs: “Anyone can use the feed, all we ask is that you attribute the links back to We Work Remotely.”
 - JSON `/api` requires a partnership token. Not used.
 - Credential name: `none` for RSS.
 - API terms (JSON API page): applications must route applying through weworkremotely.com; do not compete with/replace WWR; **“API Only”** clause says the only data you may use is that exposed via the API and that scraping/copying/saving/storing is prohibited.
-- Unresolved gate: RSS page invites filling a job feed; API terms prohibit storing “API” data and the JSON API is partner-gated. Owner should confirm that storing attributed RSS items in a personal catalog, with apply links kept on weworkremotely.com, is accepted. If not, replace this primary with `remoteok`.
+- Unresolved gate: RSS page invites filling a job feed; API terms prohibit storing “API” data and the JSON API is partner-gated. That is not permission. Owner must confirm whether storing attributed RSS items in a personal catalog, with apply links kept on weworkremotely.com, is accepted. This register does not treat WWR as approved while that gate is open.
 
 #### Retrieval
 
-- Finite RSS windows: programming feed **25** items; all-jobs feed **100** items. No pagination.
+- Finite RSS windows: programming feed **25** items (2026-08-16); all-jobs feed **100** items (2026-08-15). No pagination.
 - Recurring ingestion is bounded by feed length, not by a page API.
-- Closure: item disappearing from the feed (last-seen). No expiry field.
+- Closure: no expiry field. Drop-from-feed is a last-seen signal only. The 25-item window is not a complete active catalog.
 - Stable ID: `guid` (WWR job URL). Deterministic fallback: `link`.
 - Original URL: `link`.
 
@@ -372,40 +392,66 @@ Filtered pulls (not mixed into the unfiltered density table):
 | description | PRESENT | HTML `description` |
 | location text | PRESENT | `region` |
 | remote status | PARTIAL | remote board |
-| location eligibility | PRESENT | `region` (sample: `Anywhere in the World`) |
+| location eligibility | PRESENT | `region` (sample: `Anywhere in the World`; title/description may veto) |
 | salary | PARTIAL | only if present in HTML description |
 | published date | PRESENT | `pubDate` |
 | updated date | ABSENT | — |
-| expiry/closure | PARTIAL | drop from feed |
+| expiry/closure | PARTIAL | drop from feed is last-seen only, not authoritative closure |
 | employment type | ABSENT | — |
 | seniority | ABSENT | — |
-| technologies/tags | PARTIAL | `category` (Full-Stack Programming, etc.) |
+| technologies/tags | PARTIAL | `category` (untrustworthy in this sample) |
 | stable posting ID | PRESENT | `guid` |
 | original URL | PRESENT | `link` |
 
-#### Coverage (programming RSS, n=25)
+#### Coverage (programming RSS, n=25, 2026-08-16T22:54:56Z)
 
-- Software 25 (1.00); worldwide explicit 25 (1.00); LATAM/Brazil 0.
-- Eligible-for-Brazil 25 (1.00) via worldwide region, **not** via a Brazil label.
-- Salary-like text in 15 descriptions (0.60).
-- Unique companies 8 (0.32) — repeat posters.
-- Posted within 7d: 0; within 30d: 24; median age **24.68 days**.
+Classification rule: title first; description only when the title is ambiguous; RSS `category` must not override a clearly non-software title. Geographic veto when title/description clearly restricts region.
 
-High eligibility quality, shallow and older window.
+Software (6):
+
+1. Stripe: Fullstack Engineer, Privy
+2. Gusto, Inc.: Staff Software Engineer, AI Developer Tools
+3. Coinbase: Analytics Engineer, GFCO Analytics (description: data pipelines / analytics engineering)
+4. Stripe: Backend Engineer, Core Technology
+5. Gusto, Inc.: Business Money Engineering (description: Staff Engineer / professional software development)
+6. MapTiler: Location Services Engineer | Maps Platform (Remote in Europe)
+
+Not software (19). Representative false positives demonstrating feed-category contamination (all tagged programming categories):
+
+- Stripe: Head of Self-Serve Paid Media (marketing)
+- Stripe: GTM Operations Process Architect (operations)
+- Coinbase: Counsel, Commercial (legal)
+- Stripe: Credit Risk Analyst, North American Underwriter (underwriting)
+- Coinbase: GFCO Program Manager (general program-management)
+- Cloudflare: Country Director, India (general management)
+- Cloudflare: Principal Partner Solutions Engineer, SAARC (Based in Bangalore) (pre-sales)
+- Dropbox: Director, Product Design (design)
+
+Software density: **6 / 25 = 0.24**.
+
+Structured `region` was `Anywhere in the World` on all 25 items. Title/description geographic vetoes: MapTiler `Remote in Europe`; Cloudflare Partner Solutions Engineer `Based in Bangalore`; Cloudflare `Country Director, India`. Eligible-for-Brazil rate for the sample: **22 / 25 = 0.88**. Software and Brazil/worldwide-eligible: **5** (MapTiler vetoed). LATAM/Brazil labels: 0.
+
+- Salary-like text in 15 descriptions (0.60) from the 2026-08-15 reading of the same items.
+- Unique companies **7** (0.28) — Stripe, Coinbase, Airtable, Gusto, Dropbox, Cloudflare, MapTiler.
+- Posted within 7d: **0**; within 30d: **25**; median age **25.66 days**.
+
+Shallow, older, category-contaminated window. Not treated as a curated software feed.
 
 #### Quality risks
 
+- Programming RSS is not a software-only inventory. Category cannot drive classification or ingest filters without title review.
 - Small feed; not a large catalog.
-- Median age ~25 days; weak freshness versus Himalayas/Jobicy heads.
+- Median age ~26 days; weak freshness versus Himalayas/Jobicy heads.
 - Company/title parsing from a single string.
 - JSON API unavailable without partnership.
-- Storage-terms ambiguity (see gate).
-- API terms also say do not build a competing job board. A personal catalog with outbound WWR apply links is the intended RSS use, but is not a legal opinion.
+- Storage-terms ambiguity is unresolved; not permission.
+- API terms also say do not build a competing job board. A personal catalog with outbound WWR apply links is a possible RSS use, but is not a legal opinion.
+- `region` can contradict title-level location (`Remote in Europe`, Bangalore, India).
 
 #### Harmless verification
 
-- HTTP 200, 2026-08-15, programming and all-jobs RSS.
-- Redacted sample:
+- HTTP 200, 2026-08-16T22:54:56Z, programming RSS (`n=25`). All-jobs RSS was HTTP 200 on 2026-08-15.
+- Redacted sample (contamination example, not counted as software):
 
 ```json
 {
@@ -418,9 +464,11 @@ High eligibility quality, shallow and older window.
 }
 ```
 
+Software example from the same feed: `Stripe: Fullstack Engineer, Privy`.
+
 #### Decision
 
-`APPROVED_PRIMARY` mapped to **BACK-006**, subject to the RSS-storage owner/legal gate. Selected because it contributed the most unique worldwide software listings in trio math, via a different access method than the two JSON aggregators.
+`PENDING_OWNER`, not `APPROVED_PRIMARY`. Not mapped to BACK-006. Official RSS access exists, but (1) programming-feed membership is not software evidence and the sampled density is 0.24, (2) RSS storage versus JSON API “do not store” language is an unresolved legal gate, and (3) the feed is a small, ~26-day-old window. Do not promote `remoteok` in its place without applying the same conservative classification and eligibility rules; Remote OK remains `APPROVED_BACKUP` with 0 sampled software-eligible jobs.
 
 ---
 
@@ -493,7 +541,7 @@ High eligibility quality, shallow and older window.
 
 #### Decision
 
-`APPROVED_BACKUP`. Promote if WWR storage is rejected, accepting weaker eligibility.
+`APPROVED_BACKUP`. Do not auto-promote to the third primary. Conservative classification leaves **0** sampled software jobs with explicit Brazil/LATAM/worldwide evidence. Remote status is not Brazil eligibility. Owner may still choose it for BACK-006 after accepting that eligibility gap.
 
 ---
 
@@ -709,7 +757,7 @@ Unfiltered recent windows (Remotive = entire public feed). Rates are sample rate
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | himalayas | 100 | 23 | 0.23 | 0 | 4 | 3 | 0.07 | 4 | 0.41 | 45 | 0.09 | 0.87 |
 | jobicy | 100 | 16 | 0.16 | 2 | 6 | 1 | 0.07 | 3 | 0.59 | 57 | 0.51 | 0.77 |
-| weworkremotely | 25 | 25 | 1.00 | 0 | 0 | 25 | 1.00 | 25 | 0.60 | 8 | 24.68 | 0.57 |
+| weworkremotely | 25 | 6 | 0.24 | 0 | 0 | 22 | 0.88 | 5 | 0.60 | 7 | 25.66 | 0.57 |
 | remoteok | 100 | 48 | 0.48 | 0 | 1 | 1 | 0.02 | 0 | 0.02 | 85 | 3.86 | 0.60 |
 | remotive | 16 | 6 | 0.38 | 0 | 0 | 6 | 0.38 | 2 | 0.75 | 12 | 15.76 | 0.73 |
 | arbeitnow | 100 | 29 | 0.29 | 0 | 0 | 0 | 0.00 | 0 | 0.00 | 45 | 0.37 | 0.67 |
@@ -719,7 +767,7 @@ Additional catalog/filter evidence (not in the table):
 - Himalayas search `country=Brazil`: 4,784 jobs; `worldwide=true`: 1,649.
 - Jobicy `geo=brazil`: 100 latest Brazil/LATAM-oriented rows; `industry=engineering`: 100 rows, 19 with Brazil/LATAM geo.
 
-Freshness (dated jobs): Himalayas/Jobicy/Arbeitnow heads are <1 day; Remote OK median 3.9 days; Remotive 15.8; WWR programming 24.7.
+Freshness (dated jobs): Himalayas/Jobicy/Arbeitnow heads are <1 day; Remote OK median 3.9 days; Remotive 15.8; WWR programming median 25.66 days (0/25 within 7d).
 
 ---
 
@@ -744,22 +792,22 @@ Interpretation: the aggregator-duplication risk did **not** appear in 2026-08-15
 
 ## 8. Trio comparison
 
-Union after the same URL/tuple collapse used for overlap.
+Union after the same URL/tuple collapse used for overlap. Pairwise job matches in the 2026-08-15 windows were 0, so union jobs = `n1+n2+n3`. Union software and union software-eligible are the same sums using each source's classified counts. Unique-company figures for non-WWR trios are unchanged from 2026-08-15; WWR-containing trios subtract one company because the 2026-08-16 WWR sample has 7 unique companies rather than 8.
 
 | Trio | union jobs | union software | union software eligible | unique companies | mean Jaccard |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| himalayas + jobicy + weworkremotely | 208 | 61 | **32** | 110 | 0 |
-| himalayas + remotive + weworkremotely | 124 | 51 | 31 | 65 | 0 |
-| himalayas + weworkremotely + remoteok | 208 | 93 | 29 | 135 | 0 |
-| jobicy + weworkremotely + remoteok | 225 | 89 | 28 | 150 | 0 |
-| himalayas + jobicy + remoteok | 283 | **84** | 7 | **184** | 0 |
-| himalayas + remotive + jobicy | 199 | 42 | 9 | 114 | 0 |
-| himalayas + jobicy + arbeitnow | 282 | 65 | 7 | 147 | 0 |
-| remotive + jobicy + arbeitnow | 215 | 51 | 5 | 114 | 0 |
-| himalayas + remotive + arbeitnow | 198 | 55 | 6 | 102 | 0 |
-| himalayas + remotive + remoteok | 199 | 74 | 6 | 138 | 0 |
+| himalayas + jobicy + weworkremotely | 225 | 45 | 12 | 109 | 0 |
+| himalayas + remotive + weworkremotely | 141 | 35 | 11 | 64 | 0 |
+| himalayas + weworkremotely + remoteok | 225 | 77 | 9 | 134 | 0 |
+| jobicy + weworkremotely + remoteok | 225 | 70 | 8 | 149 | 0 |
+| himalayas + jobicy + remoteok | 300 | 87 | 7 | 184 | 0 |
+| himalayas + remotive + jobicy | 216 | 45 | 9 | 114 | 0 |
+| himalayas + jobicy + arbeitnow | 300 | 68 | 7 | 147 | 0 |
+| remotive + jobicy + arbeitnow | 216 | 51 | 5 | 114 | 0 |
+| himalayas + remotive + arbeitnow | 216 | 58 | 6 | 102 | 0 |
+| himalayas + remotive + remoteok | 216 | 77 | 6 | 138 | 0 |
 
-Selected trio wins on **union software jobs with explicit Brazil/LATAM/worldwide evidence**, which is the V1 user objective. Remote OK wins raw software union and company diversity but does not move eligibility. Arbeitnow adds volume without eligibility. Remotive adds almost no union size.
+No trio is selected as the accepted V1 set. `himalayas` + `jobicy` + `weworkremotely` still has the highest sampled software-eligible union (**12** vs **7** with Remote OK), but that margin does not overcome WWR feed-category contamination, freshness, or the RSS-storage gate. Remote OK wins raw software union (**87**) and does not move eligibility. Arbeitnow adds volume without eligibility. Remotive adds little union size. The third seat remains an owner/legal decision.
 
 ---
 
@@ -767,28 +815,48 @@ Selected trio wins on **union software jobs with explicit Brazil/LATAM/worldwide
 
 Component scores in 0–1. Uniqueness is 1.0 everywhere because snapshot Jaccard was 0; it does not differentiate and must not be over-read.
 
+```text
+weworkremotely utility =
+  0.20 * 0.24
++ 0.25 * 0.88
++ 0.15 * 0.57
++ 0.20 * 1.00
++ 0.10 * 0.00
++ 0.10 * 0.60
+= 0.048 + 0.220 + 0.0855 + 0.200 + 0.000 + 0.060
+= 0.6135 → 0.614
+```
+
 | Source | software dens. | geo eligible | fields | uniqueness | freshness | access | **utility** |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| weworkremotely | 1.00 | 1.00 | 0.57 | 1.00 | 0.00 | 0.70 | **0.805** |
+| weworkremotely | 0.24 | 0.88 | 0.57 | 1.00 | 0.00 | 0.60 | **0.614** |
 | himalayas | 0.23 | 0.07 | 0.87 | 1.00 | 1.00 | 0.95 | **0.589** |
 | remoteok | 0.48 | 0.02 | 0.60 | 1.00 | 1.00 | 0.65 | **0.556** |
 | jobicy | 0.16 | 0.07 | 0.77 | 1.00 | 1.00 | 0.80 | **0.545** |
 | remotive | 0.38 | 0.38 | 0.73 | 1.00 | 0.13 | 0.45 | **0.536** |
 | arbeitnow | 0.29 | 0.00 | 0.67 | 1.00 | 1.00 | 0.75 | **0.533** |
 
-Access judgments: Himalayas 0.95 (OpenAPI, pagination, 429, 24h cache). Jobicy 0.80 (clear fair use, latest-100 cap, HTML 403). WWR 0.70 (official RSS, small window, JSON partner + storage-clause tension). Remote OK 0.65 (legal in-feed, no pagination). Arbeitnow 0.75 (paginated, revocable). Remotive 0.45 (schema good, live inventory collapsed).
+Access judgments: Himalayas 0.95 (OpenAPI, pagination, 429, 24h cache). Jobicy 0.80 (clear fair use, latest-100 cap, HTML 403). WWR 0.60 (official RSS, small window, untrustworthy programming category, JSON partner + storage-clause tension). Remote OK 0.65 (legal in-feed, no pagination). Arbeitnow 0.75 (paginated, revocable). Remotive 0.45 (schema good, live inventory collapsed).
 
-Jobicy is below Remote OK on this score because unfiltered density/geo in the latest-100 mix is modest. It is still a primary because **filtered** `geo=brazil` / `industry=engineering` access is what V1 will call, and because trio math with WWR beats Remote OK on eligibility. The score is support, not a selector.
+Jobicy is below Remote OK on this score because unfiltered density/geo in the latest-100 mix is modest. It is still a proposed primary because **filtered** `geo=brazil` / `industry=engineering` access is what V1 will call. The score is support, not a selector, and does not approve WWR.
 
 ---
 
 ## 10. Per-primary operational notes
 
+Lifecycle ownership: [BACK-002](../work-orders/back/BACK-002-canonical-model-persistence.md) persists `JobStatus` (`active`, `stale`, `closed`, `unknown`) plus first-seen / last-seen / closed timestamps. [BACK-004](../work-orders/back/BACK-004-adapter-contract-source-one.md) extracts last-seen and closure signals through the adapter contract. Source adapters apply the defaults below unless the owner revises them. This register does not implement those Work Orders.
+
+Shared invariant: **absence during a failed or `partial_success` run never stales or closes a posting.** Only consecutive **successful** observations of that source’s bounded retrieval may change status from absence. A posting that is not observed because the run did not complete remains `active`, `stale`, `closed`, or `unknown` as last successfully recorded.
+
 ### `himalayas` (BACK-004)
 
 - Credentials: `none`
-- Refresh: upstream cached 24h. Recommend at most **once per day**. Faster polling is not justified.
-- Closure: persist `expiryDate`; also last-seen if a guid vanishes from search pages.
+- Refresh cadence: upstream cached 24h. At most **once per day**. Faster polling is not justified.
+- First-seen: first successful persist of `guid`. Last-seen: each successful run that observes that `guid`.
+- Authoritative expiry/closure: `expiryDate` in the past → `closed`. Search pages are not a full active set, so a single miss does not close.
+- Stale: after **2 consecutive successful** bounded search runs without the `guid`, mark `stale`.
+- Closed / expired / unknown: `expiryDate` past → `closed`. No `expiryDate` and still missing after the stale rule → remain `stale`, not `closed`. Latest run failed or partial → no transition (`unknown` only if status was never established).
+- Failed/partial ingestion: no stale or closed transition from absence.
 - Ingest shape: bounded search, not full browse. Suggested first queries: `worldwide=true`, `country=Brazil`, then additional LATAM country filters if needed. Cap pages. Honor 429.
 - User-Agent: `JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; personal catalog; himalayas adapter)`
 - Attribution: visible “sourced from Himalayas” and keep `applicationLink`.
@@ -797,25 +865,42 @@ Jobicy is below Remote OK on this score because unfiltered density/geo in the la
 ### `jobicy` (BACK-005)
 
 - Credentials: `none`
-- Refresh: docs say a few times per day, **not more than once per hour**. Recommend **1–2 times per day**.
-- Closure: no expiry. Last-seen against the latest-100 (and filtered) windows. Do not invent 14/30-day global lifecycle here.
+- Refresh cadence: docs say a few times per day, **not more than once per hour**. Recommend **1–2 times per day**.
+- First-seen: first successful persist of integer `id`. Last-seen: each successful run that observes that `id` in the configured pulls.
+- Authoritative expiry/closure: **none**. The latest-100 window is not a complete catalog. Drop-from-window is last-seen only and must not close a posting.
+- Stale: after **3 consecutive successful** ingestions of the configured `geo`/`industry` pulls without `id`, mark `stale`.
+- Closed / expired / unknown: do not auto-`closed`. Remain `stale` while last successful runs keep missing the id. If the latest run failed or was partial, leave the prior status unchanged (treat observability as `unknown` for that run, not as absence).
+- Failed/partial ingestion: no stale or closed transition from absence.
 - Ingest shape: `count=100` with `industry` engineering/software slugs plus `geo=brazil` and `geo=latam` (discover slugs via `?get=industries` / `?get=locations`). Dedup by `id` across those pulls.
 - User-Agent: same identifying pattern as Himalayas.
 - Attribution: credit Jobicy; application actions must use feed `url`.
 - Fixtures: success object with `id`, `url`, `jobGeo: "Brazil"`, optional salary fields present; success without salary keys; malformed missing `id`. HTML-unescape `jobIndustry`. Truncate `jobDescription`.
 
-### `weworkremotely` (BACK-006)
+### `weworkremotely` (third-seat candidate, BACK-006 unbound)
+
+Apply only if the owner later accepts this source. These defaults are recorded so that handoff is implementable.
 
 - Credentials: `none` (RSS). Do not call partner JSON API.
-- Refresh: no documented cadence. Programming feed median age ~25 days; **daily** RSS GET is enough and gentle.
-- Closure: drop-from-feed last-seen only.
-- Ingest shape: programming RSS, optionally also full-stack / back-end / front-end / devops category RSS. Parse `Company: Role`. Keep `link` as apply URL (API attribution: do not bypass WWR apply).
+- Refresh cadence: no documented cadence. Programming feed median age ~26 days; **daily** RSS GET is enough and gentle.
+- First-seen: first successful persist of `guid`. Last-seen: each successful programming-feed parse that contains that `guid`.
+- Authoritative expiry/closure: **none**. The 25-item feed is not all active jobs. Drop-from-feed is last-seen only, not closure.
+- Stale: after **2 consecutive successful** programming-feed fetches without `guid`, mark `stale`.
+- Closed / expired / unknown: never auto-`closed` from RSS absence. Remain `stale`. Failed/partial: no transition.
+- Failed/partial ingestion: no stale or closed transition from absence.
+- Ingest shape: programming RSS. Do not treat `category` as software proof; classify from title (and description when needed). Parse `Company: Role`. Keep `link` as apply URL (do not bypass WWR apply).
 - User-Agent: identifying RSS client string as above.
 - Attribution: links back to We Work Remotely; do not use WWR marks as product branding.
 - Fixtures: one RSS `<item>` with `guid`/`link`/`region`; one malformed item missing `link`. Truncate description HTML. No bulk dump.
-- Gate: owner confirms RSS storage for a personal catalog is acceptable despite JSON API “do not store” language.
+- Gate: owner confirms RSS storage for a personal catalog is acceptable despite JSON API “do not store” language. Until then this source is not approved.
 
-Lifecycle thresholds such as “14 days stale / 30 days closed” are **not** set here; they are absent from the product spec and belong to a later data-model/ingestion order. This register only records upstream evidence.
+### `remoteok` (backup / third-seat candidate)
+
+- Credentials: `none`
+- Refresh cadence: treat as delayed (historically ~24h). At most **once per day**.
+- First-seen / last-seen: same pattern as Jobicy against the latest-~100 snapshot (skip the leading legal object).
+- Authoritative expiry/closure: **none**. The snapshot is not a full active set.
+- Stale: after **3 consecutive successful** snapshot fetches without `id`, mark `stale`. Do not auto-`closed`.
+- Failed/partial ingestion: no stale or closed transition from absence.
 
 ---
 
@@ -823,7 +908,8 @@ Lifecycle thresholds such as “14 days stale / 30 days closed” are **not** se
 
 | ID | Decision | Why not V1 primary now |
 | --- | --- | --- |
-| `remoteok` | backup | Software-dense but almost no explicit Brazil/LATAM/worldwide evidence; 100-job snapshot. |
+| `weworkremotely` | `PENDING_OWNER` | Official RSS, but programming-feed membership is not software evidence (6/25 software after title/description review); RSS storage vs JSON API terms is unresolved; BACK-006 unbound. |
+| `remoteok` | backup | Software-dense (48/100) but 0 sampled software jobs with explicit Brazil/LATAM/worldwide evidence; 100-job snapshot. Not auto-promoted. |
 | `remotive` | backup | Official API; live public inventory is 16 jobs. |
 | `arbeitnow` | `REJECTED` | Lawful EU/ATS API; 0 sampled Brazil/worldwide-eligible software jobs. |
 | `greenhouse` | `POST_V1` | Per-company boards, not a catalog. |
@@ -834,12 +920,13 @@ Lifecycle thresholds such as “14 days stale / 30 days closed” are **not** se
 
 ## 12. Unresolved review gates
 
-1. **Owner acceptance of the trio** `himalayas`, `jobicy`, `weworkremotely` (`PENDING_OWNER`).
-2. **WWR RSS storage:** confirm personal catalog persistence with attribution and WWR apply URLs is allowed, given JSON API terms that forbid storing API data and require partner tokens for JSON. If rejected, bind BACK-006 to `remoteok` instead.
-3. **Himalayas ingest filter set:** confirm V1 should search Brazil + worldwide (and optional LATAM countries) rather than ingest the unfiltered 101k browse feed.
-4. **Jobicy HTML 403** to non-browser UAs: docs remain usable via JSON notice + GitHub + browser fetch; re-check if that hardens.
-5. **Adzuna / Greenhouse** remain unavailable for V1 without credentials or a board-token program.
-6. **Remotive inventory:** re-sample before any promotion; do not assume GitHub README “all active jobs” matches the live 16-row feed.
+1. **Third primary / BACK-006 bind:** owner chooses `weworkremotely` or `remoteok` (or neither) after reviewing corrected WWR evidence. CROSS-002 stays `REVIEW` until that decision. Adapter placeholders stay unbound (`PENDING_OWNER`).
+2. **WWR RSS storage:** confirm personal catalog persistence with attribution and WWR apply URLs is allowed, given JSON API terms that forbid storing API data and require partner tokens for JSON. RSS docs are not a legal opinion and are not treated as permission.
+3. **Owner acceptance of the two proposed primaries** `himalayas` and `jobicy`.
+4. **Himalayas ingest filter set:** confirm V1 should search Brazil + worldwide (and optional LATAM countries) rather than ingest the unfiltered 101k browse feed.
+5. **Jobicy HTML 403** to non-browser UAs: docs remain usable via JSON notice + GitHub + browser fetch; re-check if that hardens.
+6. **Adzuna / Greenhouse** remain unavailable for V1 without credentials or a board-token program.
+7. **Remotive inventory:** re-sample before any promotion; do not assume GitHub README “all active jobs” matches the live 16-row feed.
 
 No gate is silently treated as permission.
 
@@ -851,36 +938,18 @@ No gate is silently treated as permission.
 
 ```bash
 test -f docs/sources/v1-source-register.md
-rg -n "APPROVED_PRIMARY|APPROVED_BACKUP|REJECTED|POST_V1" docs/sources/v1-source-register.md
+rg -n "APPROVED_PRIMARY|APPROVED_BACKUP|REJECTED|PENDING_OWNER" docs/sources/v1-source-register.md
 rg -n "BACK-004|BACK-005|BACK-006" docs/sources/v1-source-register.md
-rg -n "PENDING_OWNER" docs/sources/v1-source-register.md
+rg -n "100% software|Software 25|0\\.805|software dens.*1\\.00" docs/sources/v1-source-register.md
 git diff --check
 git status --short
 ```
 
-Recorded 2026-08-15 after the register was written:
+### Independent-review remediation (2026-08-16)
 
-```text
-test -f docs/sources/v1-source-register.md
-# OK
+WWR programming RSS re-retrieved 2026-08-16T22:54:56Z (HTTP 200, `n=25`). Classification no longer uses feed membership. CROSS-002 status is `REVIEW`, not `DONE`. BACK-004/BACK-005/BACK-006 remain `BLOCKED`.
 
-rg -n "APPROVED_PRIMARY|APPROVED_BACKUP|REJECTED|POST_V1" docs/sources/v1-source-register.md
-# matches present for all four decision labels
-
-rg -n "BACK-004|BACK-005|BACK-006" docs/sources/v1-source-register.md
-# BACK-004 -> himalayas; BACK-005 -> jobicy; BACK-006 -> weworkremotely
-
-rg -n "PENDING_OWNER" docs/sources/v1-source-register.md
-# matches present, including "Status: PENDING_OWNER"
-
-git diff --check
-# no whitespace errors
-
-git status --short
-# ?? docs/sources/
-```
-
-Exactly three sources are labeled `APPROVED_PRIMARY` (`himalayas`, `jobicy`, `weworkremotely`). Two are `APPROVED_BACKUP`. No other repo paths were added.
+Exactly two sources are labeled `APPROVED_PRIMARY` (`himalayas`, `jobicy`). `weworkremotely` is `PENDING_OWNER`. Two sources are `APPROVED_BACKUP`. BACK-006 is unbound.
 
 ### Manual first-party link check (2026-08-15)
 
@@ -898,7 +967,7 @@ Exactly three sources are labeled `APPROVED_PRIMARY` (`himalayas`, `jobicy`, `we
 | WWR | https://weworkremotely.com | home | 200 |
 | WWR | https://weworkremotely.com/remote-job-rss-feed | RSS docs | 200 |
 | WWR | https://weworkremotely.com/api-terms-and-guidelines | API terms | 200 |
-| WWR | https://weworkremotely.com/categories/remote-programming-jobs.rss | feed | 200 |
+| WWR | https://weworkremotely.com/categories/remote-programming-jobs.rss | feed | 200 (also 2026-08-16T22:54:56Z) |
 | Remotive | https://remotive.com | home | 200 |
 | Remotive | https://remotive.com/remote-jobs/api | API landing | 200 |
 | Remotive | https://remotive.com/api/remote-jobs?limit=100 | API | 200 |
@@ -923,10 +992,10 @@ No application code, dependencies, `.env`, secrets, or job corpus were added to 
 
 ## 14. Owner review request
 
-Please review the proposed trio and the WWR storage gate.
+Please review the two proposed primaries, the unbound third seat, and the WWR storage gate. CROSS-002 is implemented and in `REVIEW`.
 
 ```text
 Status: PENDING_OWNER
 ```
 
-Do not mark CROSS-002 `DONE` until the owner accepts the three-source set (or names a replacement, typically `remoteok` for BACK-006).
+Do not mark CROSS-002 `DONE` until the owner accepts a three-source set (or explicitly accepts two primaries and a named third-seat decision). Do not bind adapter placeholders in this remediation.

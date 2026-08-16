@@ -13,7 +13,7 @@ This is the single status authority for all current and future Job Engine Work O
 | ID | Area | Status | Depends on | Deliverable |
 | --- | --- | --- | --- | --- |
 | [CROSS-001](cross-repo/CROSS-001-repository-foundation.md) | Cross | `REVIEW` | None | Reproducible monorepo and local-development foundation |
-| [CROSS-002](cross-repo/CROSS-002-source-feasibility.md) | Cross | `READY` | None | Approved three-source register with access evidence |
+| [CROSS-002](cross-repo/CROSS-002-source-feasibility.md) | Cross | `REVIEW` | None | Approved three-source register with access evidence |
 | [BACK-001](back/BACK-001-api-foundation.md) | Backend | `BLOCKED` | CROSS-001 | FastAPI service and backend test foundation |
 | [FRONT-001](front/FRONT-001-web-foundation.md) | Frontend | `BLOCKED` | CROSS-001 | Next.js application and frontend test foundation |
 | [BACK-002](back/BACK-002-canonical-model-persistence.md) | Backend | `BLOCKED` | BACK-001 | Canonical job catalog models, migrations, and repositories |
@@ -49,9 +49,11 @@ Batch 01 is complete only when `CROSS-003` is `DONE`. Backend or frontend automa
 | ID | Worker | Branch/worktree | Dispatched at | Notes |
 | --- | --- | --- | --- | --- |
 | [CROSS-001](cross-repo/CROSS-001-repository-foundation.md) | Cursor agent | `feat/cross-001-repository-foundation` | 2026-08-15T19:54:00-03:00 | Repository and local-development foundation |
+| [CROSS-002](cross-repo/CROSS-002-source-feasibility.md) | Cursor agent | `development` | not recorded | Source feasibility research; implementation commit `82e2147`; independent-review remediation on this branch |
 
 ## Project decision and exception record
 
 | Date | Order | Decision or exception | Owner |
 | --- | --- | --- | --- |
 | 2026-08-15 | CROSS-001 | Pinned Node.js 24.18.0, pnpm 10.34.5, CPython 3.13.14, and postgres:17.11 | Cursor agent |
+| 2026-08-16 | CROSS-002 | WWR programming-feed membership is not software evidence; third primary / BACK-006 remains unbound pending owner/legal review | Cursor agent |
