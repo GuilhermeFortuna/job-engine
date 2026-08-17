@@ -3,11 +3,11 @@ from uuid import UUID
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.factories import job_group_input, persist_job, source_posting_input
 
 from job_engine.db.models import IngestionRun
 from job_engine.domain.enums import IngestionRunStatus, JobStatus
 from job_engine.domain.taxonomy import REQUIRED_ROLE_FAMILY_IDS
+from tests.factories import job_group_input, persist_job, source_posting_input
 
 
 async def test_filters_vocabulary_and_labels(client: AsyncClient) -> None:

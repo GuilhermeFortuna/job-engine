@@ -5,10 +5,10 @@ from alembic import command
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.db.conftest import alembic_config, disposable_database_url
 
 from job_engine.config import Settings
 from job_engine.main import create_app
+from tests.db.conftest import alembic_config, disposable_database_url
 
 __all__ = ["app", "client", "disposable_database_url", "session"]
 

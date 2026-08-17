@@ -265,3 +265,50 @@ def canonical_technology_terms() -> tuple[str, ...]:
             raise RuntimeError("canonical_terms must be a non-empty list")
         _CANONICAL_TECHNOLOGY_TERMS = tuple(str(term) for term in terms)
     return _CANONICAL_TECHNOLOGY_TERMS
+
+
+class SyncStage(StrEnum):
+    FETCHING = "fetching"
+    NORMALIZING = "normalizing"
+    PERSISTING = "persisting"
+
+
+class SyncSourceStatus(StrEnum):
+    SUCCESS = "success"
+    PARTIAL_SUCCESS = "partial_success"
+    FAILURE = "failure"
+
+
+class SyncStartedEvent(ApiModel):
+    sources: tuple[str, ...]
+    started_at: datetime
+
+
+class SyncSourceProgressEvent(ApiModel):
+    source_id: str
+    stage: SyncStage
+    fetched_count: int
+    accepted_count: int
+    rejected_count: int
+
+
+class SyncErrorSummary(ApiModel):
+    code: str
+    message: str
+
+
+class SyncSourceCompletedEvent(ApiModel):
+    source_id: str
+    status: SyncSourceStatus
+    inserted_count: int
+    updated_count: int
+    marked_stale_count: int
+    error_summaries: tuple[SyncErrorSummary, ...] = ()
+
+
+class SyncCompletedEvent(ApiModel):
+    status: SyncSourceStatus
+    total_inserted: int
+    total_updated: int
+    total_stale: int
+    completed_at: datetime
