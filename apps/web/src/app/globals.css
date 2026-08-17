@@ -1,3 +1,9 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
 :root {
   color-scheme: light;
   --color-bg: #f8fafc;
@@ -35,6 +41,38 @@
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
   --focus-ring: 0.125rem solid var(--color-focus);
+  --background: var(--color-bg);
+  --foreground: var(--color-fg);
+  --card: var(--color-card-bg);
+  --card-foreground: var(--color-fg);
+  --popover: var(--color-card-bg);
+  --popover-foreground: var(--color-fg);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-primary-fg);
+  --secondary: var(--color-badge-bg);
+  --secondary-foreground: var(--color-fg);
+  --muted: var(--color-badge-bg);
+  --muted-foreground: var(--color-muted);
+  --accent: var(--color-badge-bg);
+  --accent-foreground: var(--color-fg);
+  --destructive: var(--color-error-fg);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-focus);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }
 
 *,
@@ -78,6 +116,13 @@ body {
 
 header {
   padding: var(--space-4) var(--space-4) 0;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
 }
 
 header p {
@@ -1319,4 +1364,138 @@ a {
 .skeleton-provenance-box {
   height: 16rem;
   border-radius: var(--radius-lg);
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* @theme remaps --color-muted / --color-border / --color-primary / radii for
+   Tailwind utilities. Re-assert Job Engine surface tokens so existing job CSS
+   keeps the original meanings of those variables. */
+:root {
+  --color-muted: #64748b;
+  --color-border: #e2e8f0;
+  --color-primary: #0f172a;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-bg: #000000;
+  --color-card-bg: #000000;
+  --color-fg: #ffffff;
+  --color-muted: #a3a3a3;
+  --color-border: #262626;
+  --color-border-hover: #404040;
+  --color-primary: #f5f5f5;
+  --color-primary-hover: #ffffff;
+  --color-primary-fg: #000000;
+  --color-focus: #60a5fa;
+  --color-badge-bg: #171717;
+  --color-badge-fg: #e5e5e5;
+  --color-badge-remote: #0c4a6e;
+  --color-badge-remote-fg: #7dd3fc;
+  --color-badge-eligibility: #713f12;
+  --color-badge-eligibility-fg: #fde68a;
+  --color-error-bg: #450a0a;
+  --color-error-border: #7f1d1d;
+  --color-error-fg: #fecaca;
+  --background: var(--color-bg);
+  --foreground: var(--color-fg);
+  --card: var(--color-card-bg);
+  --card-foreground: var(--color-fg);
+  --popover: var(--color-card-bg);
+  --popover-foreground: var(--color-fg);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-primary-fg);
+  --secondary: var(--color-badge-bg);
+  --secondary-foreground: var(--color-fg);
+  --muted: var(--color-badge-bg);
+  --muted-foreground: var(--color-muted);
+  --accent: var(--color-badge-bg);
+  --accent-foreground: var(--color-fg);
+  --destructive: var(--color-error-fg);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-focus);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: var(--color-card-bg);
+  --sidebar-foreground: var(--color-fg);
+  --sidebar-primary: var(--color-focus);
+  --sidebar-primary-foreground: var(--color-fg);
+  --sidebar-accent: var(--color-badge-bg);
+  --sidebar-accent-foreground: var(--color-fg);
+  --sidebar-border: var(--color-border);
+  --sidebar-ring: var(--color-focus);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html[data-magicui-theme-vt="active"]::view-transition-group(root) {
+  animation-duration: var(--magicui-theme-toggle-vt-duration);
+}
+
+html[data-magicui-theme-vt="active"]::view-transition-new(root) {
+  clip-path: var(--magicui-theme-vt-clip-from);
 }
