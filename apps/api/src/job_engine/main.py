@@ -6,6 +6,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from job_engine.api.catalog import router as catalog_router
+from job_engine.api.jobs import router as jobs_router
 from job_engine.config import Settings
 from job_engine.db.session import create_engine, create_session_factory
 
@@ -33,4 +35,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def health() -> HealthResponse:
         return HealthResponse(status="ok")
 
+    app.include_router(jobs_router, prefix="/api/v1")
+    app.include_router(catalog_router, prefix="/api/v1")
     return app
