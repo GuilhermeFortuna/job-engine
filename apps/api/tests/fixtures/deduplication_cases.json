@@ -1,0 +1,201 @@
+{
+  "cases": [
+    {
+      "id": "same_source_identity",
+      "left": {
+        "source_id": "jobicy",
+        "source_posting_id": "abc-123",
+        "application_url": "https://jobicy.com/jobs/abc-123"
+      },
+      "right": {
+        "source_id": "jobicy",
+        "source_posting_id": "abc-123",
+        "application_url": "https://jobicy.com/jobs/abc-123?utm_source=retry"
+      },
+      "expect": {
+        "kind": "same_posting",
+        "reason": "source_identity"
+      }
+    },
+    {
+      "id": "cross_source_canonical_url",
+      "left": {
+        "source_id": "jobicy",
+        "source_posting_id": "abc-123",
+        "application_url": "https://company.example/jobs/role?utm_source=jobicy"
+      },
+      "right": {
+        "source_id": "himalayas",
+        "source_posting_id": "xyz-9",
+        "application_url": "https://company.example/jobs/role?utm_campaign=board"
+      },
+      "expect": {
+        "kind": "same_job_group",
+        "reason": "canonical_url"
+      }
+    },
+    {
+      "id": "exact_tuple_compatible_employment",
+      "left": {
+        "source_id": "jobicy",
+        "source_posting_id": "abc-123",
+        "application_url": "https://jobicy.com/jobs/abc-123",
+        "title_original": "Python Engineer",
+        "company_original": "Acme Ltd.",
+        "location_original": "São Paulo, Brazil",
+        "employment_type_evidence": "full-time"
+      },
+      "right": {
+        "source_id": "himalayas",
+        "source_posting_id": "xyz-9",
+        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "title_original": "Python Engineer",
+        "company_original": "Acme, Inc.",
+        "location_original": "São Paulo, Brazil",
+        "employment_type_evidence": "Full Time"
+      },
+      "expect": {
+        "kind": "same_job_group",
+        "reason": "identity_tuple"
+      }
+    },
+    {
+      "id": "unknown_employment_is_compatible",
+      "left": {
+        "source_id": "jobicy",
+        "source_posting_id": "abc-123",
+        "application_url": "https://jobicy.com/jobs/abc-123",
+        "employment_type_evidence": "full-time"
+      },
+      "right": {
+        "source_id": "himalayas",
+        "source_posting_id": "xyz-9",
+        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "employment_type_evidence": null
+      },
+      "expect": {
+        "kind": "same_job_group",
+        "reason": "identity_tuple"
+      }
+    },
+    {
+      "id": "incompatible_employment_stays_distinct",
+      "left": {
+        "source_id": "jobicy",
+        "source_posting_id": "abc-123",
+        "application_url": "https://jobicy.com/jobs/abc-123",
+        "employment_type_evidence": "full-time"
+      },
+      "right": {
+        "source_id": "himalayas",
+        "source_posting_id": "xyz-9",
+        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "employment_type_evidence": "contract"
+      },
+      "expect": {
+        "kind": "distinct",
+        "reason": "no_high_confidence_match"
+      }
+    },
+    {
+      "id": "similar_but_distinct_titles",
+      "left": {
+        "source_id": "jobicy",
+        "source_posting_id": "abc-123",
+        "application_url": "https://jobicy.com/jobs/abc-123",
+        "title_original": "Python Engineer"
+      },
+      "right": {
+        "source_id": "himalayas",
+        "source_posting_id": "xyz-9",
+        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "title_original": "Senior Python Engineer"
+      },
+      "expect": {
+        "kind": "distinct",
+        "reason": "no_high_confidence_match"
+      }
+    },
+    {
+      "id": "remote_versus_eligible_ambiguity_distinct",
+      "left": {
+        "source_id": "jobicy",
+        "source_posting_id": "abc-123",
+        "application_url": "https://jobicy.com/jobs/abc-123",
+        "location_original": null,
+        "remote_evidence": "Remote",
+        "location_eligibility_evidence": null
+      },
+      "right": {
+        "source_id": "himalayas",
+        "source_posting_id": "xyz-9",
+        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "location_original": "Brazil",
+        "remote_evidence": "Remote",
+        "location_eligibility_evidence": "Open to Brazil"
+      },
+      "expect": {
+        "kind": "distinct",
+        "reason": "no_high_confidence_match"
+      }
+    },
+    {
+      "id": "missing_and_non_usd_salary_do_not_affect_grouping",
+      "left": {
+        "source_id": "jobicy",
+        "source_posting_id": "abc-123",
+        "application_url": "https://jobicy.com/jobs/abc-123",
+        "compensation_original_text": null
+      },
+      "right": {
+        "source_id": "himalayas",
+        "source_posting_id": "xyz-9",
+        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "compensation_original_text": "R$ 10k/mês",
+        "compensation_currency": "BRL",
+        "compensation_period": "month",
+        "compensation_minimum": "10000"
+      },
+      "expect": {
+        "kind": "same_job_group",
+        "reason": "identity_tuple"
+      }
+    },
+    {
+      "id": "repost_different_source_ids_join_by_url",
+      "left": {
+        "source_id": "jobicy",
+        "source_posting_id": "post-1",
+        "application_url": "https://boards.example/jobs/role-1"
+      },
+      "right": {
+        "source_id": "himalayas",
+        "source_posting_id": "post-2",
+        "application_url": "https://boards.example/jobs/role-1?utm_medium=feed"
+      },
+      "expect": {
+        "kind": "same_job_group",
+        "reason": "canonical_url"
+      }
+    },
+    {
+      "id": "empty_location_does_not_tuple_merge",
+      "left": {
+        "source_id": "jobicy",
+        "source_posting_id": "abc-123",
+        "application_url": "https://jobicy.com/jobs/abc-123",
+        "location_original": null
+      },
+      "right": {
+        "source_id": "himalayas",
+        "source_posting_id": "xyz-9",
+        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "location_original": null
+      },
+      "expect": {
+        "kind": "distinct",
+        "reason": "no_high_confidence_match"
+      }
+    }
+  ]
+}

@@ -10,6 +10,7 @@ from job_engine.db.models import (  # noqa: F401
     JobGroup,
     JobGroupEligibleLocation,
     JobGroupPosting,
+    JobGroupRoleFamily,
     JobGroupTechnology,
     SourcePosting,
 )

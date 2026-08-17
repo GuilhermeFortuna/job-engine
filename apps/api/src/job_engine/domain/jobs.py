@@ -10,6 +10,7 @@ from job_engine.domain.enums import (
     EmploymentType,
     IngestionRunStatus,
     JobStatus,
+    LocationEligibilityRegion,
     RemoteStatus,
     Seniority,
 )
@@ -59,20 +60,8 @@ class TechnologyTerm(FrozenModel):
 
 
 class EligibleLocation(FrozenModel):
-    region: str
+    region: LocationEligibilityRegion
     evidence_text: str | None = None
-
-    @field_validator("region")
-    @classmethod
-    def region_must_be_non_empty(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("eligible region must be non-empty")
-        if stripped == "unknown":
-            raise ValueError(
-                "use location_eligibility_unknown instead of region 'unknown'"
-            )
-        return stripped
 
 
 class ErrorSummary(FrozenModel):
@@ -128,6 +117,7 @@ class SourcePostingInput(FrozenModel):
     source_posting_id: str
     source_name: str
     application_url: str
+    application_url_canonical: str
     title_original: str
     company_original: str
     description: str | None = None
@@ -149,7 +139,7 @@ class SourcePostingInput(FrozenModel):
     adapter_version: str | None = None
     raw_source_metadata: dict[str, Any] | None = None
 
-    @field_validator("application_url")
+    @field_validator("application_url", "application_url_canonical")
     @classmethod
     def application_url_must_be_http(cls, value: str) -> str:
         return _require_http_url(value)
@@ -175,10 +165,13 @@ class SourcePosting(SourcePostingInput):
 class JobGroupInput(FrozenModel):
     title: str
     title_original: str
+    title_comparison_key: str
     company: str
     company_original: str
+    company_comparison_key: str
     description: str | None = None
     location_original: str | None = None
+    location_comparison_key: str = ""
     location_normalized_country: str | None = None
     location_normalized_region: str | None = None
     remote_status: RemoteStatus
@@ -194,6 +187,7 @@ class JobGroupInput(FrozenModel):
     location_eligibility_unknown: bool
     technologies: tuple[TechnologyTerm, ...] = ()
     eligible_locations: tuple[EligibleLocation, ...] = ()
+    role_families: tuple[str, ...] = ()
     last_ingestion_run_id: UUID | None = None
 
     @field_validator(

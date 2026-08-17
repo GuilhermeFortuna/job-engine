@@ -8,7 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from job_engine.db import models as orm
-from job_engine.domain.enums import IngestionRunStatus
+from job_engine.domain.enums import (
+    EmploymentType,
+    IngestionRunStatus,
+    LocationEligibilityRegion,
+)
 from job_engine.domain.jobs import (
     Compensation,
     EligibleLocation,
@@ -91,6 +95,7 @@ def _source_posting_from_row(row: orm.SourcePosting) -> SourcePosting:
         source_posting_id=row.source_posting_id,
         source_name=row.source_name,
         application_url=row.application_url,
+        application_url_canonical=row.application_url_canonical,
         title_original=row.title_original,
         company_original=row.company_original,
         description=row.description,
@@ -122,17 +127,23 @@ def _job_group_from_row(
         for item in row.technologies
     )
     eligible_locations = tuple(
-        EligibleLocation(region=item.region, evidence_text=item.evidence_text)
+        EligibleLocation(
+            region=LocationEligibilityRegion(item.region),
+            evidence_text=item.evidence_text,
+        )
         for item in row.eligible_locations
     )
     return JobGroup(
         id=row.id,
         title=row.title,
         title_original=row.title_original,
+        title_comparison_key=row.title_comparison_key,
         company=row.company,
         company_original=row.company_original,
+        company_comparison_key=row.company_comparison_key,
         description=row.description,
         location_original=row.location_original,
+        location_comparison_key=row.location_comparison_key,
         location_normalized_country=row.location_normalized_country,
         location_normalized_region=row.location_normalized_region,
         remote_status=row.remote_status,
@@ -148,6 +159,7 @@ def _job_group_from_row(
         location_eligibility_unknown=row.location_eligibility_unknown,
         technologies=technologies,
         eligible_locations=eligible_locations,
+        role_families=tuple(item.family_id for item in row.role_families),
         last_ingestion_run_id=row.last_ingestion_run_id,
         source_postings=source_postings,
     )
@@ -163,6 +175,7 @@ def _source_posting_values(
         "source_posting_id": posting.source_posting_id,
         "source_name": posting.source_name,
         "application_url": posting.application_url,
+        "application_url_canonical": posting.application_url_canonical,
         "title_original": posting.title_original,
         "company_original": posting.company_original,
         "description": posting.description,
@@ -191,10 +204,13 @@ def _source_posting_values(
 def _apply_job_group_fields(row: orm.JobGroup, group: JobGroupInput) -> None:
     row.title = group.title
     row.title_original = group.title_original
+    row.title_comparison_key = group.title_comparison_key
     row.company = group.company
     row.company_original = group.company_original
+    row.company_comparison_key = group.company_comparison_key
     row.description = group.description
     row.location_original = group.location_original
+    row.location_comparison_key = group.location_comparison_key
     row.location_normalized_country = group.location_normalized_country
     row.location_normalized_region = group.location_normalized_region
     row.remote_status = group.remote_status
@@ -218,9 +234,13 @@ def _apply_job_group_fields(row: orm.JobGroup, group: JobGroupInput) -> None:
     row.updated_at = _utcnow()
 
 
-def _replace_group_children(row: orm.JobGroup, group: JobGroupInput) -> None:
+def _clear_group_children(row: orm.JobGroup) -> None:
     row.technologies.clear()
     row.eligible_locations.clear()
+    row.role_families.clear()
+
+
+def _append_group_children(row: orm.JobGroup, group: JobGroupInput) -> None:
     for term in group.technologies:
         row.technologies.append(
             orm.JobGroupTechnology(term=term.term, source_text=term.source_text)
@@ -228,9 +248,11 @@ def _replace_group_children(row: orm.JobGroup, group: JobGroupInput) -> None:
     for location in group.eligible_locations:
         row.eligible_locations.append(
             orm.JobGroupEligibleLocation(
-                region=location.region, evidence_text=location.evidence_text
+                region=location.region.value, evidence_text=location.evidence_text
             )
         )
+    for family_id in group.role_families:
+        row.role_families.append(orm.JobGroupRoleFamily(family_id=family_id))
 
 
 class CatalogRepository:
@@ -283,9 +305,7 @@ class CatalogRepository:
             "first_seen_at",
             "created_at",
         }
-        update_fields = {
-            key: values[key] for key in values if key not in unchanged
-        }
+        update_fields = {key: values[key] for key in values if key not in unchanged}
         stmt = (
             insert(orm.SourcePosting)
             .values(values)
@@ -307,7 +327,7 @@ class CatalogRepository:
         row = orm.JobGroup(id=uuid4())
         _apply_job_group_fields(row, group)
         row.created_at = _utcnow()
-        _replace_group_children(row, group)
+        _append_group_children(row, group)
         self._session.add(row)
         await self._session.flush()
         return await self._require_job_group(row.id)
@@ -319,16 +339,26 @@ class CatalogRepository:
             options=(
                 selectinload(orm.JobGroup.technologies),
                 selectinload(orm.JobGroup.eligible_locations),
+                selectinload(orm.JobGroup.role_families),
             ),
         )
         if row is None:
             raise JobGroupNotFoundError(str(group_id))
         _apply_job_group_fields(row, group)
-        _replace_group_children(row, group)
+        _clear_group_children(row)
+        await self._session.flush()
+        _append_group_children(row, group)
         await self._session.flush()
         return await self._require_job_group(group_id)
 
     async def add_posting_to_group(self, group_id: UUID, posting_id: UUID) -> None:
+        existing = await self._session.scalar(
+            select(orm.JobGroupPosting).where(
+                orm.JobGroupPosting.source_posting_id == posting_id
+            )
+        )
+        if existing is not None:
+            return
         self._session.add(
             orm.JobGroupPosting(
                 job_group_id=group_id,
@@ -380,6 +410,47 @@ class CatalogRepository:
             return None
         return _job_group_from_loaded_row(row)
 
+    async def get_job_group_by_canonical_url(
+        self, canonical_url: str
+    ) -> JobGroup | None:
+        stmt = (
+            select(orm.JobGroup)
+            .join(orm.JobGroupPosting)
+            .join(orm.SourcePosting)
+            .where(orm.SourcePosting.application_url_canonical == canonical_url)
+            .options(*_job_group_load_options())
+            .execution_options(populate_existing=True)
+        )
+        row = await self._session.scalar(stmt)
+        if row is None:
+            return None
+        return _job_group_from_loaded_row(row)
+
+    async def get_job_group_by_identity_tuple(
+        self,
+        company_key: str,
+        title_key: str,
+        location_key: str,
+        employment_type: EmploymentType,
+    ) -> JobGroup | None:
+        if not location_key:
+            return None
+        stmt = (
+            select(orm.JobGroup)
+            .where(
+                orm.JobGroup.company_comparison_key == company_key,
+                orm.JobGroup.title_comparison_key == title_key,
+                orm.JobGroup.location_comparison_key == location_key,
+            )
+            .options(*_job_group_load_options())
+            .execution_options(populate_existing=True)
+        )
+        rows = (await self._session.scalars(stmt)).unique().all()
+        for row in rows:
+            if _employment_compatible(row.employment_type, employment_type):
+                return _job_group_from_loaded_row(row)
+        return None
+
     async def _require_job_group(self, group_id: UUID) -> JobGroup:
         loaded = await self.get_job_group(group_id)
         if loaded is None:
@@ -391,10 +462,17 @@ def _job_group_load_options() -> tuple[Any, ...]:
     return (
         selectinload(orm.JobGroup.technologies),
         selectinload(orm.JobGroup.eligible_locations),
+        selectinload(orm.JobGroup.role_families),
         selectinload(orm.JobGroup.posting_links).selectinload(
             orm.JobGroupPosting.source_posting
         ),
     )
+
+
+def _employment_compatible(left: EmploymentType, right: EmploymentType) -> bool:
+    if left is right:
+        return True
+    return left is EmploymentType.UNKNOWN or right is EmploymentType.UNKNOWN
 
 
 def _job_group_from_loaded_row(row: orm.JobGroup) -> JobGroup:

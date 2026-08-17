@@ -12,6 +12,7 @@ from job_engine.domain.enums import (
     EmploymentType,
     IngestionRunStatus,
     JobStatus,
+    LocationEligibilityRegion,
     RemoteStatus,
     Seniority,
 )
@@ -36,6 +37,7 @@ def _source_posting(**overrides: object) -> SourcePostingInput:
         "source_posting_id": "abc-123",
         "source_name": "Jobicy",
         "application_url": "https://jobicy.com/jobs/abc-123",
+        "application_url_canonical": "https://jobicy.com/jobs/abc-123",
         "title_original": "Python Engineer",
         "company_original": "Acme Ltd",
         "description": "Build APIs.",
@@ -65,10 +67,13 @@ def _job_group(**overrides: object) -> JobGroupInput:
     payload: dict[str, object] = {
         "title": "Python Engineer",
         "title_original": "Python Engineer (Backend)",
+        "title_comparison_key": "python engineer",
         "company": "Acme",
         "company_original": "Acme Ltd",
+        "company_comparison_key": "acme",
         "description": "Build APIs.",
         "location_original": "São Paulo, Brazil",
+        "location_comparison_key": "são paulo brazil",
         "location_normalized_country": "BR",
         "location_normalized_region": "latin_america",
         "remote_status": RemoteStatus.REMOTE,
@@ -90,8 +95,12 @@ def _job_group(**overrides: object) -> JobGroupInput:
         "location_eligibility_unknown": False,
         "technologies": (TechnologyTerm(term="Python", source_text="Python, FastAPI"),),
         "eligible_locations": (
-            EligibleLocation(region="brazil", evidence_text="Remote in Brazil"),
+            EligibleLocation(
+                region=LocationEligibilityRegion.BRAZIL,
+                evidence_text="Remote in Brazil",
+            ),
         ),
+        "role_families": ("python",),
         "last_ingestion_run_id": None,
     }
     payload.update(overrides)
@@ -268,3 +277,55 @@ async def test_update_job_group_replaces_child_rows(db_session: AsyncSession) ->
     assert loaded is not None
     assert loaded.eligible_locations == ()
     assert [term.term for term in loaded.technologies] == ["FastAPI"]
+    assert loaded.role_families == ("python",)
+
+
+async def test_lookup_by_canonical_url_and_identity_tuple(
+    db_session: AsyncSession,
+) -> None:
+    repo = CatalogRepository(db_session)
+    group = await repo.create_job_group(_job_group())
+    posting = await repo.upsert_source_posting(_source_posting())
+    await repo.add_posting_to_group(group.id, posting.id)
+
+    by_url = await repo.get_job_group_by_canonical_url(
+        "https://jobicy.com/jobs/abc-123"
+    )
+    by_tuple = await repo.get_job_group_by_identity_tuple(
+        "acme",
+        "python engineer",
+        "são paulo brazil",
+        EmploymentType.FULL_TIME,
+    )
+    missing_location = await repo.get_job_group_by_identity_tuple(
+        "acme",
+        "python engineer",
+        "",
+        EmploymentType.FULL_TIME,
+    )
+
+    assert by_url is not None
+    assert by_url.id == group.id
+    assert by_tuple is not None
+    assert by_tuple.id == group.id
+    assert missing_location is None
+
+
+async def test_add_posting_to_group_is_idempotent_and_does_not_reassign(
+    db_session: AsyncSession,
+) -> None:
+    repo = CatalogRepository(db_session)
+    first_group = await repo.create_job_group(_job_group())
+    second_group = await repo.create_job_group(
+        _job_group(title="Other", title_comparison_key="other")
+    )
+    posting = await repo.upsert_source_posting(_source_posting())
+
+    await repo.add_posting_to_group(first_group.id, posting.id)
+    await repo.add_posting_to_group(first_group.id, posting.id)
+    await repo.add_posting_to_group(second_group.id, posting.id)
+
+    loaded = await repo.get_job_group_by_source_posting("jobicy", "abc-123")
+    assert loaded is not None
+    assert loaded.id == first_group.id
+    assert len(loaded.source_postings) == 1

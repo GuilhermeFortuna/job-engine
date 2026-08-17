@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import (
     DateTime,
     ForeignKey,
+    Index,
     Numeric,
     String,
     Text,
@@ -127,10 +128,13 @@ class JobGroup(CompensationMixin, Base):
     id: Mapped[UUID] = _uuid_pk()
     title: Mapped[str] = mapped_column(Text, nullable=False)
     title_original: Mapped[str] = mapped_column(Text, nullable=False)
+    title_comparison_key: Mapped[str] = mapped_column(Text, nullable=False)
     company: Mapped[str] = mapped_column(Text, nullable=False)
     company_original: Mapped[str] = mapped_column(Text, nullable=False)
+    company_comparison_key: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     location_original: Mapped[str | None] = mapped_column(Text)
+    location_comparison_key: Mapped[str] = mapped_column(Text, nullable=False)
     location_normalized_country: Mapped[str | None] = mapped_column(Text)
     location_normalized_region: Mapped[str | None] = mapped_column(Text)
     remote_status: Mapped[RemoteStatus] = mapped_column(
@@ -163,8 +167,20 @@ class JobGroup(CompensationMixin, Base):
     eligible_locations: Mapped[list["JobGroupEligibleLocation"]] = relationship(
         back_populates="job_group", cascade="all, delete-orphan"
     )
+    role_families: Mapped[list["JobGroupRoleFamily"]] = relationship(
+        back_populates="job_group", cascade="all, delete-orphan"
+    )
     posting_links: Mapped[list["JobGroupPosting"]] = relationship(
         back_populates="job_group", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_job_groups_identity_tuple",
+            "company_comparison_key",
+            "title_comparison_key",
+            "location_comparison_key",
+        ),
     )
 
 
@@ -174,6 +190,10 @@ class SourcePosting(CompensationMixin, Base):
         UniqueConstraint(
             "source_id", "source_posting_id", name="uq_source_postings_source_identity"
         ),
+        Index(
+            "ix_source_postings_application_url_canonical",
+            "application_url_canonical",
+        ),
     )
 
     id: Mapped[UUID] = _uuid_pk()
@@ -181,6 +201,7 @@ class SourcePosting(CompensationMixin, Base):
     source_posting_id: Mapped[str] = mapped_column(Text, nullable=False)
     source_name: Mapped[str] = mapped_column(Text, nullable=False)
     application_url: Mapped[str] = mapped_column(Text, nullable=False)
+    application_url_canonical: Mapped[str] = mapped_column(Text, nullable=False)
     title_original: Mapped[str] = mapped_column(Text, nullable=False)
     company_original: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -272,3 +293,20 @@ class JobGroupEligibleLocation(Base):
     evidence_text: Mapped[str | None] = mapped_column(Text)
 
     job_group: Mapped[JobGroup] = relationship(back_populates="eligible_locations")
+
+
+class JobGroupRoleFamily(Base):
+    __tablename__ = "job_group_role_families"
+    __table_args__ = (
+        UniqueConstraint(
+            "job_group_id", "family_id", name="uq_job_group_role_families_family"
+        ),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    job_group_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("job_groups.id"), nullable=False
+    )
+    family_id: Mapped[str] = mapped_column(Text, nullable=False)
+
+    job_group: Mapped[JobGroup] = relationship(back_populates="role_families")

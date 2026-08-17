@@ -2,7 +2,6 @@ from alembic import command
 from sqlalchemy import create_engine, inspect, text
 
 from job_engine.db.session import to_sync_url
-
 from tests.db.conftest import alembic_config
 
 REQUIRED_TABLES = {
@@ -12,6 +11,7 @@ REQUIRED_TABLES = {
     "job_group_postings",
     "job_group_technologies",
     "job_group_eligible_locations",
+    "job_group_role_families",
     "source_postings",
 }
 

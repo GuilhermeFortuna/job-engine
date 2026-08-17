@@ -38,3 +38,9 @@ class IngestionRunStatus(StrEnum):
     SUCCESS = "success"
     PARTIAL_SUCCESS = "partial_success"
     FAILURE = "failure"
+
+
+class LocationEligibilityRegion(StrEnum):
+    BRAZIL = "brazil"
+    LATIN_AMERICA = "latin_america"
+    WORLDWIDE = "worldwide"

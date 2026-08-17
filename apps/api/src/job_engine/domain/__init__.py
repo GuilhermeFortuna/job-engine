@@ -2,6 +2,7 @@ from job_engine.domain.enums import (
     EmploymentType,
     IngestionRunStatus,
     JobStatus,
+    LocationEligibilityRegion,
     RemoteStatus,
     Seniority,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "JobGroup",
     "JobGroupInput",
     "JobStatus",
+    "LocationEligibilityRegion",
     "RemoteStatus",
     "Seniority",
     "SourcePosting",

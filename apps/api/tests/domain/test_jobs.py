@@ -10,6 +10,7 @@ from job_engine.domain.enums import (
     EmploymentType,
     IngestionRunStatus,
     JobStatus,
+    LocationEligibilityRegion,
     RemoteStatus,
     Seniority,
 )
@@ -46,6 +47,7 @@ def _valid_source_posting(**overrides: object) -> SourcePostingInput:
         "source_posting_id": "abc-123",
         "source_name": "Jobicy",
         "application_url": "https://jobicy.com/jobs/abc-123",
+        "application_url_canonical": "https://jobicy.com/jobs/abc-123",
         "title_original": "Python Engineer",
         "company_original": "Acme Ltd",
         "description": "Build APIs.",
@@ -75,10 +77,13 @@ def _valid_job_group(**overrides: object) -> JobGroupInput:
     payload: dict[str, object] = {
         "title": "Python Engineer",
         "title_original": "Python Engineer (Backend)",
+        "title_comparison_key": "python engineer",
         "company": "Acme",
         "company_original": "Acme Ltd",
+        "company_comparison_key": "acme",
         "description": "Build APIs.",
         "location_original": "São Paulo, Brazil",
+        "location_comparison_key": "são paulo brazil",
         "location_normalized_country": "BR",
         "location_normalized_region": "latin_america",
         "remote_status": RemoteStatus.REMOTE,
@@ -94,8 +99,12 @@ def _valid_job_group(**overrides: object) -> JobGroupInput:
         "location_eligibility_unknown": False,
         "technologies": (TechnologyTerm(term="Python", source_text="Python, FastAPI"),),
         "eligible_locations": (
-            EligibleLocation(region="brazil", evidence_text="Remote in Brazil"),
+            EligibleLocation(
+                region=LocationEligibilityRegion.BRAZIL,
+                evidence_text="Remote in Brazil",
+            ),
         ),
+        "role_families": ("python",),
         "last_ingestion_run_id": uuid4(),
     }
     payload.update(overrides)

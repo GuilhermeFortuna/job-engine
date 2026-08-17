@@ -1,0 +1,59 @@
+{
+  "families": [
+    {
+      "id": "software_developer",
+      "title_terms": [
+        "software developer",
+        "software engineer",
+        "programmer"
+      ]
+    },
+    {
+      "id": "full_stack",
+      "title_terms": [
+        "full stack",
+        "full-stack",
+        "fullstack"
+      ]
+    },
+    {
+      "id": "backend",
+      "title_terms": [
+        "backend",
+        "back-end",
+        "back end"
+      ]
+    },
+    {
+      "id": "python",
+      "title_terms": [
+        "python"
+      ]
+    },
+    {
+      "id": "frontend",
+      "title_terms": [
+        "frontend",
+        "front-end",
+        "front end",
+        "react developer",
+        "typescript developer"
+      ]
+    },
+    {
+      "id": "ai_application",
+      "title_terms": [
+        "ai application",
+        "llm engineer",
+        "generative ai"
+      ]
+    },
+    {
+      "id": "applied_ai",
+      "title_terms": [
+        "applied ai",
+        "ai engineer"
+      ]
+    }
+  ]
+}
