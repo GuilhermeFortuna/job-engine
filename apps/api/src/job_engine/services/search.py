@@ -99,6 +99,7 @@ SORT_LABELS = {
 SOURCE_LABELS = {
     "himalayas": "Himalayas",
     "jobicy": "Jobicy",
+    "remoteok": "Remote OK",
 }
 
 

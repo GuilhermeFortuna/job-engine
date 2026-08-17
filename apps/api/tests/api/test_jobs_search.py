@@ -434,7 +434,7 @@ async def test_validation_errors(client: AsyncClient) -> None:
         "/api/v1/jobs?posted_within=year",
         "/api/v1/jobs?sort=relevance",
         "/api/v1/jobs?role_family=data_scientist",
-        "/api/v1/jobs?source=remoteok",
+        "/api/v1/jobs?source=not-a-source",
         "/api/v1/jobs?technology=Fortran",
         "/api/v1/jobs?remote_status=eligible",
     ]

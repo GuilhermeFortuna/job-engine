@@ -1,0 +1,14 @@
+[
+  {
+    "legal": "Credit Remote OK and link the original listing URL."
+  },
+  {
+    "slug": "missing-identifier",
+    "url": "https://remoteok.com/remote-jobs/missing-identifier",
+    "position": "Missing Identifier Role",
+    "company": "NoId Inc",
+    "location": "Austin,",
+    "tags": ["dev"],
+    "description": "Sanitized malformed fixture without id."
+  }
+]

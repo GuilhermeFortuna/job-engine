@@ -4,7 +4,33 @@
 
 **Registry:** [Work Order Registry](README.md)
 
-This is the single status authority for all current and future Job Engine Work Orders. Add future batches as new sections in this file; do not create batch-specific status boards.
+This is the sole source of truth for live Work Order status and owner approvals. Add future batches as new sections in this file; do not create batch-specific status boards.
+
+## Authority and precedence
+
+The owner manually records approvals in this file. The status board here
+overrides conflicting status fields, dispatch gates, dependency notes, and
+pending-owner language in individual Work Orders, directory indexes, source
+registers, research documents, and older handoff notes.
+
+- `READY` is explicit authorization to plan, bind, and implement the order
+  within its documented technical scope. A stale `BLOCKED`, `REVIEW`,
+  `PENDING_OWNER`, unbound, or awaiting-approval statement elsewhere must not
+  stop the worker or cause the worker to downgrade the order.
+- `IMPLEMENTING` authorizes continued implementation.
+- `DONE` records owner acceptance and must not be reopened solely because a
+  secondary document was not synchronized.
+- Only an explicit owner instruction may change an approval status. Conflicting
+  secondary documentation should be reported in the handoff and corrected when
+  it is in scope; it is not an implementation blocker.
+
+`STATUS.md` records approval; it does not transfer technical handoff work to the
+owner. An agent whose Work Order resolves a downstream source ID, file name,
+contract value, or placeholder must update the affected downstream Work Orders,
+indexes, and validation commands before handoff. If that propagation was missed
+and the downstream order is already `READY`, its assigned worker must reconcile
+the omission from the completed prerequisite and current repository evidence,
+then continue. A stale placeholder is not an owner-approval request.
 
 ## Batch 01
 
@@ -61,6 +87,7 @@ Batch 01 is complete only when `CROSS-003` is `DONE`. Backend or frontend automa
 | [BACK-004](back/BACK-004-adapter-contract-source-one.md)   | Cursor agent | `development`                               | 2026-08-16T23:00:00-03:00 | Adapter contract and Himalayas source one                                                                   |
 | [BACK-007](back/BACK-007-search-api.md)                    | Cursor agent | `development`                               | 2026-08-16T22:58:00-03:00 | Persisted V1 search and details API; parallel with BACK-004 on this branch                                  |
 | [BACK-005](back/BACK-005-source-two-adapter.md)            | Cursor agent | `development`                               | 2026-08-17T00:13:00-03:00 | Jobicy source-two adapter; shared `development` checkout                                                    |
+| [BACK-006](back/BACK-006-source-three-adapter.md)          | Cursor agent | `development`                               | 2026-08-17T00:30:00-03:00 | Remote OK source-three adapter; bound from CROSS-002 `APPROVED_BACKUP`; shared `development` checkout      |
 
 
 
@@ -74,3 +101,4 @@ Batch 01 is complete only when `CROSS-003` is `DONE`. Backend or frontend automa
 | 2026-08-16 | CROSS-002 | WWR programming-feed membership is not software evidence; third primary / BACK-006 remains unbound pending owner/legal review | Cursor agent |
 | 2026-08-16 | BACK-002  | Technology terms and eligible regions use child tables with unique `(job_group_id, value)`, not arrays                        | Cursor agent |
 | 2026-08-17 | BACK-005  | Source-aware stale thresholds via Settings (`himalayas`=2, `jobicy`=3) in `_mark_stale_absences`; adapter Protocol unchanged  | Cursor agent |
+| 2026-08-17 | BACK-006  | Third source bound to `remoteok` (CROSS-002 `APPROVED_BACKUP`); WWR not implemented; stale after 3 successful misses         | Cursor agent |

@@ -2,7 +2,7 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DOCUMENTED_DATABASE_URL = "postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine"
-DEFAULT_ENABLED_SOURCES: tuple[str, ...] = ("himalayas", "jobicy")
+DEFAULT_ENABLED_SOURCES: tuple[str, ...] = ("himalayas", "jobicy", "remoteok")
 HIMALAYAS_USER_AGENT = (
     "JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; "
     "personal catalog; himalayas adapter)"
@@ -10,6 +10,10 @@ HIMALAYAS_USER_AGENT = (
 JOBICY_USER_AGENT = (
     "JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; "
     "personal catalog; jobicy adapter)"
+)
+REMOTEOK_USER_AGENT = (
+    "JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; "
+    "personal catalog; remoteok adapter)"
 )
 
 
@@ -35,12 +39,20 @@ class Settings(BaseSettings):
     jobicy_count: int = 100
     jobicy_max_windows: int = 3
     jobicy_stale_after_successful_misses: int = 3
+    remoteok_base_url: str = "https://remoteok.com"
+    remoteok_connect_timeout_seconds: float = 5.0
+    remoteok_read_timeout_seconds: float = 15.0
+    remoteok_max_retries: int = 1
+    remoteok_user_agent: str = REMOTEOK_USER_AGENT
+    remoteok_stale_after_successful_misses: int = 3
 
     def stale_after_successful_misses(self, source_id: str) -> int:
         if source_id == "himalayas":
             return self.himalayas_stale_after_successful_misses
         if source_id == "jobicy":
             return self.jobicy_stale_after_successful_misses
+        if source_id == "remoteok":
+            return self.remoteok_stale_after_successful_misses
         return 2
 
     @field_validator("enabled_sources", mode="before")
