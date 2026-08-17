@@ -91,6 +91,7 @@ BACK-004 + BACK-005 + BACK-006 + BACK-007 + FRONT-003 -> CROSS-003 (Batch 01 Acc
 | [BACK-005](back/BACK-005-source-two-adapter.md)            | Cursor agent      | `development`                               | 2026-08-17T00:13:00-03:00 | Jobicy source-two adapter; shared `development` checkout                                                    |
 | [BACK-006](back/BACK-006-source-three-adapter.md)          | Cursor agent      | `development`                               | 2026-08-17T00:30:00-03:00 | Remote OK source-three adapter; bound from CROSS-002 `APPROVED_BACKUP`; shared `development` checkout       |
 | [FRONT-002](front/FRONT-002-unified-search-ui.md)          | Antigravity agent | `development`                               | 2026-08-17T00:50:30-03:00 | URL-backed unified search and results UI; shared `development` checkout                                     |
+| [FRONT-003](front/FRONT-003-job-details-resilience.md)     | Antigravity agent | `development`                               | 2026-08-17T01:30:00-03:00 | Details, freshness, partial-failure, responsive, and accessibility states; shared `development` checkout    |
 
 
 

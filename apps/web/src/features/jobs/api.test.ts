@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ApiError,
+  ApiNotFoundError,
   ApiValidationError,
   NetworkError,
   fetchCatalogFilters,
+  fetchCatalogHealth,
+  fetchJobDetail,
   searchJobs,
 } from "./api";
 import { DEFAULT_SEARCH_PARAMS } from "./search-params";
@@ -135,6 +138,59 @@ describe("api client", () => {
       global.fetch = vi.fn().mockRejectedValue(new Error("Network down"));
 
       await expect(fetchCatalogFilters()).rejects.toThrow(NetworkError);
+    });
+  });
+
+  describe("fetchJobDetail", () => {
+    it("fetches /api/v1/jobs/{id} successfully", async () => {
+      const mockDetail = { id: "job-1", title: "Test Title" };
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockDetail,
+      } as Response);
+
+      const result = await fetchJobDetail("job-1");
+      expect(global.fetch).toHaveBeenCalledWith(
+        "http://127.0.0.1:8000/api/v1/jobs/job-1",
+        expect.objectContaining({
+          headers: expect.objectContaining({ Accept: "application/json" }),
+        }),
+      );
+      expect(result).toEqual(mockDetail);
+    });
+
+    it("throws ApiNotFoundError when backend returns 404", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+        json: async () => ({ detail: "Job group not found" }),
+      } as Response);
+
+      await expect(fetchJobDetail("non-existent")).rejects.toThrow(
+        ApiNotFoundError,
+      );
+    });
+  });
+
+  describe("fetchCatalogHealth", () => {
+    it("fetches /api/v1/catalog/health successfully", async () => {
+      const mockHealth = { catalog_last_seen_at: null, sources: [] };
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockHealth,
+      } as Response);
+
+      const result = await fetchCatalogHealth();
+      expect(global.fetch).toHaveBeenCalledWith(
+        "http://127.0.0.1:8000/api/v1/catalog/health",
+        expect.objectContaining({
+          headers: expect.objectContaining({ Accept: "application/json" }),
+        }),
+      );
+      expect(result).toEqual(mockHealth);
     });
   });
 });

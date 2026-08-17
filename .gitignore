@@ -26,6 +26,8 @@ node_modules/
 # Coverage and test output
 coverage/
 *.lcov
+test-results/
+playwright-report/
 
 # Build output
 dist/

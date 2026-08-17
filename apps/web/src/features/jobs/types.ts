@@ -94,8 +94,66 @@ export interface JobCardBase {
   primary_application_url: string | null;
 }
 
+export type JobStatus = "active" | "stale" | "closed" | "unknown";
+
+export type LatestRunStatus =
+  | "never_run"
+  | "running"
+  | "success"
+  | "partial_success"
+  | "failure";
+
 export interface JobListItem extends JobCardBase {
   description_excerpt: string | null;
+}
+
+export interface SourcePostingDetail {
+  id: string;
+  source_id: string;
+  source_posting_id: string;
+  source_name: string;
+  application_url: string;
+  title_original: string;
+  company_original: string;
+  description: string | null;
+  location_original: string | null;
+  remote_status: RemoteStatus;
+  employment_type: EmploymentType;
+  seniority: Seniority;
+  seniority_original: string | null;
+  compensation: Compensation;
+  technologies_original_text: string | null;
+  location_eligibility_evidence: string | null;
+  published_at: string | null;
+  source_timestamp: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  closed_at: string | null;
+  status: JobStatus;
+  adapter_version: string | null;
+  linked_at: string;
+}
+
+export interface JobDetail extends JobCardBase {
+  description: string | null;
+  status: JobStatus;
+  closed_at: string | null;
+  source_postings: SourcePostingDetail[];
+}
+
+export interface SourceHealth {
+  source_id: string;
+  latest_run_status: LatestRunStatus;
+  latest_run_started_at: string | null;
+  latest_run_completed_at: string | null;
+  fetched_count: number | null;
+  accepted_count: number | null;
+  rejected_count: number | null;
+}
+
+export interface CatalogHealth {
+  catalog_last_seen_at: string | null;
+  sources: SourceHealth[];
 }
 
 export interface JobSearchResponse {

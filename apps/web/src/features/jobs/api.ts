@@ -2,6 +2,8 @@ import { getApiBaseUrl } from "@/lib/env";
 import { serializeSearchParams } from "./search-params";
 import type {
   CatalogFilters,
+  CatalogHealth,
+  JobDetail,
   JobSearchParams,
   JobSearchResponse,
 } from "./types";
@@ -30,6 +32,13 @@ export class ApiValidationError extends ApiError {
   constructor(statusText: string, detail?: unknown) {
     super(422, statusText, detail);
     this.name = "ApiValidationError";
+  }
+}
+
+export class ApiNotFoundError extends ApiError {
+  constructor(statusText: string, detail?: unknown) {
+    super(404, statusText, detail);
+    this.name = "ApiNotFoundError";
   }
 }
 
@@ -119,4 +128,84 @@ export async function fetchCatalogFilters(
   }
 
   return (await response.json()) as CatalogFilters;
+}
+
+export async function fetchJobDetail(
+  jobGroupId: string,
+  init?: RequestInit,
+): Promise<JobDetail> {
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}/api/v1/jobs/${encodeURIComponent(jobGroupId)}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      headers: {
+        Accept: "application/json",
+        ...init?.headers,
+      },
+    });
+  } catch (err) {
+    throw new NetworkError(`Failed to fetch job details for ${jobGroupId}`, err);
+  }
+
+  if (!response.ok) {
+    let detail: unknown;
+    try {
+      detail = await response.json();
+    } catch {
+      try {
+        detail = await response.text();
+      } catch {
+        detail = undefined;
+      }
+    }
+
+    if (response.status === 404) {
+      throw new ApiNotFoundError(response.statusText, detail);
+    }
+    if (response.status === 422) {
+      throw new ApiValidationError(response.statusText, detail);
+    }
+    throw new ApiError(response.status, response.statusText, detail);
+  }
+
+  return (await response.json()) as JobDetail;
+}
+
+export async function fetchCatalogHealth(
+  init?: RequestInit,
+): Promise<CatalogHealth> {
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}/api/v1/catalog/health`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      headers: {
+        Accept: "application/json",
+        ...init?.headers,
+      },
+    });
+  } catch (err) {
+    throw new NetworkError("Failed to fetch catalog health status", err);
+  }
+
+  if (!response.ok) {
+    let detail: unknown;
+    try {
+      detail = await response.json();
+    } catch {
+      try {
+        detail = await response.text();
+      } catch {
+        detail = undefined;
+      }
+    }
+    throw new ApiError(response.status, response.statusText, detail);
+  }
+
+  return (await response.json()) as CatalogHealth;
 }

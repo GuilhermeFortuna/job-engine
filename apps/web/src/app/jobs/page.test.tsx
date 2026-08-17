@@ -77,6 +77,10 @@ const mockSearchResponse: JobSearchResponse = {
 describe("JobsPage Server Component", () => {
   it("renders page title, search form, status, active filters, and job results", async () => {
     vi.spyOn(api, "fetchCatalogFilters").mockResolvedValue(mockFilters);
+    vi.spyOn(api, "fetchCatalogHealth").mockResolvedValue({
+      catalog_last_seen_at: "2026-08-16T12:00:00Z",
+      sources: [],
+    });
     vi.spyOn(api, "searchJobs").mockResolvedValue(mockSearchResponse);
 
     const jsx = await JobsPage({

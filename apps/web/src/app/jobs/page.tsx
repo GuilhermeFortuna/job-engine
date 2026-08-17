@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
-import { fetchCatalogFilters, searchJobs } from "@/features/jobs/api";
+import {
+  fetchCatalogFilters,
+  fetchCatalogHealth,
+  searchJobs,
+} from "@/features/jobs/api";
 import {
   parseRawSearchParams,
   validateSearchParams,
 } from "@/features/jobs/search-params";
 import { ActiveFilters } from "@/features/jobs/components/ActiveFilters";
+import { CatalogHealthNotice } from "@/features/jobs/components/CatalogHealthNotice";
 import { JobResults } from "@/features/jobs/components/JobResults";
 import { JobSearchForm } from "@/features/jobs/components/JobSearchForm";
 import { Pagination } from "@/features/jobs/components/Pagination";
@@ -22,7 +27,10 @@ interface JobsPageProps {
 
 export default async function JobsPage(props: JobsPageProps) {
   const rawParams = await props.searchParams;
-  const catalogFilters = await fetchCatalogFilters();
+  const [catalogFilters, catalogHealth] = await Promise.all([
+    fetchCatalogFilters(),
+    fetchCatalogHealth().catch(() => null),
+  ]);
   const parsedParams = parseRawSearchParams(rawParams);
   const validatedParams = validateSearchParams(parsedParams, catalogFilters);
   const searchResponse = await searchJobs(validatedParams);
@@ -36,6 +44,8 @@ export default async function JobsPage(props: JobsPageProps) {
           sources.
         </p>
       </header>
+
+      <CatalogHealthNotice health={catalogHealth} />
 
       <div className="jobs-page-layout">
         <aside className="jobs-sidebar" aria-label="Search and Filter Controls">

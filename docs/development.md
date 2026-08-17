@@ -163,12 +163,12 @@ Workspace commands:
 corepack pnpm --filter @job-engine/web run dev
 corepack pnpm --filter @job-engine/web run check
 corepack pnpm --filter @job-engine/web run test
+corepack pnpm --filter @job-engine/web run test:e2e
 corepack pnpm --filter @job-engine/web run build
 ```
 
-- `dev` serves the App Router foundation page (not a live job catalog).
+- `dev` serves the App Router application.
 - `check` runs `next typegen`, strict `tsc --noEmit`, and ESLint. No separate formatter is installed.
-- `test` runs Vitest once (`vitest run`).
+- `test` runs Vitest unit and component tests (`vitest run`).
+- `test:e2e` runs Playwright end-to-end and Axe accessibility tests (`playwright test`).
 - `build` produces the production Next.js build.
-
-The foundation page does not call the API. Later UI orders will read `getApiBaseUrl()` from `src/lib/env.ts`.
