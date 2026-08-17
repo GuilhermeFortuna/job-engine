@@ -46,6 +46,27 @@ async def test_details_include_grouped_postings_and_omit_raw_payload(
     assert "secret" not in response.text
 
 
+async def test_details_description_strips_source_html(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    group_id = await persist_job(
+        session,
+        group=job_group_input(
+            title="HTML Details Role",
+            description=(
+                '<p>A <a href="https://fcamara.com.br/">FCamara</a> '
+                "está em busca de um profissional.</p>"
+            ),
+        ),
+    )
+    response = await client.get(f"/api/v1/jobs/{group_id}")
+    assert response.status_code == 200
+    description = response.json()["description"]
+    assert description == "A FCamara está em busca de um profissional."
+    assert "<p>" not in description
+    assert "<a " not in description
+
+
 async def test_closed_group_is_fetchable_by_id(
     session: AsyncSession, client: AsyncClient
 ) -> None:

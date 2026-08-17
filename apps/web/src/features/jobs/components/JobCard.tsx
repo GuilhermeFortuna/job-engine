@@ -63,6 +63,32 @@ export function formatLocationEligibility(
   return `Eligible: ${parts.join(", ")}`;
 }
 
+const BLOCK_TAG_RE =
+  /<\/?(?:p|div|br|h[1-6]|li|ul|ol|tr|td|th|table|section|article|blockquote)[^>]*>/gi;
+const ANY_TAG_RE = /<[^>]+>/g;
+const SCRIPT_RE = /<script[\s\S]*?<\/script>/gi;
+const STYLE_RE = /<style[\s\S]*?<\/style>/gi;
+
+export function htmlToPlainText(value: string | null | undefined): string | null {
+  if (value == null) {
+    return null;
+  }
+  const decoded = value
+    .replace(SCRIPT_RE, " ")
+    .replace(STYLE_RE, " ")
+    .replace(BLOCK_TAG_RE, " ")
+    .replace(ANY_TAG_RE, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+  return decoded || null;
+}
+
 export function formatUsdAmount(val: string | null): string | null {
   if (!val) return null;
   const num = Number(val);
@@ -74,8 +100,16 @@ export function formatUsdAmount(val: string | null): string | null {
   }).format(num);
 }
 
+function displayableOriginalCompensation(text: string | null): string | null {
+  const original = text?.trim();
+  if (!original || !/\d/.test(original)) {
+    return null;
+  }
+  return original;
+}
+
 export function formatCompensation(comp: Compensation): string {
-  const original = comp.original_text?.trim();
+  const original = displayableOriginalCompensation(comp.original_text);
   const minUsd = formatUsdAmount(comp.annual_usd_minimum);
   const maxUsd = formatUsdAmount(comp.annual_usd_maximum);
 
@@ -128,6 +162,7 @@ export function JobCard({ job }: { job: JobListItem }) {
 
   const compensationText = formatCompensation(job.compensation);
   const eligibilityText = formatLocationEligibility(job.location_eligibility);
+  const excerptText = htmlToPlainText(job.description_excerpt);
   const postedDateIso = job.published_at || job.first_seen_at;
   const postedDateFormatted = formatDate(postedDateIso);
   const lastSeenFormatted = formatDate(job.last_seen_at);
@@ -174,9 +209,7 @@ export function JobCard({ job }: { job: JobListItem }) {
           {compensationText}
         </p>
 
-        {job.description_excerpt && (
-          <p className="job-excerpt">{job.description_excerpt}</p>
-        )}
+        {excerptText && <p className="job-excerpt">{excerptText}</p>}
 
         {job.technologies && job.technologies.length > 0 && (
           <div className="job-technologies" aria-label="Required technologies">

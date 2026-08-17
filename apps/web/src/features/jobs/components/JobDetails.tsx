@@ -6,6 +6,7 @@ import {
   formatLocationEligibility,
   formatRemoteStatus,
   formatSeniority,
+  htmlToPlainText,
 } from "./JobCard";
 import { ExternalApplyLink } from "./ExternalApplyLink";
 import { formatEmploymentType, formatJobStatus, SourcePostingList } from "./SourcePostingList";
@@ -41,6 +42,7 @@ export function JobDetails({ job }: { job: JobDetail }) {
 
   const compensationText = formatCompensation(job.compensation);
   const eligibilityText = formatLocationEligibility(job.location_eligibility);
+  const descriptionText = htmlToPlainText(job.description);
   const publishedDateIso = job.published_at || job.first_seen_at;
   const primarySource = job.sources[0]?.source_name ?? "Source";
 
@@ -206,9 +208,9 @@ export function JobDetails({ job }: { job: JobDetail }) {
           Job Description
         </h2>
 
-        {job.description?.trim() ? (
+        {descriptionText ? (
           <div className="job-description-text">
-            {job.description}
+            {descriptionText}
           </div>
         ) : (
           <p className="no-description-message">

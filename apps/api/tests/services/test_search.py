@@ -15,6 +15,25 @@ def test_description_excerpt_none_and_blank() -> None:
     assert description_excerpt("Short description.") == "Short description."
 
 
+def test_description_excerpt_strips_html_to_plain_text() -> None:
+    excerpt = description_excerpt(
+        "<p>We are seeking a highly skilled and motivated "
+        "<strong>Senior Software Engineer (React)</strong> to join our team.</p>"
+    )
+    assert excerpt == (
+        "We are seeking a highly skilled and motivated "
+        "Senior Software Engineer (React) to join our team."
+    )
+    assert excerpt is not None
+    assert "<" not in excerpt
+    assert (
+        description_excerpt(
+            '<p>A <a href="https://fcamara.com">FCamara</a> está em busca de um...</p>'
+        )
+        == "A FCamara está em busca de um..."
+    )
+
+
 def test_description_excerpt_truncates_on_whitespace() -> None:
     text = ("word " * 80).strip()
     excerpt = description_excerpt(text)
@@ -40,8 +59,11 @@ def test_posted_after_windows() -> None:
 
 def test_compensation_unknown_predicate() -> None:
     minimum = Decimal("100000")
-    assert compensation_matches(
+    assert not compensation_matches(
         None, None, minimum_annual_usd=None, include_unknown=False
+    )
+    assert compensation_matches(
+        None, None, minimum_annual_usd=None, include_unknown=True
     )
     assert compensation_matches(
         None, None, minimum_annual_usd=minimum, include_unknown=True

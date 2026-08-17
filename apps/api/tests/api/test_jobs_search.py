@@ -381,6 +381,34 @@ async def test_unknown_compensation_filter_and_json(
     assert money["minimum"] is None
     assert "0" not in str(money.values())
 
+    known_only = await client.get("/api/v1/jobs?include_unknown_compensation=false")
+    known_only_ids = set(_ids(known_only.json()))
+    assert str(ids["python_brazil"]) in known_only_ids
+    assert str(ids["frontend_latam"]) not in known_only_ids
+
+
+async def test_description_excerpt_returns_plain_text_not_html(
+    session: AsyncSession, client: AsyncClient
+) -> None:
+    await persist_job(
+        session,
+        group=job_group_input(
+            title="HTML Card Role",
+            description=(
+                "<p>We are seeking a highly skilled and motivated "
+                "<strong>Senior Software Engineer (React)</strong>.</p>"
+            ),
+        ),
+    )
+    response = await client.get("/api/v1/jobs?q=HTML+Card")
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    excerpt = item["description_excerpt"]
+    assert excerpt is not None
+    assert "<p>" not in excerpt
+    assert "<strong>" not in excerpt
+    assert "Senior Software Engineer (React)" in excerpt
+
 
 async def test_compensation_sort_places_unknown_last(
     session: AsyncSession, client: AsyncClient

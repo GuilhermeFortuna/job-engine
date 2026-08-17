@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { JobCard } from "./JobCard";
+import { JobCard, formatCompensation } from "./JobCard";
 import { renderWithProviders, screen } from "@/test/render";
 import type { JobListItem } from "../types";
 
@@ -108,6 +108,42 @@ describe("JobCard component", () => {
     expect(screen.getByText("Eligibility: Unknown")).toBeInTheDocument();
   });
 
+  it("renders 'Compensation not provided' when original text is only a pay period", () => {
+    const periodOnlyJob: JobListItem = {
+      ...baseJob,
+      compensation: {
+        original_text: "year",
+        currency: null,
+        period: "year",
+        minimum: null,
+        maximum: null,
+        annual_usd_minimum: null,
+        annual_usd_maximum: null,
+      },
+    };
+
+    renderWithProviders(<JobCard job={periodOnlyJob} />);
+    expect(screen.getByText("Compensation not provided")).toBeInTheDocument();
+    expect(screen.queryByText("year")).not.toBeInTheDocument();
+  });
+
+  it("renders description excerpts as plain text without HTML tags", () => {
+    const htmlExcerptJob: JobListItem = {
+      ...baseJob,
+      description_excerpt:
+        "<p>We are seeking a highly skilled and motivated <strong>Senior Software Engineer (React)</strong>.</p>",
+    };
+
+    renderWithProviders(<JobCard job={htmlExcerptJob} />);
+    expect(
+      screen.getByText(
+        "We are seeking a highly skilled and motivated Senior Software Engineer (React).",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/<p>/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/<strong>/)).not.toBeInTheDocument();
+  });
+
   it("renders 'Compensation not provided' when compensation is missing or unknown", () => {
     const noCompJob: JobListItem = {
       ...baseJob,
@@ -125,6 +161,20 @@ describe("JobCard component", () => {
     renderWithProviders(<JobCard job={noCompJob} />);
     expect(screen.getByText("Compensation not provided")).toBeInTheDocument();
     expect(screen.queryByText("$0")).not.toBeInTheDocument();
+  });
+
+  it("treats period-only original compensation text as unknown", () => {
+    expect(
+      formatCompensation({
+        original_text: "USD year",
+        currency: "USD",
+        period: "year",
+        minimum: null,
+        maximum: null,
+        annual_usd_minimum: null,
+        annual_usd_maximum: null,
+      }),
+    ).toBe("Compensation not provided");
   });
 
   it("renders both original compensation text and normalized annual USD when provided", () => {
