@@ -19,11 +19,11 @@ This is the single status authority for all current and future Job Engine Work O
 | [FRONT-001](front/FRONT-001-web-foundation.md)                 | Frontend | `DONE`    | CROSS-001                                         | Next.js application and frontend test foundation                          |
 | [BACK-002](back/BACK-002-canonical-model-persistence.md)       | Backend  | `DONE`    | BACK-001                                          | Canonical job catalog models, migrations, and repositories                |
 | [BACK-003](back/BACK-003-normalization-deduplication.md)       | Backend  | `DONE`    | BACK-002                                          | Deterministic normalization and duplicate grouping                        |
-| [BACK-004](back/BACK-004-adapter-contract-source-one.md)       | Backend  | `REVIEW` | CROSS-002, BACK-002, BACK-003                     | Adapter contract and first approved source                                |
-| [BACK-005](back/BACK-005-source-two-adapter.md)                | Backend  | `BLOCKED` | CROSS-002, BACK-004                               | Second approved source adapter                                            |
-| [BACK-006](back/BACK-006-source-three-adapter.md)              | Backend  | `BLOCKED` | CROSS-002, BACK-004                               | Third approved source adapter                                             |
-| [BACK-007](back/BACK-007-search-api.md)                        | Backend  | `REVIEW` | BACK-003                                          | Persisted V1 search and details API                                       |
-| [FRONT-002](front/FRONT-002-unified-search-ui.md)              | Frontend | `BLOCKED` | FRONT-001, BACK-007                               | URL-backed unified search and results UI                                  |
+| [BACK-004](back/BACK-004-adapter-contract-source-one.md)       | Backend  | `DONE`    | CROSS-002, BACK-002, BACK-003                     | Adapter contract and first approved source                                |
+| [BACK-005](back/BACK-005-source-two-adapter.md)                | Backend  | `READY`   | CROSS-002, BACK-004                               | Second approved source adapter                                            |
+| [BACK-006](back/BACK-006-source-three-adapter.md)              | Backend  | `READY`   | CROSS-002, BACK-004                               | Third approved source adapter                                             |
+| [BACK-007](back/BACK-007-search-api.md)                        | Backend  | `DONE`    | BACK-003                                          | Persisted V1 search and details API                                       |
+| [FRONT-002](front/FRONT-002-unified-search-ui.md)              | Frontend | `READY`   | FRONT-001, BACK-007                               | URL-backed unified search and results UI                                  |
 | [FRONT-003](front/FRONT-003-job-details-resilience.md)         | Frontend | `BLOCKED` | FRONT-002, BACK-007                               | Details, freshness, partial-failure, responsive, and accessibility states |
 | [CROSS-003](cross-repo/CROSS-003-v1-integration-acceptance.md) | Cross    | `BLOCKED` | BACK-004, BACK-005, BACK-006, BACK-007, FRONT-003 | Integrated three-source V1 acceptance evidence                            |
 
@@ -72,3 +72,5 @@ Batch 01 is complete only when `CROSS-003` is `DONE`. Backend or frontend automa
 | 2026-08-15 | CROSS-001 | Pinned Node.js 24.18.0, pnpm 10.34.5, CPython 3.13.14, and postgres:17.11                                                     | Cursor agent |
 | 2026-08-16 | CROSS-002 | WWR programming-feed membership is not software evidence; third primary / BACK-006 remains unbound pending owner/legal review | Cursor agent |
 | 2026-08-16 | BACK-002  | Technology terms and eligible regions use child tables with unique `(job_group_id, value)`, not arrays                        | Cursor agent |
+
+
