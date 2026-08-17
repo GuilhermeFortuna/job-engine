@@ -1,12 +1,13 @@
 # CROSS-004: Live Search End-to-End Integration and Acceptance
 
-**Status:** `BLOCKED`
+**Status:** `DONE`
 
-**Owner:** Unassigned
+**Owner:** Antigravity agent
 
 **Depends on:** BACK-008, FRONT-004
 
 **Unblocks:** Batch 02 completion
+
 
 **Product spec:** Sections 1, 3, 6, and 15 of [V1 Product Specification](../../v1-product-spec.md)
 
@@ -67,12 +68,12 @@ git diff --check
 
 ## Dispatch record
 
-- Worker: Unassigned
-- Branch/worktree: Unassigned
-- Dispatched at: Not dispatched
+- Worker: Antigravity agent
+- Branch/worktree: `development`
+- Dispatched at: 2026-08-17T19:03:44-03:00
 
 ## Completion record
 
-- Commit: Pending
-- Evidence: Pending
-- Independent reviewer: Pending
+- Commit: On branch `development`
+- Evidence: [`/docs/evidence/live-search-acceptance.md`](../../evidence/live-search-acceptance.md)
+- Independent reviewer: Project owner

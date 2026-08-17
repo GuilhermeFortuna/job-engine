@@ -52,7 +52,8 @@ then continue. A stale placeholder is not an owner-approval request.
 | [CROSS-003](cross-repo/CROSS-003-v1-integration-acceptance.md) | Cross    | `DONE`  | BACK-004, BACK-005, BACK-006, BACK-007, FRONT-003 | Integrated three-source V1 acceptance evidence                            |
 | [BACK-008](back/BACK-008-live-sync-streaming-api.md)           | Backend  | `DONE`  | CROSS-003, BACK-007                               | On-demand concurrent live sync and SSE streaming API                      |
 | [FRONT-004](front/FRONT-004-interactive-live-search-ui.md)     | Frontend | `DONE`  | FRONT-003, BACK-008                               | Interactive live search and progress feedback UI                          |
-| [CROSS-004](cross-repo/CROSS-004-live-search-acceptance.md)    | Cross    | `READY` | BACK-008, FRONT-004                               | Live search end-to-end integration and acceptance                         |
+| [CROSS-004](cross-repo/CROSS-004-live-search-acceptance.md)    | Cross    | `DONE`  | BACK-008, FRONT-004                               | Live search end-to-end integration and acceptance                         |
+
 
 
 
@@ -99,6 +100,7 @@ BACK-004 + BACK-005 + BACK-006 + BACK-007 + FRONT-003 -> CROSS-003 (Batch 01 Acc
 | [FRONT-002](front/FRONT-002-unified-search-ui.md)              | Antigravity agent | `development`                               | 2026-08-17T00:50:30-03:00 | URL-backed unified search and results UI; shared `development` checkout                                     |
 | [FRONT-003](front/FRONT-003-job-details-resilience.md)         | Antigravity agent | `development`                               | 2026-08-17T01:30:00-03:00 | Details, freshness, partial-failure, responsive, and accessibility states; shared `development` checkout    |
 | [CROSS-003](cross-repo/CROSS-003-v1-integration-acceptance.md) | Antigravity agent | `development`                               | 2026-08-17T03:53:14-03:00 | Integrated three-source V1 acceptance evidence; GO decision in `/docs/evidence/v1-acceptance.md`            |
+| [CROSS-004](cross-repo/CROSS-004-live-search-acceptance.md)    | Antigravity agent | `development`                               | 2026-08-17T19:03:44-03:00 | Live search end-to-end integration and acceptance; GO decision in `/docs/evidence/live-search-acceptance.md` |
 
 
 
@@ -115,5 +117,6 @@ BACK-004 + BACK-005 + BACK-006 + BACK-007 + FRONT-003 -> CROSS-003 (Batch 01 Acc
 | 2026-08-17 | BACK-006  | Third source bound to `remoteok` (CROSS-002 `APPROVED_BACKUP`); WWR not implemented; stale after 3 successful misses          | Cursor agent      |
 | 2026-08-17 | BACK-008  | Scope Batch 02 on-demand live search with SSE progress streaming; sequented after Batch 01 (FRONT-003, CROSS-003)             | Project owner     |
 | 2026-08-17 | CROSS-003 | V1 integration acceptance complete; all 12 criteria verified against commit 9a45951; GO issued                                | Antigravity agent |
+| 2026-08-17 | CROSS-004 | Batch 02 live search acceptance complete; all 6 criteria verified; GO issued                                                  | Antigravity agent |
 
 

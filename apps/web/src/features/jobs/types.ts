@@ -205,3 +205,74 @@ export interface JobSearchParams {
   page: number;
   page_size: number;
 }
+
+export type SyncStage = "fetching" | "normalizing" | "persisting";
+export type SyncSourceStatus = "success" | "partial_success" | "failure";
+
+export interface SyncStartedEvent {
+  sources: string[];
+  started_at: string;
+}
+
+export interface SyncSourceProgressEvent {
+  source_id: string;
+  stage: SyncStage;
+  fetched_count: number;
+  accepted_count: number;
+  rejected_count: number;
+}
+
+export interface SyncErrorSummary {
+  code: string;
+  message: string;
+}
+
+export interface SyncSourceCompletedEvent {
+  source_id: string;
+  status: SyncSourceStatus;
+  inserted_count: number;
+  updated_count: number;
+  marked_stale_count: number;
+  error_summaries: SyncErrorSummary[];
+}
+
+export interface SyncCompletedEvent {
+  status: SyncSourceStatus;
+  total_inserted: number;
+  total_updated: number;
+  total_stale: number;
+  completed_at: string;
+}
+
+export interface SourceLiveState {
+  source_id: string;
+  stage: SyncStage | "idle";
+  status?: SyncSourceStatus;
+  fetched_count: number;
+  accepted_count: number;
+  rejected_count: number;
+  inserted_count: number;
+  updated_count: number;
+  marked_stale_count: number;
+  error_summaries: SyncErrorSummary[];
+}
+
+export type LiveSyncStatus =
+  | "idle"
+  | "connecting"
+  | "syncing"
+  | "completed"
+  | "error"
+  | "cooldown";
+
+export interface LiveSyncState {
+  status: LiveSyncStatus;
+  sources: Record<string, SourceLiveState>;
+  total_inserted: number;
+  total_updated: number;
+  total_stale: number;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  cooldown_remaining_seconds: number | null;
+}

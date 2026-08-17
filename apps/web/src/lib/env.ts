@@ -4,12 +4,19 @@ export function getApiBaseUrl(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
   const raw = env.NEXT_PUBLIC_API_BASE_URL?.trim();
-  const value =
-    raw && raw.length > 0
-      ? raw
-      : env.NODE_ENV === "development"
-        ? DEFAULT_DEV_API_BASE_URL
-        : undefined;
+  let value: string | undefined;
+
+  if (raw && raw.length > 0) {
+    value = raw;
+  } else if (env.NODE_ENV === "development") {
+    value = DEFAULT_DEV_API_BASE_URL;
+  } else if (typeof window !== "undefined" && env === process.env) {
+    // In-browser client fallback
+    value =
+      window.location.port === "3005"
+        ? "http://127.0.0.1:8088"
+        : DEFAULT_DEV_API_BASE_URL;
+  }
 
   if (!value) {
     throw new Error(
@@ -19,6 +26,7 @@ export function getApiBaseUrl(
 
   return assertPublicHttpOrigin(value);
 }
+
 
 function assertPublicHttpOrigin(value: string): string {
   let url: URL;

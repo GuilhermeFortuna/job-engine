@@ -2,6 +2,8 @@ import http from "node:http";
 
 const PORT = parseInt(process.env.MOCK_PORT || "8088", 10);
 let isDegradedGlobal = false;
+let liveSyncCooldownActive = false;
+let liveSyncDegradedSource = false;
 
 export const mockFilters = {
   role_families: [
@@ -297,6 +299,169 @@ const server = http.createServer((req, res) => {
       res.writeHead(200);
       res.end(JSON.stringify({ ok: true, degraded: isDegradedGlobal }));
     });
+    return;
+  }
+
+  if (url.pathname === "/api/v1/test/set-live-sync-mode" && req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      try {
+        const parsed = JSON.parse(body || "{}");
+        if (typeof parsed.cooldown === "boolean") {
+          liveSyncCooldownActive = parsed.cooldown;
+        }
+        if (typeof parsed.degraded === "boolean") {
+          liveSyncDegradedSource = parsed.degraded;
+        }
+      } catch {}
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          ok: true,
+          cooldown: liveSyncCooldownActive,
+          degraded: liveSyncDegradedSource,
+        }),
+      );
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/v1/catalog/live-sync") {
+    if (liveSyncCooldownActive || url.searchParams.get("cooldown") === "true") {
+      res.writeHead(429, {
+        "Content-Type": "application/json",
+        "Retry-After": "15",
+      });
+      res.end(
+        JSON.stringify({
+          detail: "Live sync cooldown active. Please wait 15 seconds before syncing again.",
+        }),
+      );
+      return;
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+
+    const isDegraded = liveSyncDegradedSource || url.searchParams.get("degraded") === "true";
+
+    const sendEvent = (event, data) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    // 1. sync_started
+    sendEvent("sync_started", {
+      sources: ["himalayas", "jobicy", "remoteok"],
+      started_at: new Date().toISOString(),
+    });
+
+    // 2. Source progress events
+    setTimeout(() => {
+      sendEvent("source_progress", {
+        source_id: "himalayas",
+        stage: "fetching",
+        fetched_count: 50,
+        accepted_count: 48,
+        rejected_count: 2,
+      });
+      sendEvent("source_progress", {
+        source_id: "jobicy",
+        stage: "fetching",
+        fetched_count: 30,
+        accepted_count: 30,
+        rejected_count: 0,
+      });
+      sendEvent("source_progress", {
+        source_id: "remoteok",
+        stage: "fetching",
+        fetched_count: 40,
+        accepted_count: 39,
+        rejected_count: 1,
+      });
+    }, 50);
+
+    setTimeout(() => {
+      sendEvent("source_progress", {
+        source_id: "himalayas",
+        stage: "normalizing",
+        fetched_count: 50,
+        accepted_count: 48,
+        rejected_count: 2,
+      });
+      sendEvent("source_progress", {
+        source_id: "remoteok",
+        stage: "normalizing",
+        fetched_count: 40,
+        accepted_count: 39,
+        rejected_count: 1,
+      });
+    }, 100);
+
+    // 3. Source completed events
+    setTimeout(() => {
+      sendEvent("source_completed", {
+        source_id: "himalayas",
+        status: "success",
+        inserted_count: 5,
+        updated_count: 43,
+        marked_stale_count: 0,
+        error_summaries: [],
+      });
+
+      if (isDegraded) {
+        sendEvent("source_completed", {
+          source_id: "jobicy",
+          status: "failure",
+          inserted_count: 0,
+          updated_count: 0,
+          marked_stale_count: 0,
+          error_summaries: [
+            {
+              code: "upstream_timeout",
+              message: "Jobicy API connection timed out",
+            },
+          ],
+        });
+      } else {
+        sendEvent("source_completed", {
+          source_id: "jobicy",
+          status: "success",
+          inserted_count: 3,
+          updated_count: 27,
+          marked_stale_count: 0,
+          error_summaries: [],
+        });
+      }
+
+      sendEvent("source_completed", {
+        source_id: "remoteok",
+        status: "success",
+        inserted_count: 4,
+        updated_count: 35,
+        marked_stale_count: 1,
+        error_summaries: [],
+      });
+    }, 150);
+
+    // 4. sync_completed
+    setTimeout(() => {
+      sendEvent("sync_completed", {
+        status: isDegraded ? "partial_success" : "success",
+        total_inserted: isDegraded ? 9 : 12,
+        total_updated: isDegraded ? 78 : 105,
+        total_stale: 1,
+        completed_at: new Date().toISOString(),
+      });
+      res.end();
+    }, 200);
+
     return;
   }
 

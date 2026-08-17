@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useLiveSync } from "../hooks/useLiveSync";
 import { buildSearchUrl, updateSearchParams } from "../search-params";
 import type {
   CatalogFilters,
@@ -13,6 +14,8 @@ import type {
   Seniority,
   SortValue,
 } from "../types";
+import { LiveSearchButton } from "./LiveSearchButton";
+import { LiveSyncProgressModal } from "./LiveSyncProgressModal";
 
 export function JobSearchForm({
   params,
@@ -22,6 +25,7 @@ export function JobSearchForm({
   catalogFilters: CatalogFilters;
 }) {
   const router = useRouter();
+  const liveSync = useLiveSync();
   const [keywordInput, setKeywordInput] = useState(params.q ?? "");
   const [prevQ, setPrevQ] = useState(params.q);
   if (params.q !== prevQ) {
@@ -120,6 +124,11 @@ export function JobSearchForm({
           <button type="submit" className="btn btn-primary btn-search">
             Search
           </button>
+          <LiveSearchButton
+            onStartSync={liveSync.startSync}
+            status={liveSync.state.status}
+            cooldownSeconds={liveSync.state.cooldown_remaining_seconds}
+          />
         </div>
       </div>
 
@@ -387,6 +396,15 @@ export function JobSearchForm({
           </div>
         </div>
       </details>
+
+      <LiveSyncProgressModal
+        isOpen={liveSync.isOpen}
+        state={liveSync.state}
+        onClose={liveSync.closeModal}
+        onCancel={liveSync.cancelSync}
+        onRetry={liveSync.startSync}
+        liveAnnouncement={liveSync.liveAnnouncement}
+      />
     </form>
   );
 }

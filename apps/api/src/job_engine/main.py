@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -31,6 +32,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = resolved
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/api/v1/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
