@@ -1,0 +1,16 @@
+{
+  "updatedAt": 1740300000000,
+  "offset": 0,
+  "limit": 20,
+  "totalCount": 1,
+  "jobs": [
+    {
+      "title": "Missing Identifier Role",
+      "companyName": "NoGuid Inc",
+      "employmentType": "Full Time",
+      "applicationLink": "https://himalayas.app/companies/noguid/jobs/missing",
+      "description": "Sanitized malformed fixture without guid.",
+      "locationRestrictions": []
+    }
+  ]
+}

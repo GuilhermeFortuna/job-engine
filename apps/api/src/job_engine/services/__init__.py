@@ -7,6 +7,7 @@ from job_engine.services.deduplication import (
     decide_duplicate,
     employment_compatible,
 )
+from job_engine.services.ingestion import resolve_group_lifecycle, run_ingestion
 from job_engine.services.normalization import (
     FieldNormalization,
     NormalizationCandidate,
@@ -32,4 +33,6 @@ __all__ = [
     "display_text",
     "employment_compatible",
     "normalize_candidate",
+    "resolve_group_lifecycle",
+    "run_ingestion",
 ]

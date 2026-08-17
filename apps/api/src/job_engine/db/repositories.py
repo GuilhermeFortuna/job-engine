@@ -1,8 +1,12 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -11,7 +15,10 @@ from job_engine.db import models as orm
 from job_engine.domain.enums import (
     EmploymentType,
     IngestionRunStatus,
+    JobStatus,
     LocationEligibilityRegion,
+    RemoteStatus,
+    Seniority,
 )
 from job_engine.domain.jobs import (
     Compensation,
@@ -33,6 +40,10 @@ class IngestionRunNotFoundError(LookupError):
 
 class JobGroupNotFoundError(LookupError):
     """Raised when a job group ID does not exist."""
+
+
+class SourcePostingNotFoundError(LookupError):
+    """Raised when a source posting identity does not exist."""
 
 
 def _utcnow() -> datetime:
@@ -451,11 +462,147 @@ class CatalogRepository:
                 return _job_group_from_loaded_row(row)
         return None
 
+    async def list_source_postings(self, source_id: str) -> tuple[SourcePosting, ...]:
+        stmt = select(orm.SourcePosting).where(orm.SourcePosting.source_id == source_id)
+        rows = (await self._session.scalars(stmt)).all()
+        return tuple(_source_posting_from_row(row) for row in rows)
+
+    async def list_successful_ingestion_runs(
+        self, source_id: str, *, before: datetime, limit: int = 1
+    ) -> tuple[IngestionRun, ...]:
+        stmt = (
+            select(orm.IngestionRun)
+            .where(
+                orm.IngestionRun.source_id == source_id,
+                orm.IngestionRun.status == IngestionRunStatus.SUCCESS,
+                orm.IngestionRun.started_at < before,
+            )
+            .order_by(orm.IngestionRun.started_at.desc())
+            .limit(limit)
+        )
+        rows = (await self._session.scalars(stmt)).all()
+        return tuple(_ingestion_run_from_row(row) for row in rows)
+
+    async def update_source_posting_status(
+        self,
+        source_id: str,
+        source_posting_id: str,
+        status: JobStatus,
+        *,
+        closed_at: datetime | None = None,
+    ) -> SourcePosting:
+        stmt = select(orm.SourcePosting).where(
+            orm.SourcePosting.source_id == source_id,
+            orm.SourcePosting.source_posting_id == source_posting_id,
+        )
+        row = await self._session.scalar(stmt)
+        if row is None:
+            raise SourcePostingNotFoundError(f"{source_id}:{source_posting_id}")
+        row.status = status
+        if status is JobStatus.CLOSED:
+            row.closed_at = closed_at
+        row.updated_at = _utcnow()
+        await self._session.flush()
+        loaded = await self.get_source_posting(source_id, source_posting_id)
+        if loaded is None:
+            raise SourcePostingNotFoundError(f"{source_id}:{source_posting_id}")
+        return loaded
+
+    async def update_job_group_lifecycle(
+        self,
+        group_id: UUID,
+        status: JobStatus,
+        *,
+        closed_at: datetime | None,
+    ) -> JobGroup:
+        row = await self._session.get(orm.JobGroup, group_id)
+        if row is None:
+            raise JobGroupNotFoundError(str(group_id))
+        row.status = status
+        row.closed_at = closed_at
+        row.updated_at = _utcnow()
+        await self._session.flush()
+        return await self._require_job_group(group_id)
+
     async def _require_job_group(self, group_id: UUID) -> JobGroup:
         loaded = await self.get_job_group(group_id)
         if loaded is None:
             raise JobGroupNotFoundError(str(group_id))
         return loaded
+
+    async def search_job_groups(
+        self, criteria: JobSearchCriteria
+    ) -> tuple[tuple[JobGroupApiRecord, ...], int]:
+        filtered = _apply_search_filters(select(orm.JobGroup.id), criteria)
+        total = await self._session.scalar(
+            _apply_search_filters(
+                select(func.count()).select_from(orm.JobGroup),
+                criteria,
+            )
+        )
+        if total is None:
+            total = 0
+        ordered = filtered.order_by(*_search_order_by(criteria.sort))
+        page_ids = (
+            await self._session.scalars(
+                ordered.offset(criteria.offset).limit(criteria.limit)
+            )
+        ).all()
+        records = await self._load_api_records(tuple(page_ids))
+        by_id = {record.row.id: record for record in records}
+        return tuple(by_id[group_id] for group_id in page_ids), total
+
+    async def get_job_group_api_record(
+        self, group_id: UUID
+    ) -> JobGroupApiRecord | None:
+        records = await self._load_api_records((group_id,))
+        if not records:
+            return None
+        return records[0]
+
+    async def latest_ingestion_runs(
+        self, source_ids: tuple[str, ...]
+    ) -> dict[str, orm.IngestionRun]:
+        if not source_ids:
+            return {}
+        stmt = (
+            select(orm.IngestionRun)
+            .distinct(orm.IngestionRun.source_id)
+            .where(orm.IngestionRun.source_id.in_(source_ids))
+            .order_by(
+                orm.IngestionRun.source_id,
+                orm.IngestionRun.started_at.desc(),
+                orm.IngestionRun.id.asc(),
+            )
+        )
+        rows = (await self._session.scalars(stmt)).all()
+        return {row.source_id: row for row in rows}
+
+    async def catalog_last_seen_at(self) -> datetime | None:
+        value = await self._session.scalar(
+            select(func.max(orm.JobGroup.last_seen_at)).where(
+                orm.JobGroup.status == JobStatus.ACTIVE
+            )
+        )
+        if value is None:
+            return None
+        if not isinstance(value, datetime):
+            raise RuntimeError("catalog last_seen_at is not a datetime")
+        return value
+
+    async def _load_api_records(
+        self, group_ids: tuple[UUID, ...]
+    ) -> tuple[JobGroupApiRecord, ...]:
+        if not group_ids:
+            return ()
+        stmt = (
+            select(orm.JobGroup)
+            .where(orm.JobGroup.id.in_(group_ids))
+            .options(*_job_group_load_options())
+            .execution_options(populate_existing=True)
+        )
+        rows = (await self._session.scalars(stmt)).unique().all()
+        return tuple(_job_group_api_record(row) for row in rows)
 
 
 def _job_group_load_options() -> tuple[Any, ...]:
@@ -481,3 +628,144 @@ def _job_group_from_loaded_row(row: orm.JobGroup) -> JobGroup:
         for link in sorted(row.posting_links, key=lambda item: item.linked_at)
     )
     return _job_group_from_row(row, postings)
+
+
+@dataclass(frozen=True)
+class LinkedSourcePosting:
+    row: orm.SourcePosting
+    linked_at: datetime
+
+
+@dataclass(frozen=True)
+class JobGroupApiRecord:
+    row: orm.JobGroup
+    links: tuple[LinkedSourcePosting, ...]
+
+
+@dataclass(frozen=True)
+class JobSearchCriteria:
+    q: str | None
+    role_families: tuple[str, ...]
+    technologies: tuple[str, ...]
+    remote_statuses: tuple[RemoteStatus, ...]
+    location_eligibilities: tuple[str, ...]
+    seniorities: tuple[Seniority, ...]
+    sources: tuple[str, ...]
+    minimum_annual_usd: Decimal | None
+    include_unknown_compensation: bool
+    posted_after: datetime | None
+    sort: str
+    offset: int
+    limit: int
+
+
+def _escape_ilike(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _job_group_api_record(row: orm.JobGroup) -> JobGroupApiRecord:
+    links = tuple(
+        LinkedSourcePosting(row=link.source_posting, linked_at=link.linked_at)
+        for link in sorted(
+            row.posting_links,
+            key=lambda item: (item.linked_at, item.source_posting.id),
+        )
+    )
+    return JobGroupApiRecord(row=row, links=links)
+
+
+def _search_order_by(sort: str) -> tuple[Any, ...]:
+    posted = func.coalesce(orm.JobGroup.published_at, orm.JobGroup.first_seen_at)
+    newest = (posted.desc(), orm.JobGroup.id.asc())
+    if sort == "compensation_desc":
+        known = func.coalesce(
+            orm.JobGroup.compensation_annual_usd_minimum,
+            orm.JobGroup.compensation_annual_usd_maximum,
+        )
+        return (known.desc().nulls_last(), *newest)
+    return newest
+
+
+def _apply_search_filters(stmt: Any, criteria: JobSearchCriteria) -> Any:
+    stmt = stmt.where(orm.JobGroup.status == JobStatus.ACTIVE)
+    if criteria.q:
+        pattern = f"%{_escape_ilike(criteria.q)}%"
+        tech_match = exists(
+            select(1).where(
+                orm.JobGroupTechnology.job_group_id == orm.JobGroup.id,
+                orm.JobGroupTechnology.term.ilike(pattern, escape="\\"),
+            )
+        )
+        stmt = stmt.where(
+            or_(
+                orm.JobGroup.title.ilike(pattern, escape="\\"),
+                orm.JobGroup.company.ilike(pattern, escape="\\"),
+                orm.JobGroup.description.ilike(pattern, escape="\\"),
+                tech_match,
+            )
+        )
+    if criteria.role_families:
+        stmt = stmt.where(
+            exists(
+                select(1).where(
+                    orm.JobGroupRoleFamily.job_group_id == orm.JobGroup.id,
+                    orm.JobGroupRoleFamily.family_id.in_(criteria.role_families),
+                )
+            )
+        )
+    if criteria.technologies:
+        stmt = stmt.where(
+            exists(
+                select(1).where(
+                    orm.JobGroupTechnology.job_group_id == orm.JobGroup.id,
+                    orm.JobGroupTechnology.term.in_(criteria.technologies),
+                )
+            )
+        )
+    if criteria.remote_statuses:
+        stmt = stmt.where(orm.JobGroup.remote_status.in_(criteria.remote_statuses))
+    if criteria.location_eligibilities:
+        clauses: list[Any] = []
+        regions = [
+            value for value in criteria.location_eligibilities if value != "unknown"
+        ]
+        if regions:
+            clauses.append(
+                exists(
+                    select(1).where(
+                        orm.JobGroupEligibleLocation.job_group_id == orm.JobGroup.id,
+                        orm.JobGroupEligibleLocation.region.in_(regions),
+                    )
+                )
+            )
+        if "unknown" in criteria.location_eligibilities:
+            clauses.append(orm.JobGroup.location_eligibility_unknown.is_(True))
+        stmt = stmt.where(or_(*clauses))
+    if criteria.seniorities:
+        stmt = stmt.where(orm.JobGroup.seniority.in_(criteria.seniorities))
+    if criteria.sources:
+        stmt = stmt.where(
+            exists(
+                select(1)
+                .select_from(orm.JobGroupPosting)
+                .join(orm.SourcePosting)
+                .where(
+                    orm.JobGroupPosting.job_group_id == orm.JobGroup.id,
+                    orm.SourcePosting.source_id.in_(criteria.sources),
+                )
+            )
+        )
+    if criteria.minimum_annual_usd is not None:
+        known = func.coalesce(
+            orm.JobGroup.compensation_annual_usd_minimum,
+            orm.JobGroup.compensation_annual_usd_maximum,
+        )
+        meets_minimum = known >= criteria.minimum_annual_usd
+        if criteria.include_unknown_compensation:
+            stmt = stmt.where(or_(meets_minimum, known.is_(None)))
+        else:
+            stmt = stmt.where(meets_minimum)
+    if criteria.posted_after is not None:
+        posted = func.coalesce(orm.JobGroup.published_at, orm.JobGroup.first_seen_at)
+        stmt = stmt.where(posted >= criteria.posted_after)
+    return stmt

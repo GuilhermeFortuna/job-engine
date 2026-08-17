@@ -11,6 +11,7 @@ dependencies = [
     "alembic",
     "asyncpg",
     "fastapi",
+    "httpx",
     "psycopg[binary]",
     "pydantic",
     "pydantic-settings",
@@ -20,7 +21,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "httpx",
     "mypy",
     "pytest",
     "pytest-asyncio",
@@ -50,3 +50,6 @@ files = ["src", "tests"]
 asyncio_default_fixture_loop_scope = "function"
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "live: bounded authorized live source smoke (deselect by default)",
+]

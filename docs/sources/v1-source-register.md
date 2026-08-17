@@ -217,7 +217,7 @@ Live `locationRestrictions` were **strings** (country names), not `{alpha2,name,
 - All 100 dated within 24h (browse head is the newest slice). Median age 0.09 days.
 - Catalog search: `country=Brazil` `totalCount` **4,784**; `worldwide=true` `totalCount` **1,649**.
 
-V1 ingestion should use search (`country=Brazil`, `worldwide=true`, and possibly named LATAM countries), not a 101k unfiltered crawl (~5,000 requests).
+V1 ingestion uses search (`country=Brazil` with `exclude_worldwide=true`, and `worldwide=true`), not a 101k unfiltered crawl. BACK-004 implements those two windows only; additional LATAM-country search windows are out of scope.
 
 #### Quality risks
 
@@ -857,10 +857,31 @@ Shared invariant: **absence during a failed or `partial_success` run never stale
 - Stale: after **2 consecutive successful** bounded search runs without the `guid`, mark `stale`.
 - Closed / expired / unknown: `expiryDate` past → `closed`. No `expiryDate` and still missing after the stale rule → remain `stale`, not `closed`. Latest run failed or partial → no transition (`unknown` only if status was never established).
 - Failed/partial ingestion: no stale or closed transition from absence.
-- Ingest shape: bounded search, not full browse. Suggested first queries: `worldwide=true`, `country=Brazil`, then additional LATAM country filters if needed. Cap pages. Honor 429.
+- Ingest shape (BACK-004 implemented): bounded **search**, not browse. Two disjoint windows, `page` 1-based, stop at `totalCount` or `himalayas_max_pages_per_window` (default **5**, 20 jobs/page):
+  - worldwide: `worldwide=true&sort=recent`
+  - Brazil: `country=Brazil&exclude_worldwide=true&sort=recent` so worldwide jobs do not consume the Brazil page budget
+  - Defensive `guid` dedup across windows. Absence from search is not closure.
 - User-Agent: `JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; personal catalog; himalayas adapter)`
 - Attribution: visible “sourced from Himalayas” and keep `applicationLink`.
-- Fixtures: one sanitized success job with `guid`, `applicationLink`, empty and non-empty `locationRestrictions`, salary null vs numbers, `expiryDate`; one malformed (missing `guid`). Strip emails/phones; truncate `description`; keep IDs/URLs/title/company.
+- Fixtures: sanitized success envelope with three jobs covering empty and non-empty `locationRestrictions` (string and `{name,alpha2,slug}`), salary null vs numbers, future vs past `expiryDate`, unix-ms dates; one malformed job missing `guid`. Strip emails/phones; truncate `description`; keep `guid`/URL/title/company.
+- Implemented field map (BACK-004 adapter):
+
+| Canonical input | Source |
+| --- | --- |
+| `source_id` | `"himalayas"` |
+| `source_posting_id` | `guid` (required; missing → reject) |
+| `application_url` | `applicationLink` |
+| title / company | `title` / `companyName` |
+| description | `description` HTML as stored source text |
+| location text | joined `locationRestrictions` names; empty → `"Worldwide"` |
+| `remote_evidence` | `"remote"` (Remote Jobs API; eligibility stays separate) |
+| employment / seniority evidence | `employmentType` string; `seniority` array joined |
+| compensation | `minSalary` / `maxSalary` / `currency` / `salaryPeriod` (`annual`→year; weekly/fortnightly not annualized) |
+| technologies text | `categories` joined |
+| eligibility evidence | empty restrictions → `"worldwide"`; else joined names (strings or `{name,alpha2,slug}`) |
+| published_at | `pubDate`: int ms if `> 1e12`, else seconds; or ISO string |
+| closed | observed past `expiryDate` → posting `CLOSED` on persist |
+| raw metadata | small dict (`guid`, `companySlug`, `expiryDate`, categories); no full description |
 
 ### `jobicy` (BACK-005)
 
