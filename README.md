@@ -11,6 +11,7 @@
   <img src="https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" />
   <img src="https://img.shields.io/badge/Next.js-16.3-000000?style=flat-square&logo=next.js&logoColor=white" alt="Next.js 16" />
   <img src="https://img.shields.io/badge/PostgreSQL-17.11-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL 17" />
+  <img src="https://img.shields.io/github/actions/workflow/status/GuilhermeFortuna/job-engine/ci.yml?branch=main&label=CI&style=flat-square" alt="CI Status" />
   <img src="https://img.shields.io/badge/License-Private-grey?style=flat-square" alt="Private License" />
 </p>
 
@@ -212,6 +213,11 @@ corepack pnpm run test
 
 # Build all packages
 corepack pnpm run build
+
+# Run the complete full-stack CI pipeline locally (mirrors remote GitHub Actions)
+corepack pnpm run ci
+# or directly:
+./ci.sh
 ```
 
 ### Backend (`apps/api`) Commands

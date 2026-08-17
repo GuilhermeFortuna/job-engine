@@ -15,6 +15,8 @@ import { JobSearchForm } from "@/features/jobs/components/JobSearchForm";
 import { Pagination } from "@/features/jobs/components/Pagination";
 import { SearchStatus } from "@/features/jobs/components/SearchStatus";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Search Jobs - Job Engine",
   description:
