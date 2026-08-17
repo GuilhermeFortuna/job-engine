@@ -54,12 +54,10 @@ Arbeitnow remains unfit: 0/100 sampled jobs had explicit Brazil/LATAM/worldwide 
 ```text
 BACK-004 -> himalayas
 BACK-005 -> jobicy
-BACK-006 -> unbound (owner chooses weworkremotely or remoteok after legal/quality review)
+BACK-006 -> remoteok
 ```
 
-Mapping order: richest paginated JSON contract first (`himalayas`), then a second JSON source with Brazil/LATAM filters (`jobicy`). BACK-006 is not bound. Adapter Work Orders stay `BLOCKED` with placeholders unbound until the owner accepts a third source.
-
-Do not treat this mapping as adapter dispatch. A worker must not choose or rename the third source.
+Mapping order: richest paginated JSON contract first (`himalayas`), then a second JSON source with Brazil/LATAM filters (`jobicy`), then the ranked approved backup (`remoteok`). CROSS-002 left BACK-006 unbound because We Work Remotely stayed `PENDING_OWNER` (RSS-storage legal gate). BACK-006 bound `remoteok` from that approved-backup evidence after `STATUS.md` marked CROSS-002 `DONE` and BACK-006 `READY`. `weworkremotely` is not implemented.
 
 ---
 
@@ -286,6 +284,7 @@ V1 ingestion uses search (`country=Brazil` with `exclude_worldwide=true`, and `w
 - Closure: none in schema. Absence from a later latest-100 window is a last-seen signal only and is **not** authoritative closure. See §10.
 - Stable ID: integer `id` (also `jobSlug`).
 - Original URL: `url` (Jobicy canonical).
+- Implemented ingest (BACK-005): three disjoint latest-100 pulls, `count` default 100, stop after `jobicy_max_windows` (default **3**). Window slugs pinned from the 2026-08-16 taxonomy (`geoSlug`/`industrySlug`): `geo=brazil`, `geo=latam`, `industry=engineering` (`engineering` is Software Engineering; deprecated `dev` is not used). Taxonomies are not fetched on every ingest. Defensive integer `id` dedup across windows. Absence from these windows is not closure.
 
 #### Field availability
 
@@ -892,12 +891,35 @@ Shared invariant: **absence during a failed or `partial_success` run never stale
 - Stale: after **3 consecutive successful** ingestions of the configured `geo`/`industry` pulls without `id`, mark `stale`.
 - Closed / expired / unknown: do not auto-`closed`. Remain `stale` while last successful runs keep missing the id. If the latest run failed or was partial, leave the prior status unchanged (treat observability as `unknown` for that run, not as absence).
 - Failed/partial ingestion: no stale or closed transition from absence.
-- Ingest shape: `count=100` with `industry` engineering/software slugs plus `geo=brazil` and `geo=latam` (discover slugs via `?get=industries` / `?get=locations`). Dedup by `id` across those pulls.
-- User-Agent: same identifying pattern as Himalayas.
+- Ingest shape (BACK-005 implemented): bounded **latest-100** pulls, not deep pagination. Three disjoint windows, stop at `jobicy_max_windows` (default **3**), `count` default **100**:
+  - brazil: `geo=brazil`
+  - latam: `geo=latam`
+  - engineering: `industry=engineering` (Software Engineering slug from 2026-08-16 `?get=industries`; `dev` is deprecated)
+  - Slugs pinned in Settings rather than live taxonomy discovery on each run
+  - Defensive integer `id` dedup across windows. Absence from these windows is not closure.
+- User-Agent: `JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; personal catalog; jobicy adapter)`
 - Attribution: credit Jobicy; application actions must use feed `url`.
-- Fixtures: success object with `id`, `url`, `jobGeo: "Brazil"`, optional salary fields present; success without salary keys; malformed missing `id`. HTML-unescape `jobIndustry`. Truncate `jobDescription`.
+- Fixtures: sanitized success envelope with three jobs covering `jobGeo` Brazil / LATAM / Anywhere, salary present vs omitted keys, `jobLevel` Senior vs Any, HTML entity in `jobIndustry`; one malformed job missing `id`. Strip emails/phones; truncate `jobDescription`; keep `id`/URL/title/company.
+- Implemented field map (BACK-005 adapter):
 
-### `weworkremotely` (third-seat candidate, BACK-006 unbound)
+| Canonical input | Source |
+| --- | --- |
+| `source_id` | `"jobicy"` |
+| `source_posting_id` | integer `id` stringified (required; missing → reject) |
+| `application_url` | `url` |
+| title / company | `jobTitle` / `companyName` |
+| description | `jobDescription` HTML as stored source text |
+| location text | `jobGeo` |
+| `remote_evidence` | `"remote"` (Remote Jobs API; eligibility stays separate) |
+| employment / seniority evidence | joined `jobType`; `jobLevel` except `"Any"` → omitted (unknown) |
+| compensation | optional `salaryMin` / `salaryMax` / `salaryCurrency` / `salaryPeriod` (`yearly` left native; omitted keys → unknown) |
+| technologies text | HTML-unescaped `jobIndustry` joined (function labels, not a stack) |
+| eligibility evidence | native `jobGeo` (`Anywhere` is worldwide evidence; LATAM-without-Brazil stays LATAM) |
+| published_at | ISO `pubDate` |
+| closed | never from this adapter; no expiry field |
+| raw metadata | small dict (`id`, `jobSlug`, `jobIndustry`, `jobGeo`, `jobLevel`); no description / `friendlyNotice` |
+
+### `weworkremotely` (third-seat candidate, not BACK-006)
 
 Apply only if the owner later accepts this source. These defaults are recorded so that handoff is implementable.
 
@@ -914,14 +936,40 @@ Apply only if the owner later accepts this source. These defaults are recorded s
 - Fixtures: one RSS `<item>` with `guid`/`link`/`region`; one malformed item missing `link`. Truncate description HTML. No bulk dump.
 - Gate: owner confirms RSS storage for a personal catalog is acceptable despite JSON API “do not store” language. Until then this source is not approved.
 
-### `remoteok` (backup / third-seat candidate)
+### `remoteok` (BACK-006)
 
 - Credentials: `none`
 - Refresh cadence: treat as delayed (historically ~24h). At most **once per day**.
-- First-seen / last-seen: same pattern as Jobicy against the latest-~100 snapshot (skip the leading legal object).
-- Authoritative expiry/closure: **none**. The snapshot is not a full active set.
-- Stale: after **3 consecutive successful** snapshot fetches without `id`, mark `stale`. Do not auto-`closed`.
+- First-seen: first successful persist of stringified `id`. Last-seen: each successful snapshot fetch that contains that `id`.
+- Authoritative expiry/closure: **none**. The snapshot is not a full active set. Drop-from-snapshot is last-seen only and must not close a posting.
+- Stale: after **3 consecutive successful** snapshot fetches without `id`, mark `stale`.
+- Closed / expired / unknown: do not auto-`closed`. Remain `stale` while last successful runs keep missing the id. If the latest run failed or was partial, leave the prior status unchanged.
 - Failed/partial ingestion: no stale or closed transition from absence.
+- Ingest shape (BACK-006 implemented): bounded **latest-~100 snapshot**, not pagination and not `?tag=` windows. One `GET /api`, stop after that page:
+  - Skip the leading legal/metadata object (has `legal` and no job `id`)
+  - Remaining array elements are jobs
+  - Defensive `id` dedup inside the snapshot. Absence from the snapshot is not closure.
+- User-Agent: `JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; personal catalog; remoteok adapter)`
+- Attribution: credit Remote OK; application actions must use feed `url` (Remote OK listing).
+- Fixtures: sanitized JSON array with a short legal object plus three jobs covering non-zero salary vs `0`/`0` (unknown), noisy city-fragment `location`, and ops-like tags; one malformed job missing `id`. Strip emails/phones; truncate `description`; keep `id`/URL/title/company. Do not copy the live legal blob.
+- Implemented field map (BACK-006 adapter):
+
+| Canonical input | Source |
+| --- | --- |
+| `source_id` | `"remoteok"` |
+| `source_posting_id` | `id` stringified (required; missing → reject) |
+| `application_url` | `url`; fallback `apply_url` if `url` missing (missing both → reject) |
+| title / company | `position` / `company` |
+| description | `description` HTML/text as stored source text |
+| location text | native `location` (city fragments stay original) |
+| `remote_evidence` | `"remote"` (remote board; eligibility stays separate) |
+| employment / seniority evidence | omitted (unknown) |
+| compensation | `salary_min` / `salary_max`; `0` or omitted → unknown |
+| technologies text | `tags` joined |
+| eligibility evidence | native `location` (no Brazil/worldwide inference from remote) |
+| published_at | `epoch` seconds or ISO `date` |
+| closed | never from this adapter; no expiry field |
+| raw metadata | small dict (`id`, `slug`, `tags`, `location`); no description / legal blob |
 
 ---
 
@@ -929,8 +977,8 @@ Apply only if the owner later accepts this source. These defaults are recorded s
 
 | ID | Decision | Why not V1 primary now |
 | --- | --- | --- |
-| `weworkremotely` | `PENDING_OWNER` | Official RSS, but programming-feed membership is not software evidence (6/25 software after title/description review); RSS storage vs JSON API terms is unresolved; BACK-006 unbound. |
-| `remoteok` | backup | Software-dense (48/100) but 0 sampled software jobs with explicit Brazil/LATAM/worldwide evidence; 100-job snapshot. Not auto-promoted. |
+| `weworkremotely` | `PENDING_OWNER` | Official RSS, but programming-feed membership is not software evidence (6/25 software after title/description review); RSS storage vs JSON API terms is unresolved. Not bound to BACK-006. |
+| `remoteok` | backup; BACK-006 | Software-dense (48/100) but 0 sampled software jobs with explicit Brazil/LATAM/worldwide evidence; 100-job snapshot. Bound to BACK-006 as the ranked approved backup after WWR stayed legally gated. |
 | `remotive` | backup | Official API; live public inventory is 16 jobs. |
 | `arbeitnow` | `REJECTED` | Lawful EU/ATS API; 0 sampled Brazil/worldwide-eligible software jobs. |
 | `greenhouse` | `POST_V1` | Per-company boards, not a catalog. |
@@ -941,7 +989,7 @@ Apply only if the owner later accepts this source. These defaults are recorded s
 
 ## 12. Unresolved review gates
 
-1. **Third primary / BACK-006 bind:** owner chooses `weworkremotely` or `remoteok` (or neither) after reviewing corrected WWR evidence. CROSS-002 stays `REVIEW` until that decision. Adapter placeholders stay unbound (`PENDING_OWNER`).
+1. **Third primary / BACK-006 bind:** BACK-006 bound `remoteok` (ranked `APPROVED_BACKUP`) because `weworkremotely` remains `PENDING_OWNER` on the RSS-storage legal gate. Eligibility gaps stay unknown; WWR is not implemented.
 2. **WWR RSS storage:** confirm personal catalog persistence with attribution and WWR apply URLs is allowed, given JSON API terms that forbid storing API data and require partner tokens for JSON. RSS docs are not a legal opinion and are not treated as permission.
 3. **Owner acceptance of the two proposed primaries** `himalayas` and `jobicy`.
 4. **Himalayas ingest filter set:** confirm V1 should search Brazil + worldwide (and optional LATAM countries) rather than ingest the unfiltered 101k browse feed.

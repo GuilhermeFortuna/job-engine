@@ -7,6 +7,10 @@ HIMALAYAS_USER_AGENT = (
     "JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; "
     "personal catalog; himalayas adapter)"
 )
+JOBICY_USER_AGENT = (
+    "JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; "
+    "personal catalog; jobicy adapter)"
+)
 
 
 class Settings(BaseSettings):
@@ -22,6 +26,22 @@ class Settings(BaseSettings):
     himalayas_max_pages_per_window: int = 5
     himalayas_max_retries: int = 1
     himalayas_user_agent: str = HIMALAYAS_USER_AGENT
+    himalayas_stale_after_successful_misses: int = 2
+    jobicy_base_url: str = "https://jobicy.com"
+    jobicy_connect_timeout_seconds: float = 5.0
+    jobicy_read_timeout_seconds: float = 15.0
+    jobicy_max_retries: int = 1
+    jobicy_user_agent: str = JOBICY_USER_AGENT
+    jobicy_count: int = 100
+    jobicy_max_windows: int = 3
+    jobicy_stale_after_successful_misses: int = 3
+
+    def stale_after_successful_misses(self, source_id: str) -> int:
+        if source_id == "himalayas":
+            return self.himalayas_stale_after_successful_misses
+        if source_id == "jobicy":
+            return self.jobicy_stale_after_successful_misses
+        return 2
 
     @field_validator("enabled_sources", mode="before")
     @classmethod

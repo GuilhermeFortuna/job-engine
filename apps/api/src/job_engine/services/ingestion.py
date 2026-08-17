@@ -95,13 +95,15 @@ async def _mark_stale_absences(
     source_id: str,
     *,
     run_started_at: datetime,
+    stale_after_successful_misses: int,
 ) -> tuple[int, set[UUID]]:
+    needed = max(stale_after_successful_misses, 2) - 1
     previous = await repo.list_successful_ingestion_runs(
-        source_id, before=run_started_at, limit=1
+        source_id, before=run_started_at, limit=needed
     )
-    if not previous:
+    if len(previous) < needed:
         return 0, set()
-    cutoff = previous[0].started_at
+    cutoff = previous[-1].started_at
     marked = 0
     groups: set[UUID] = set()
     for posting in await repo.list_source_postings(source_id):
@@ -193,7 +195,12 @@ async def run_ingestion(
     )
     if status is IngestionRunStatus.SUCCESS:
         stale_count, stale_groups = await _mark_stale_absences(
-            repo, source_id, run_started_at=run.started_at
+            repo,
+            source_id,
+            run_started_at=run.started_at,
+            stale_after_successful_misses=settings.stale_after_successful_misses(
+                source_id
+            ),
         )
         marked_stale += stale_count
         affected_groups.update(stale_groups)

@@ -17,10 +17,12 @@ def register(source_id: str, factory: AdapterFactory) -> None:
 
 
 def _ensure_registered() -> None:
-    # Lazy import avoids the registry <-> himalayas cycle at module load.
+    # Lazy import avoids the registry <-> adapter cycle at module load.
     from job_engine.sources.himalayas import HimalayasAdapter
+    from job_engine.sources.jobicy import JobicyAdapter
 
     register("himalayas", HimalayasAdapter)
+    register("jobicy", JobicyAdapter)
 
 
 def registered_ids() -> frozenset[str]:

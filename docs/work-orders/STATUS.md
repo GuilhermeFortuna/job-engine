@@ -20,7 +20,7 @@ This is the single status authority for all current and future Job Engine Work O
 | [BACK-002](back/BACK-002-canonical-model-persistence.md)       | Backend  | `DONE`    | BACK-001                                          | Canonical job catalog models, migrations, and repositories                |
 | [BACK-003](back/BACK-003-normalization-deduplication.md)       | Backend  | `DONE`    | BACK-002                                          | Deterministic normalization and duplicate grouping                        |
 | [BACK-004](back/BACK-004-adapter-contract-source-one.md)       | Backend  | `DONE`    | CROSS-002, BACK-002, BACK-003                     | Adapter contract and first approved source                                |
-| [BACK-005](back/BACK-005-source-two-adapter.md)                | Backend  | `READY`   | CROSS-002, BACK-004                               | Second approved source adapter                                            |
+| [BACK-005](back/BACK-005-source-two-adapter.md)                | Backend  | `REVIEW`  | CROSS-002, BACK-004                               | Second approved source adapter                                            |
 | [BACK-006](back/BACK-006-source-three-adapter.md)              | Backend  | `READY`   | CROSS-002, BACK-004                               | Third approved source adapter                                             |
 | [BACK-007](back/BACK-007-search-api.md)                        | Backend  | `DONE`    | BACK-003                                          | Persisted V1 search and details API                                       |
 | [FRONT-002](front/FRONT-002-unified-search-ui.md)              | Frontend | `READY`   | FRONT-001, BACK-007                               | URL-backed unified search and results UI                                  |
@@ -60,6 +60,7 @@ Batch 01 is complete only when `CROSS-003` is `DONE`. Backend or frontend automa
 | [BACK-002](back/BACK-002-canonical-model-persistence.md)   | Cursor agent | `feat/back-002-canonical-model-persistence` | 2026-08-16T20:46:00-03:00 | Canonical job catalog models, migrations, and repositories                                                  |
 | [BACK-004](back/BACK-004-adapter-contract-source-one.md)   | Cursor agent | `development`                               | 2026-08-16T23:00:00-03:00 | Adapter contract and Himalayas source one                                                                   |
 | [BACK-007](back/BACK-007-search-api.md)                    | Cursor agent | `development`                               | 2026-08-16T22:58:00-03:00 | Persisted V1 search and details API; parallel with BACK-004 on this branch                                  |
+| [BACK-005](back/BACK-005-source-two-adapter.md)            | Cursor agent | `development`                               | 2026-08-17T00:13:00-03:00 | Jobicy source-two adapter; shared `development` checkout                                                    |
 
 
 
@@ -72,5 +73,4 @@ Batch 01 is complete only when `CROSS-003` is `DONE`. Backend or frontend automa
 | 2026-08-15 | CROSS-001 | Pinned Node.js 24.18.0, pnpm 10.34.5, CPython 3.13.14, and postgres:17.11                                                     | Cursor agent |
 | 2026-08-16 | CROSS-002 | WWR programming-feed membership is not software evidence; third primary / BACK-006 remains unbound pending owner/legal review | Cursor agent |
 | 2026-08-16 | BACK-002  | Technology terms and eligible regions use child tables with unique `(job_group_id, value)`, not arrays                        | Cursor agent |
-
-
+| 2026-08-17 | BACK-005  | Source-aware stale thresholds via Settings (`himalayas`=2, `jobicy`=3) in `_mark_stale_absences`; adapter Protocol unchanged  | Cursor agent |

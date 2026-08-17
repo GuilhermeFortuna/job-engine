@@ -21,6 +21,7 @@ from job_engine.domain.jobs import SourcePosting
 from job_engine.services.ingestion import resolve_group_lifecycle, run_ingestion
 from job_engine.sources.base import PageCursor, SourcePage
 from job_engine.sources.himalayas import HimalayasAdapter
+from job_engine.sources.jobicy import JobicyAdapter
 
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "sources" / "fixtures" / "himalayas"
 SEEN_AT = datetime(2026, 8, 16, 23, 0, tzinfo=UTC)
@@ -332,6 +333,245 @@ async def test_himalayas_live_smoke(db_session: AsyncSession) -> None:
         IngestionRunStatus.PARTIAL_SUCCESS,
     }
     assert run.fetched_count >= 0
+    print(
+        {
+            "status": run.status.value,
+            "fetched_count": run.fetched_count,
+            "accepted_count": run.accepted_count,
+            "rejected_count": run.rejected_count,
+            "inserted_count": run.inserted_count,
+            "updated_count": run.updated_count,
+            "marked_stale_count": run.marked_stale_count,
+            "marked_closed_count": run.marked_closed_count,
+        }
+    )
+
+
+JOBICY_FIXTURE_DIR = (
+    Path(__file__).resolve().parents[1] / "sources" / "fixtures" / "jobicy"
+)
+
+
+def _load_jobicy(name: str) -> dict[str, Any]:
+    payload = json.loads((JOBICY_FIXTURE_DIR / name).read_text())
+    assert isinstance(payload, dict)
+    return payload
+
+
+def _empty_jobicy_page() -> dict[str, Any]:
+    return {
+        "apiVersion": "2.2.15",
+        "jobCount": 0,
+        "jobs": [],
+        "statusCode": 200,
+        "success": True,
+    }
+
+
+def _jobicy_settings() -> Settings:
+    return Settings.model_validate(
+        {
+            "jobicy_base_url": "https://jobicy.com",
+            "jobicy_count": 100,
+            "jobicy_max_windows": 3,
+            "jobicy_max_retries": 1,
+        }
+    )
+
+
+def _jobicy_client(handler: Any) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="https://jobicy.com",
+    )
+
+
+def _jobicy_adapter(handler: Any) -> JobicyAdapter:
+    return JobicyAdapter(_jobicy_settings(), client=_jobicy_client(handler))
+
+
+def _jobicy_window(request: httpx.Request) -> str:
+    query = parse_qs(urlparse(str(request.url)).query)
+    if "geo" in query:
+        return query["geo"][0]
+    if "industry" in query:
+        return query["industry"][0]
+    return ""
+
+
+async def _ingest_jobicy(session: AsyncSession, handler: Any) -> Any:
+    return await run_ingestion(
+        session,
+        "jobicy",
+        _jobicy_settings(),
+        adapter=_jobicy_adapter(handler),
+    )
+
+
+async def test_jobicy_fixture_ingestion_persists_provenance(
+    db_session: AsyncSession,
+) -> None:
+    success = _load_jobicy("success.json")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if _jobicy_window(request) == "brazil":
+            return httpx.Response(200, json=success)
+        return httpx.Response(200, json=_empty_jobicy_page())
+
+    run = await _ingest_jobicy(db_session, handler)
+    assert run.status is IngestionRunStatus.SUCCESS
+    assert await _count_postings(db_session) == 3
+    assert await _count_groups(db_session) == 3
+    repo = CatalogRepository(db_session)
+    posting = await repo.get_source_posting("jobicy", "150001")
+    assert posting is not None
+    assert posting.source_name == "Jobicy"
+    assert posting.adapter_version == "jobicy-1"
+    assert posting.ingestion_run_id == run.id
+    assert posting.status is JobStatus.ACTIVE
+    assert run.marked_closed_count == 0
+    for posting_id in ("150001", "150002", "150003"):
+        loaded = await repo.get_source_posting("jobicy", posting_id)
+        assert loaded is not None
+        assert loaded.status is JobStatus.ACTIVE
+
+
+async def test_jobicy_repeated_ingestion_is_idempotent(
+    db_session: AsyncSession,
+) -> None:
+    success = _load_jobicy("success.json")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if _jobicy_window(request) == "brazil":
+            return httpx.Response(200, json=success)
+        return httpx.Response(200, json=_empty_jobicy_page())
+
+    first = await _ingest_jobicy(db_session, handler)
+    second = await _ingest_jobicy(db_session, handler)
+    assert first.inserted_count == 3
+    assert second.inserted_count == 0
+    assert second.updated_count == 3
+    assert await _count_postings(db_session) == 3
+    assert await _count_groups(db_session) == 3
+
+
+async def test_jobicy_malformed_record_keeps_valid(db_session: AsyncSession) -> None:
+    success = _load_jobicy("success.json")
+    malformed = _load_jobicy("malformed.json")
+    payload = dict(success)
+    payload["jobs"] = [success["jobs"][0], malformed["jobs"][0]]
+    payload["jobCount"] = 2
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if _jobicy_window(request) == "brazil":
+            return httpx.Response(200, json=payload)
+        return httpx.Response(200, json=_empty_jobicy_page())
+
+    run = await _ingest_jobicy(db_session, handler)
+    assert run.status is IngestionRunStatus.PARTIAL_SUCCESS
+    assert run.accepted_count == 1
+    assert run.rejected_count == 1
+    assert await _count_postings(db_session) == 1
+    assert run.error_summaries
+    assert all("bearer" not in item.message.casefold() for item in run.error_summaries)
+
+
+async def test_jobicy_does_not_close_from_payload(db_session: AsyncSession) -> None:
+    success = _load_jobicy("success.json")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if _jobicy_window(request) == "brazil":
+            return httpx.Response(200, json=success)
+        return httpx.Response(200, json=_empty_jobicy_page())
+
+    run = await _ingest_jobicy(db_session, handler)
+    assert run.marked_closed_count == 0
+    repo = CatalogRepository(db_session)
+    posting = await repo.get_source_posting("jobicy", "150002")
+    assert posting is not None
+    assert posting.status is JobStatus.ACTIVE
+    assert posting.closed_at is None
+
+
+async def test_jobicy_transport_failure_does_not_stale(
+    db_session: AsyncSession,
+) -> None:
+    success = _load_jobicy("success.json")
+    calls = {"count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["count"] += 1
+        if calls["count"] <= 3:
+            if _jobicy_window(request) == "brazil":
+                return httpx.Response(200, json=success)
+            return httpx.Response(200, json=_empty_jobicy_page())
+        raise httpx.ConnectError("down", request=request)
+
+    first = await _ingest_jobicy(db_session, handler)
+    assert first.status is IngestionRunStatus.SUCCESS
+    failed = await _ingest_jobicy(db_session, handler)
+    assert failed.status is IngestionRunStatus.FAILURE
+    repo = CatalogRepository(db_session)
+    posting = await repo.get_source_posting("jobicy", "150001")
+    assert posting is not None
+    assert posting.status is JobStatus.ACTIVE
+
+
+async def test_jobicy_three_successful_misses_mark_stale(
+    db_session: AsyncSession,
+) -> None:
+    success = _load_jobicy("success.json")
+    empty = _empty_jobicy_page()
+    calls = {"count": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["count"] += 1
+        if calls["count"] <= 3:
+            if _jobicy_window(request) == "brazil":
+                return httpx.Response(200, json=success)
+            return httpx.Response(200, json=empty)
+        return httpx.Response(200, json=empty)
+
+    first = await _ingest_jobicy(db_session, handler)
+    assert first.status is IngestionRunStatus.SUCCESS
+    second = await _ingest_jobicy(db_session, handler)
+    assert second.status is IngestionRunStatus.SUCCESS
+    assert second.marked_stale_count == 0
+    third = await _ingest_jobicy(db_session, handler)
+    assert third.status is IngestionRunStatus.SUCCESS
+    assert third.marked_stale_count == 0
+    fourth = await _ingest_jobicy(db_session, handler)
+    assert fourth.status is IngestionRunStatus.SUCCESS
+    assert fourth.marked_stale_count == 3
+    repo = CatalogRepository(db_session)
+    posting = await repo.get_source_posting("jobicy", "150001")
+    assert posting is not None
+    assert posting.status is JobStatus.STALE
+    group = await repo.get_job_group_by_source_posting("jobicy", "150001")
+    assert group is not None
+    assert group.status is JobStatus.STALE
+    assert group.closed_at is None
+
+
+@pytest.mark.live
+@pytest.mark.skipif(
+    os.environ.get("JOB_ENGINE_LIVE_SMOKE") != "1",
+    reason="set JOB_ENGINE_LIVE_SMOKE=1 for bounded Jobicy live smoke",
+)
+async def test_jobicy_live_smoke(db_session: AsyncSession) -> None:
+    settings = Settings.model_validate({"jobicy_max_windows": 1, "jobicy_count": 10})
+    run = await run_ingestion(
+        db_session,
+        "jobicy",
+        settings,
+        seen_at=datetime.now(UTC),
+    )
+    assert run.status in {
+        IngestionRunStatus.SUCCESS,
+        IngestionRunStatus.PARTIAL_SUCCESS,
+    }
+    assert run.fetched_count >= 0
+    assert run.marked_closed_count == 0
     print(
         {
             "status": run.status.value,
