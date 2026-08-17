@@ -1,0 +1,156 @@
+{
+  "cases": [
+    {
+      "id": "display_vs_comparison_keys",
+      "candidate": {
+        "title_original": "  Python   Engineer  ",
+        "company_original": "Acme Ltd.",
+        "location_original": "São Paulo, Brazil"
+      },
+      "expect": {
+        "title": "Python Engineer",
+        "title_original": "  Python   Engineer  ",
+        "title_comparison_key": "python engineer",
+        "company": "Acme Ltd.",
+        "company_comparison_key": "acme",
+        "location_original": "São Paulo, Brazil",
+        "location_comparison_key": "são paulo brazil",
+        "location_normalized_country": null,
+        "location_normalized_region": null
+      }
+    },
+    {
+      "id": "remote_does_not_imply_brazil_eligibility",
+      "candidate": {
+        "remote_evidence": "Fully remote",
+        "location_eligibility_evidence": null
+      },
+      "expect": {
+        "remote_status": "remote",
+        "location_eligibility_unknown": true,
+        "eligible_regions": []
+      }
+    },
+    {
+      "id": "explicit_brazil_eligibility",
+      "candidate": {
+        "remote_evidence": "Remote",
+        "location_eligibility_evidence": "Candidates in Brazil are welcome"
+      },
+      "expect": {
+        "remote_status": "remote",
+        "location_eligibility_unknown": false,
+        "eligible_regions": ["brazil"]
+      }
+    },
+    {
+      "id": "missing_salary_is_unknown_not_zero",
+      "candidate": {
+        "compensation_original_text": null,
+        "compensation_currency": null,
+        "compensation_period": null,
+        "compensation_minimum": null,
+        "compensation_maximum": null
+      },
+      "expect": {
+        "compensation_minimum": null,
+        "compensation_maximum": null,
+        "compensation_annual_usd_minimum": null,
+        "compensation_annual_usd_maximum": null,
+        "compensation_currency": null
+      }
+    },
+    {
+      "id": "non_usd_salary_preserved_not_converted",
+      "candidate": {
+        "compensation_original_text": "R$ 10k/mês",
+        "compensation_currency": "BRL",
+        "compensation_period": "month",
+        "compensation_minimum": "10000",
+        "compensation_maximum": "10000"
+      },
+      "expect": {
+        "compensation_original_text": "R$ 10k/mês",
+        "compensation_currency": "BRL",
+        "compensation_period": "month",
+        "compensation_minimum": "10000",
+        "compensation_maximum": "10000",
+        "compensation_annual_usd_minimum": null,
+        "compensation_annual_usd_maximum": null
+      }
+    },
+    {
+      "id": "usd_hourly_annualized",
+      "candidate": {
+        "compensation_original_text": "USD 50/hour",
+        "compensation_currency": "USD",
+        "compensation_period": "hour",
+        "compensation_minimum": "50",
+        "compensation_maximum": "50"
+      },
+      "expect": {
+        "compensation_currency": "USD",
+        "compensation_period": "hour",
+        "compensation_minimum": "50",
+        "compensation_annual_usd_minimum": "104000",
+        "compensation_annual_usd_maximum": "104000"
+      }
+    },
+    {
+      "id": "usd_monthly_annualized",
+      "candidate": {
+        "compensation_original_text": "USD 4000/month",
+        "compensation_currency": "USD",
+        "compensation_period": "month",
+        "compensation_minimum": "4000",
+        "compensation_maximum": null
+      },
+      "expect": {
+        "compensation_annual_usd_minimum": "48000",
+        "compensation_annual_usd_maximum": null
+      }
+    },
+    {
+      "id": "unknown_enums_from_ambiguous_text",
+      "candidate": {
+        "remote_evidence": "flexible",
+        "employment_type_evidence": "ninja",
+        "seniority_evidence": "rockstar"
+      },
+      "expect": {
+        "remote_status": "unknown",
+        "employment_type": "unknown",
+        "seniority": "unknown",
+        "seniority_original": "rockstar"
+      }
+    },
+    {
+      "id": "technology_alias_and_unmatched_retain",
+      "candidate": {
+        "technologies_original_text": "Python, JS, FastAPI, COBOL"
+      },
+      "expect": {
+        "technology_terms": ["Python", "JavaScript", "FastAPI", "COBOL"]
+      }
+    },
+    {
+      "id": "multi_family_title_match",
+      "candidate": {
+        "title_original": "Senior Python Backend Engineer"
+      },
+      "expect": {
+        "role_families": ["backend", "python"]
+      }
+    },
+    {
+      "id": "url_strips_tracking_keeps_identity_query",
+      "candidate": {
+        "application_url": "https://JOBS.Example.com/jobs/abc-123/?utm_source=feed&id=99&utm_campaign=x#frag"
+      },
+      "expect": {
+        "application_url": "https://JOBS.Example.com/jobs/abc-123/?utm_source=feed&id=99&utm_campaign=x#frag",
+        "canonical_url": "https://jobs.example.com/jobs/abc-123?id=99"
+      }
+    }
+  ]
+}

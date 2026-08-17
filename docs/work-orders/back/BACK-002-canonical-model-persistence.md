@@ -1,8 +1,8 @@
 # BACK-002: Canonical Job Model and Persistence
 
-**Status:** `BLOCKED`
+**Status:** `REVIEW`
 
-**Owner:** Unassigned
+**Owner:** Cursor agent
 
 **Depends on:** BACK-001
 
@@ -93,13 +93,88 @@ git diff --check
 
 ## Dispatch record
 
-- Worker: Unassigned
-- Branch/worktree: Unassigned
-- Dispatched at: Not dispatched
+- Worker: Cursor agent
+- Branch/worktree: `feat/back-002-canonical-model-persistence`
+- Dispatched at: 2026-08-16T20:46:00-03:00
 
 ## Completion record
 
 - Commit: Pending
-- Evidence: Pending
+- Evidence: See below
 - Independent reviewer: Pending
 
+### Field-to-column/domain mapping
+
+Section 7 fields map to frozen Pydantic models in `job_engine.domain.jobs` and PostgreSQL columns as follows. Nullability is documented in domain comments: missing compensation amounts are `None`, never `0`. Location-eligibility `unknown` is `JobGroupInput.location_eligibility_unknown` plus zero `job_group_eligible_locations` rows, not a region named `unknown`.
+
+| V1 field | Domain | Persistence |
+| --- | --- | --- |
+| Internal job-group ID | `JobGroup.id` | `job_groups.id` UUID PK |
+| Title display + original | `title`, `title_original` | `job_groups.title`, `title_original` |
+| Company display + original | `company`, `company_original` | `job_groups.company`, `company_original` |
+| Description | `description` | `job_groups.description` / `source_postings.description` (nullable) |
+| Source postings | `SourcePosting` + `JobGroup.source_postings` | `source_postings` unique `(source_id, source_posting_id)`; membership `job_group_postings` |
+| Location original + normalized | `location_original`, `location_normalized_country`, `location_normalized_region` | matching `job_groups` columns; posting original on `source_postings.location_original` |
+| Remote status | `RemoteStatus` | PG enum `remote_status` |
+| Location eligibility | `location_eligibility_unknown`, `EligibleLocation` | `job_groups.location_eligibility_unknown`; child table `job_group_eligible_locations(region, evidence_text)` unique `(job_group_id, region)` |
+| Employment type | `EmploymentType` | PG enum `employment_type` |
+| Seniority + original | `seniority`, `seniority_original` | PG enum `seniority` + `seniority_original` |
+| Technologies | `TechnologyTerm` | `job_group_technologies(term, source_text)` unique `(job_group_id, term)`; posting original text on `source_postings.technologies_original_text` |
+| Compensation | `Compensation` | original text/currency/period/min/max plus optional annual USD bounds on both `job_groups` and `source_postings`; numeric columns nullable with no default |
+| Dates | `published_at`, `first_seen_at`, `last_seen_at`, `closed_at` | `timestamptz`; posting also has `source_timestamp` |
+| Status | `JobStatus` | PG enum `job_status` |
+| Ingestion metadata | `IngestionRun`, `ingestion_run_id`, `adapter_version` | `ingestion_runs` plus FKs on groups/postings |
+| Bounded source extras | `raw_source_metadata` | `source_postings.raw_source_metadata` JSONB only |
+
+### Required-validation transcript
+
+PostgreSQL `postgres:17.11` was healthy (`pg_isready` accepting connections) before this pass.
+
+```text
+$ cd apps/api && uv sync --frozen
+Checked 44 packages in 0.43ms
+
+$ cd apps/api && uv run alembic upgrade head
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_canonical_job_catalog
+
+$ cd apps/api && uv run alembic downgrade base
+INFO  [alembic.runtime.migration] Running downgrade 0001_canonical_job_catalog ->
+
+$ cd apps/api && uv run alembic upgrade head
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001_canonical_job_catalog
+
+$ cd apps/api && uv run ruff check .
+All checks passed!
+
+$ cd apps/api && uv run ruff format --check .
+23 files already formatted
+
+$ cd apps/api && uv run mypy src tests
+Success: no issues found in 20 source files
+
+$ cd apps/api && uv run pytest tests/domain tests/db
+collected 21 items
+tests/domain/test_jobs.py .............
+tests/db/test_migrations.py .
+tests/db/test_repositories.py .......
+21 passed
+```
+
+Live schema after the second `upgrade head` (`psql \dt` / `\dT+` / `\d`): tables `ingestion_runs`, `job_groups`, `source_postings`, `job_group_postings`, `job_group_technologies`, `job_group_eligible_locations`, `alembic_version`; enums `remote_status`, `employment_type`, `seniority`, `job_status`, `ingestion_run_status`; unique `(source_id, source_posting_id)` on `source_postings`; compensation numeric columns nullable with no default.
+
+### Idempotent upsert counts
+
+`test_source_posting_upsert_is_idempotent` upserts the same `(jobicy, abc-123)` twice. `SELECT count(*) FROM source_postings` is `1`. The second upsert updates `title_original` and preserves `id` and `first_seen_at`. A raw second insert of the same identity raises `IntegrityError` from PostgreSQL.
+
+### Example original vs normalized/unknown round trip
+
+`test_job_group_round_trips_original_and_normalized_values` persisted:
+
+- `title` = `Python Engineer`, `title_original` = `Python Engineer (Backend)`
+- `seniority` = `unknown`, `seniority_original` = `ninja`
+- `compensation.original_text` = `R$ 10k/mês`, `currency` = `BRL`, `minimum` = `10000`, `annual_usd_minimum` = `None`
+- `first_seen_at` supplied as UTC-3 and stored as `2026-08-16 23:30:00+00`
+
+`test_multiple_source_postings_round_trip_on_one_job_group` attached Jobicy and Himalayas postings to one group; retrieval by `(himalayas, xyz-9)` returned that group with both source IDs and `raw_source_metadata={"feed": "programming"}`.
+
+No `/jobs` route, adapter, or normalization policy was added. `create_app()` still exposes only `GET /api/v1/health`.

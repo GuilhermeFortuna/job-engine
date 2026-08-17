@@ -1,8 +1,8 @@
 # BACK-003: Deterministic Normalization and Deduplication
 
-**Status:** `BLOCKED`
+**Status:** `REVIEW`
 
-**Owner:** Unassigned
+**Owner:** Cursor agent
 
 **Depends on:** BACK-002
 
@@ -87,12 +87,76 @@ git diff --check
 
 ## Dispatch record
 
-- Worker: Unassigned
-- Branch/worktree: Unassigned
-- Dispatched at: Not dispatched
+- Worker: Cursor agent
+- Branch/worktree: `feat/back-003-normalization-deduplication`
+- Dispatched at: 2026-08-16T22:17:00-03:00
 
 ## Completion record
 
 - Commit: Pending
-- Evidence: Pending
+- Evidence: See below
 - Independent reviewer: Pending
+
+### Rule table
+
+| Field | Rule |
+| --- | --- |
+| Display text | Unicode NFC, trim, collapse whitespace; original casing kept |
+| Comparison keys | NFC, trim, collapse, `casefold`, strip tested punctuation; company/title also strip trailing legal suffixes (`inc`, `incorporated`, `llc`, `ltd`, `limited`, `corp`, `corporation`, `plc`, `gmbh`, `ag`, `sa`) |
+| Remote | Explicit tokens only (`remote`, `hybrid`, `onsite`/`on-site`/`on site`); otherwise `unknown`. Remote never assigns eligibility |
+| Eligibility | `brazil` / `latin_america` / `worldwide` from explicit evidence only; else `location_eligibility_unknown` with zero child rows |
+| Location country/region | Left `None` (no geocoding) |
+| Seniority / employment | Explicit tokens; otherwise `unknown`; original seniority text retained |
+| Compensation | Missing amounts stay `None`, never `0`. USD annualization: hourly × 2080, monthly × 12, yearly as-is. Non-USD preserved with `annual_usd_* = None` |
+| URL | Persist original; canonical form lowercases host, drops default port/fragment/trailing slash and tracking query keys, keeps identity query |
+| Dedup | `(source_id, source_posting_id)` → `same_posting`; same canonical URL → `same_job_group`; exact `(company, title, location)` keys + compatible employment → `same_job_group`; empty location cannot tuple-merge; similarity is insufficient |
+
+### Technology vocabulary summary
+
+Canonical terms in `technology_aliases.json`: Python, JavaScript, TypeScript, React, Next.js, FastAPI, PostgreSQL, SQL, Docker, Git, GitHub, CI/CD, AWS, GCP, LLM. Aliases include `js`→JavaScript and `postgres`→PostgreSQL. Unmatched tokens are retained. Duplicate aliases/IDs are rejected at load.
+
+Role-family IDs: `software_developer`, `full_stack`, `backend`, `python`, `frontend`, `ai_application`, `applied_ai`. A title may match multiple families.
+
+### Fixture matrix
+
+| Case | Expected | Actual |
+| --- | --- | --- |
+| `same_source_identity` | `same_posting` / `source_identity` | match |
+| `cross_source_canonical_url` | `same_job_group` / `canonical_url` | match |
+| `exact_tuple_compatible_employment` | `same_job_group` / `identity_tuple` | match |
+| `unknown_employment_is_compatible` | `same_job_group` / `identity_tuple` | match |
+| `incompatible_employment_stays_distinct` | `distinct` / `no_high_confidence_match` | match |
+| `similar_but_distinct_titles` | `distinct` / `no_high_confidence_match` | match |
+| `remote_versus_eligible_ambiguity_distinct` | `distinct` / `no_high_confidence_match` | match |
+| `missing_and_non_usd_salary_do_not_affect_grouping` | `same_job_group` / `identity_tuple` | match |
+| `repost_different_source_ids_join_by_url` | `same_job_group` / `canonical_url` | match |
+| `empty_location_does_not_tuple_merge` | `distinct` / `no_high_confidence_match` | match |
+
+Normalization fixtures also cover display vs comparison keys, remote ≠ Brazil eligibility, missing salary, non-USD preservation, USD hourly/monthly annualization, unknown enums, technology alias + unmatched retain, multi-family titles, and URL tracking strip.
+
+### Stable repeated-run group counts
+
+`test_repeated_corpus_produces_stable_groups_and_counts` applies an 8-posting corpus twice. Both runs persist **6 job groups** and **8 source postings**, with identical group membership sets (`source_id`, `source_posting_id`). No postings are deleted.
+
+### Required-validation transcript
+
+```text
+$ docker compose up -d postgres
+Container job-engine-postgres-1 Started
+
+$ cd apps/api && uv run ruff check .
+All checks passed!
+
+$ cd apps/api && uv run ruff format --check .
+34 files already formatted
+
+$ cd apps/api && uv run mypy src tests
+Success: no issues found in 30 source files
+
+$ cd apps/api && uv run pytest tests/services tests/domain tests/db
+collected 58 items
+58 passed
+
+$ git diff --check
+(no whitespace errors)
+```

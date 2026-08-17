@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "job-engine"
+version = "0.1.0"
+description = "Job Engine API"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "alembic",
+    "asyncpg",
+    "fastapi",
+    "httpx",
+    "psycopg[binary]",
+    "pydantic",
+    "pydantic-settings",
+    "sqlalchemy[asyncio]",
+    "uvicorn[standard]",
+]
+
+[dependency-groups]
+dev = [
+    "mypy",
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/job_engine"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/job_engine/data/role_families.json" = "job_engine/data/role_families.json"
+"src/job_engine/data/technology_aliases.json" = "job_engine/data/technology_aliases.json"
+
+[tool.ruff]
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["ASYNC", "B", "E", "F", "I", "UP"]
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
+files = ["src", "tests"]
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "live: bounded authorized live source smoke (deselect by default)",
+]
