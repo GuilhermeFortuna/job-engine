@@ -134,6 +134,8 @@ Equivalent uv commands from `apps/api`:
 
 ```bash
 uv run uvicorn job_engine.main:create_app --factory --reload --host 127.0.0.1 --port 8000
+uv run alembic upgrade head
+uv run alembic downgrade base
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src tests
@@ -142,6 +144,14 @@ uv run python -c "from job_engine.main import create_app; create_app()"
 ```
 
 `dev` serves `GET /api/v1/health` on `http://127.0.0.1:8000`. That route reports process health (`{"status":"ok"}`) and does not query PostgreSQL. `build` verifies that `create_app()` imports; it does not create a container.
+
+Alembic reads `DATABASE_URL` the same way as `Settings` (process environment only, documented default matching `.env.example`). It does not load `.env`. Apply catalog migrations against the local PostgreSQL service after `docker compose up -d postgres`:
+
+```bash
+cd apps/api && uv run alembic upgrade head
+```
+
+`alembic.ini` does not hardcode credentials. The initial revision `0001_canonical_job_catalog` creates `ingestion_runs`, `job_groups`, `source_postings`, `job_group_postings`, `job_group_technologies`, and `job_group_eligible_locations`.
 
 ## Frontend (`apps/web`)
 
