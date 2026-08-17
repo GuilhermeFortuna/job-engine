@@ -46,3 +46,25 @@ Escalate to the owner only when the repository contains no accepted technical
 decision and proceeding would require a genuinely new product, legal, or scope
 decision. Do not infer that situation merely from stale text when `STATUS.md`
 already marks the prerequisite `DONE` and the downstream order `READY`.
+
+## Shared working branch
+
+Work on the `development` branch. Do not create a separate branch, worktree, or
+feature branch for a task unless the owner explicitly asks you to.
+
+Multiple AI workers often implement different tasks on the same `development`
+branch at the same time. Treat that as expected. Do not fight other workers for
+the branch, the working tree, or files you do not own.
+
+- Stay on `development`. Do not switch away, branch off, or open a dedicated
+  worktree unless the owner requested it for this task.
+- Re-read files from disk immediately before editing. Another worker may have
+  changed them since your last read.
+- Do not revert, overwrite, restyle, or "fix" another worker's in-progress
+  changes unless those files are in your owned-file boundary or the owner asked
+  you to.
+- If you collide with another worker (unexpected diffs, overlapping edits,
+  merge conflicts, or files you did not own), stop. Preserve both sides of the
+  work and report the collision. Do not force your version through.
+- Do not reset, rebase, force-push, or otherwise rewrite shared `development`
+  history.
