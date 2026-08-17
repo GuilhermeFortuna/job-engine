@@ -1,30 +1,14 @@
-import { describe, expect, it } from "vitest";
-import RootLayout from "./layout";
+import { describe, expect, it, vi } from "vitest";
 import HomePage from "./page";
-import { renderWithProviders, screen } from "@/test/render";
+import { redirect } from "next/navigation";
 
-describe("foundation page", () => {
-  it("renders one descriptive heading, landmarks, and a truthful foundation message", () => {
-    renderWithProviders(
-      <RootLayout>
-        <HomePage />
-      </RootLayout>,
-    );
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn(),
+}));
 
-    expect(
-      screen.getByRole("heading", {
-        level: 1,
-        name: "Job Engine V1 search is being built",
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-    expect(screen.getByRole("banner")).toBeInTheDocument();
-    expect(screen.getByRole("main")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /this foundation screen is not a live job catalog/i,
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/software engineer/i)).not.toBeInTheDocument();
+describe("root page", () => {
+  it("redirects to /jobs", () => {
+    HomePage();
+    expect(redirect).toHaveBeenCalledWith("/jobs");
   });
 });

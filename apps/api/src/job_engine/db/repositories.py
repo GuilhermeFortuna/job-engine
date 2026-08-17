@@ -755,16 +755,24 @@ def _apply_search_filters(stmt: Any, criteria: JobSearchCriteria) -> Any:
                 )
             )
         )
+    known = func.coalesce(
+        orm.JobGroup.compensation_annual_usd_minimum,
+        orm.JobGroup.compensation_annual_usd_maximum,
+    )
+    has_amount = or_(
+        orm.JobGroup.compensation_minimum.is_not(None),
+        orm.JobGroup.compensation_maximum.is_not(None),
+        orm.JobGroup.compensation_annual_usd_minimum.is_not(None),
+        orm.JobGroup.compensation_annual_usd_maximum.is_not(None),
+    )
     if criteria.minimum_annual_usd is not None:
-        known = func.coalesce(
-            orm.JobGroup.compensation_annual_usd_minimum,
-            orm.JobGroup.compensation_annual_usd_maximum,
-        )
         meets_minimum = known >= criteria.minimum_annual_usd
         if criteria.include_unknown_compensation:
             stmt = stmt.where(or_(meets_minimum, known.is_(None)))
         else:
             stmt = stmt.where(meets_minimum)
+    elif not criteria.include_unknown_compensation:
+        stmt = stmt.where(has_amount)
     if criteria.posted_after is not None:
         posted = func.coalesce(orm.JobGroup.published_at, orm.JobGroup.first_seen_at)
         stmt = stmt.where(posted >= criteria.posted_after)

@@ -83,6 +83,24 @@ def test_registered_himalayas_exposes_protocol() -> None:
     assert "himalayas" in registered_ids()
 
 
+def test_registered_jobicy_exposes_protocol() -> None:
+    registry_mod._REGISTRY.pop("jobicy", None)
+    adapter = get_adapter("jobicy", Settings())
+    assert isinstance(adapter, SourceAdapter)
+    assert adapter.source_id == "jobicy"
+    assert adapter.adapter_version
+    assert "jobicy" in registered_ids()
+
+
+def test_registered_remoteok_exposes_protocol() -> None:
+    registry_mod._REGISTRY.pop("remoteok", None)
+    adapter = get_adapter("remoteok", Settings())
+    assert isinstance(adapter, SourceAdapter)
+    assert adapter.source_id == "remoteok"
+    assert adapter.adapter_version
+    assert "remoteok" in registered_ids()
+
+
 def test_unknown_source_id_raises() -> None:
     with pytest.raises(UnknownSourceError, match="not-a-source"):
         get_adapter("not-a-source", Settings())

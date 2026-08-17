@@ -37,6 +37,7 @@ async def test_filters_vocabulary_and_labels(client: AsyncClient) -> None:
     assert payload["sources"] == [
         {"id": "himalayas", "label": "Himalayas"},
         {"id": "jobicy", "label": "Jobicy"},
+        {"id": "remoteok", "label": "Remote OK"},
     ]
 
 
@@ -57,6 +58,15 @@ async def test_health_never_run_uses_nulls(client: AsyncClient) -> None:
         },
         {
             "source_id": "jobicy",
+            "latest_run_status": "never_run",
+            "latest_run_started_at": None,
+            "latest_run_completed_at": None,
+            "fetched_count": None,
+            "accepted_count": None,
+            "rejected_count": None,
+        },
+        {
+            "source_id": "remoteok",
             "latest_run_status": "never_run",
             "latest_run_started_at": None,
             "latest_run_completed_at": None,

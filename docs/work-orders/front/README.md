@@ -7,5 +7,6 @@ Frontend orders own the Next.js/React interface, browser URL state, accessibilit
 | [FRONT-001](FRONT-001-web-foundation.md) | Web foundation | `REVIEW` |
 | [FRONT-002](FRONT-002-unified-search-ui.md) | Unified search UI | `BLOCKED` |
 | [FRONT-003](FRONT-003-job-details-resilience.md) | Job details and resilience | `BLOCKED` |
+| [FRONT-004](FRONT-004-interactive-live-search-ui.md) | Interactive live search UI | `BLOCKED` |
 
 The authoritative live status is the project-wide [Work Order Status](../STATUS.md).

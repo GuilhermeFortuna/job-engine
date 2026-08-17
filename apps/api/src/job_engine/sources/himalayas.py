@@ -150,7 +150,7 @@ def _compensation_text(
     currency: str | None,
     period: str | None,
 ) -> str | None:
-    if minimum is None and maximum is None and currency is None and period is None:
+    if minimum is None and maximum is None:
         return None
     amount = ""
     if minimum is not None and maximum is not None:

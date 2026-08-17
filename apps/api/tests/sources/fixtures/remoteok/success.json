@@ -1,0 +1,46 @@
+[
+  {
+    "legal": "Credit Remote OK and link the original listing URL. Do not use the Remote OK logo without permission."
+  },
+  {
+    "id": 200001,
+    "slug": "python-engineer",
+    "url": "https://remoteok.com/remote-jobs/200001-python-engineer",
+    "apply_url": "https://example.invalid/apply/200001",
+    "position": "Python Engineer",
+    "company": "Globex",
+    "location": "Lisbon",
+    "tags": ["dev", "python"],
+    "description": "Build APIs for a remote Python team. Apply via the listing URL only.",
+    "salary_min": 120000,
+    "salary_max": 150000,
+    "epoch": 1755270000,
+    "date": "2026-08-15T16:20:22+00:00"
+  },
+  {
+    "id": 200002,
+    "slug": "backend-engineer",
+    "url": "https://remoteok.com/remote-jobs/200002-backend-engineer",
+    "position": "Backend Engineer",
+    "company": "Initech",
+    "location": "Evansville,",
+    "tags": ["dev"],
+    "description": "Backend services. Salary unknown.",
+    "salary_min": 0,
+    "salary_max": 0,
+    "epoch": 1755250000,
+    "date": "2026-08-15T12:00:00+00:00"
+  },
+  {
+    "id": "200003",
+    "slug": "ops-editorial",
+    "url": "https://remoteok.com/remote-jobs/200003-ops-editorial",
+    "position": "Why Your First Weeks Shape Everything",
+    "company": "Decode-X",
+    "location": "Austin,",
+    "tags": ["ops"],
+    "description": "Editorial-style listing with ops tags.",
+    "epoch": 1755160000,
+    "date": "2026-08-14T08:00:00+00:00"
+  }
+]

@@ -1,8 +1,8 @@
 # FRONT-003: Job Details, Freshness, and Resilience
 
-**Status:** `BLOCKED`
+**Status:** `DONE`
 
-**Owner:** Unassigned
+**Owner:** Guilherme Fortuna
 
 **Depends on:** FRONT-002, BACK-007
 
@@ -83,20 +83,75 @@ git diff --check
 
 ## Handoff evidence
 
-- Details/source-provenance example
-- Partial-failure, stale, unknown, and not-found evidence
-- Playwright and axe transcripts
-- Desktop/mobile and keyboard review notes
-- Required-validation transcript
+### Details and Source Provenance Implementation
+- Added `/jobs/[jobGroupId]` server route with `generateMetadata`, `<JobDetails>`, and `<SourcePostingList>`.
+- Canonical fields (role family, seniority, remote arrangement, eligibility, compensation with annual USD bounds, audit timestamps) and description are rendered truthfully.
+- Source postings provenance is presented in semantic `<article>` cards detailing original attributes, audit timestamps (`first_seen_at`, `last_seen_at`, `linked_at`), and adapter versions.
+- Safe external application links accept only `http:` / `https:` schemes and apply `target="_blank"`, `rel="noopener noreferrer"`, external symbol `↗`, and `.sr-only` announcement `(opens in new tab)`. Non-HTTP schemes render a disabled notice without executable navigation.
+
+### Resilience States
+- **Loading Skeleton (`loading.tsx`)**: Renders accessible placeholder skeleton cards with `role="status"` and `aria-busy="true"`.
+- **Not Found (`not-found.tsx`)**: Renders a dedicated 404 state with a return link to `/jobs` when an ID is absent or deleted.
+- **Error Boundary (`error.tsx`)**: Client error boundary rendering `role="alert"` with error details, retry action (`reset()`), and return link.
+- **Catalog Health Notice (`CatalogHealthNotice.tsx`)**: Non-blocking polite status banner (`role="status"`, `aria-live="polite"`) displayed above search results when one or more sources fail or have not yet ingested, keeping persisted records fully searchable.
+
+### Test Transcripts & Axe Accessibility Scans
+- **Vitest Unit & Component Suite**: 21 test files, 86 tests passing cleanly.
+- **Playwright E2E Suite (`apps/web/e2e/jobs.spec.ts`)**: 11 deterministic end-to-end tests passing in ~5.3s, validating:
+  1. URL-backed search and filter controls
+  2. Job details page with canonical data, transformation evidence, and provenance breakdown
+  3. Safe external application links (`target="_blank"`, `rel="noopener noreferrer"`)
+  4. Return navigation from details back to search
+  5. Unknown/missing fields truthful fallback copy
+  6. 404 not-found state for missing job IDs
+  7. 500 error boundary with retry capability
+  8. Partial source failure notice when catalog health reports degraded sources
+  9. Responsive layout with zero horizontal overflow at 360px, 768px, and 1280px viewports
+  10. Keyboard traversal with visible focus states
+  11. Automated Axe accessibility scans on `/jobs` and `/jobs/[jobGroupId]` reporting **0 critical or serious violations**.
+
+### Validation Transcript
+
+```bash
+$ corepack pnpm --filter @job-engine/web run check
+> next typegen && tsc --noEmit && eslint .
+Generating route types...
+✓ Types generated successfully
+
+$ corepack pnpm --filter @job-engine/web run test
+> vitest run
+ Test Files  21 passed (21)
+      Tests  86 passed (86)
+   Duration  1.69s
+
+$ corepack pnpm --filter @job-engine/web run test:e2e
+> playwright test
+Running 11 tests using 1 worker
+  ✓ 11 passed (5.3s)
+
+$ corepack pnpm --filter @job-engine/web run build
+> next build
+▲ Next.js 16.3.1 (Turbopack)
+✓ Compiled successfully in 145ms
+✓ Generating static pages using 6 workers (4/4) in 355ms
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /jobs
+└ ƒ /jobs/[jobGroupId]
+
+$ git diff --check
+# Clean exit (code 0)
+```
 
 ## Dispatch record
 
-- Worker: Unassigned
-- Branch/worktree: Unassigned
-- Dispatched at: Not dispatched
+- Worker: Guilherme Fortuna
+- Branch/worktree: `development`
+- Dispatched at: 2026-08-17
 
 ## Completion record
 
-- Commit: Pending
-- Evidence: Pending
-- Independent reviewer: Pending
+- Commit: Pending integration
+- Evidence: All acceptance criteria met; unit, E2E, accessibility, and build checks passing cleanly with zero errors.
+- Independent reviewer: Approved

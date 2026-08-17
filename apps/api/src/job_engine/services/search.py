@@ -8,8 +8,11 @@ are treated as literals. Blank `q` is ignored.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from html import unescape
+from html.parser import HTMLParser
 from uuid import UUID
 
 from fastapi.exceptions import RequestValidationError
@@ -52,6 +55,60 @@ from job_engine.domain.enums import (
 from job_engine.domain.taxonomy import REQUIRED_ROLE_FAMILY_IDS
 
 EXCERPT_LIMIT = 280
+_WHITESPACE_RE = re.compile(r"\s+")
+_BLOCK_TAGS = frozenset(
+    {
+        "p",
+        "div",
+        "br",
+        "li",
+        "ul",
+        "ol",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "tr",
+        "section",
+        "article",
+        "blockquote",
+        "pre",
+    }
+)
+_SKIP_TAGS = frozenset({"script", "style", "noscript"})
+
+
+class _HTMLTextExtractor(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._parts: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
+        if tag in _SKIP_TAGS:
+            self._skip_depth += 1
+            return
+        if self._skip_depth == 0 and tag in _BLOCK_TAGS:
+            self._parts.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _SKIP_TAGS and self._skip_depth:
+            self._skip_depth -= 1
+            return
+        if self._skip_depth == 0 and tag in _BLOCK_TAGS:
+            self._parts.append(" ")
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth == 0:
+            self._parts.append(data)
+
+    def text(self) -> str:
+        return unescape(_WHITESPACE_RE.sub(" ", "".join(self._parts)).strip())
+
+
 POSTED_WITHIN_DELTAS = {
     "24h": timedelta(hours=24),
     "7d": timedelta(days=7),
@@ -99,6 +156,7 @@ SORT_LABELS = {
 SOURCE_LABELS = {
     "himalayas": "Himalayas",
     "jobicy": "Jobicy",
+    "remoteok": "Remote OK",
 }
 
 
@@ -180,11 +238,19 @@ class SearchService:
         )
 
 
-def description_excerpt(description: str | None) -> str | None:
+def html_to_plain_text(description: str | None) -> str | None:
     if description is None:
         return None
-    stripped = description.strip()
-    if not stripped:
+    extractor = _HTMLTextExtractor()
+    extractor.feed(description)
+    extractor.close()
+    stripped = extractor.text()
+    return stripped or None
+
+
+def description_excerpt(description: str | None) -> str | None:
+    stripped = html_to_plain_text(description)
+    if stripped is None:
         return None
     if len(stripped) <= EXCERPT_LIMIT:
         return stripped
@@ -213,11 +279,11 @@ def compensation_matches(
     minimum_annual_usd: Decimal | None,
     include_unknown: bool,
 ) -> bool:
-    if minimum_annual_usd is None:
-        return True
     known = annual_min if annual_min is not None else annual_max
     if known is None:
         return include_unknown
+    if minimum_annual_usd is None:
+        return True
     return known >= minimum_annual_usd
 
 
@@ -276,7 +342,7 @@ def _list_item(record: JobGroupApiRecord) -> JobListItem:
 
 def _detail(record: JobGroupApiRecord) -> JobDetail:
     payload = _card(record).model_dump()
-    payload["description"] = record.row.description
+    payload["description"] = html_to_plain_text(record.row.description)
     payload["status"] = record.row.status
     payload["closed_at"] = record.row.closed_at
     payload["source_postings"] = tuple(
@@ -376,7 +442,7 @@ def _source_posting_detail(link: LinkedSourcePosting) -> SourcePostingDetail:
         application_url=row.application_url,
         title_original=row.title_original,
         company_original=row.company_original,
-        description=row.description,
+        description=html_to_plain_text(row.description),
         location_original=row.location_original,
         remote_status=row.remote_status,
         employment_type=row.employment_type,

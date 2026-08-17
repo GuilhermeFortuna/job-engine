@@ -132,6 +132,9 @@ def test_map_candidate_accepts_string_and_object_restrictions() -> None:
     assert brazil.location_eligibility_evidence == "Brazil"
     assert brazil.status is JobStatus.CLOSED
     assert brazil.closed_at is not None
+    assert brazil.compensation_minimum is None
+    assert brazil.compensation_maximum is None
+    assert brazil.compensation_original_text is None
     object_restrictions = adapter.map_candidate(
         adapter.parse_record(jobs[2]), run_id=uuid4(), seen_at=SEEN_AT
     )

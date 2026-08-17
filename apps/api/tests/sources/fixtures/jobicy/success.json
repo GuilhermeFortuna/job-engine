@@ -1,0 +1,63 @@
+{
+  "apiVersion": "2.2.15",
+  "documentationUrl": "https://jobi.cy/apidocs",
+  "friendlyNotice": "Thanks for using Jobicy API! Credit Jobicy with a direct source link.",
+  "jobCount": 3,
+  "lastUpdate": "2026-08-16T16:47:20+00:00",
+  "appliedFilters": {"count": 3},
+  "jobs": [
+    {
+      "id": 150001,
+      "url": "https://jobicy.com/jobs/150001-python-engineer-brazil",
+      "jobSlug": "150001-python-engineer-brazil",
+      "jobTitle": "Python Engineer",
+      "companyName": "Globex",
+      "companyLogo": "https://jobicy.com/logos/globex.png",
+      "jobIndustry": ["Software Engineering"],
+      "jobType": ["Full-Time"],
+      "jobGeo": "Brazil",
+      "jobLevel": "Senior",
+      "jobExcerpt": "Build APIs.",
+      "jobDescription": "Build APIs for a remote Python team in Brazil. Apply via the listing URL only.",
+      "pubDate": "2026-08-15T16:20:22+00:00",
+      "salaryMin": 120000,
+      "salaryMax": 150000,
+      "salaryCurrency": "USD",
+      "salaryPeriod": "yearly"
+    },
+    {
+      "id": 150002,
+      "url": "https://jobicy.com/jobs/150002-backend-engineer-latam",
+      "jobSlug": "150002-backend-engineer-latam",
+      "jobTitle": "Backend Engineer",
+      "companyName": "Initech",
+      "jobIndustry": ["Software Engineering"],
+      "jobType": ["Contract"],
+      "jobGeo": "LATAM",
+      "jobLevel": "Any",
+      "jobExcerpt": "Work on services.",
+      "jobDescription": "Backend services for LATAM-eligible contractors.",
+      "pubDate": "2026-08-15T12:00:00+00:00"
+    },
+    {
+      "id": 150003,
+      "url": "https://jobicy.com/jobs/150003-staff-engineer-anywhere",
+      "jobSlug": "150003-staff-engineer-anywhere",
+      "jobTitle": "Staff Engineer",
+      "companyName": "Acme",
+      "jobIndustry": ["Finance &amp; Accounting", "Software Engineering"],
+      "jobType": ["Full-Time"],
+      "jobGeo": "Anywhere",
+      "jobLevel": "Director",
+      "jobExcerpt": "Lead platform work.",
+      "jobDescription": "Staff engineer role open worldwide.",
+      "pubDate": "2026-08-14T08:00:00+00:00",
+      "salaryMin": 70,
+      "salaryMax": 84,
+      "salaryCurrency": "USD",
+      "salaryPeriod": "hourly"
+    }
+  ],
+  "statusCode": 200,
+  "success": true
+}

@@ -1,0 +1,23 @@
+{
+  "apiVersion": "2.2.15",
+  "documentationUrl": "https://jobi.cy/apidocs",
+  "friendlyNotice": "Thanks for using Jobicy API! Credit Jobicy with a direct source link.",
+  "jobCount": 1,
+  "lastUpdate": "2026-08-16T16:47:20+00:00",
+  "appliedFilters": {"count": 1},
+  "jobs": [
+    {
+      "url": "https://jobicy.com/jobs/150099-missing-identifier",
+      "jobSlug": "150099-missing-identifier",
+      "jobTitle": "Missing Identifier Role",
+      "companyName": "NoId Inc",
+      "jobIndustry": ["Software Engineering"],
+      "jobType": ["Full-Time"],
+      "jobGeo": "Brazil",
+      "jobLevel": "Senior",
+      "jobDescription": "Sanitized malformed fixture without id."
+    }
+  ],
+  "statusCode": 200,
+  "success": true
+}
