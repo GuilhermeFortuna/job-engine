@@ -14,6 +14,15 @@ An order must use the prefix belonging to its directory. IDs are zero-padded and
 
 ## Status model
 
+Live status and owner approval come only from [`STATUS.md`](STATUS.md). Its
+status board overrides conflicting status or gate language in this registry,
+individual Work Orders, directory indexes, source registers, research
+documents, and older handoffs. In particular, a `READY` row is explicit
+authorization to proceed even if secondary documentation still says `BLOCKED`,
+`PENDING_OWNER`, unbound, or awaiting approval. Technical bindings remain the
+responsibility of the agents implementing the Work Orders that resolve them;
+see the repository-level instructions in [`AGENTS.md`](../../AGENTS.md).
+
 - `BLOCKED`: A prerequisite or required owner decision is incomplete.
 - `READY`: The order is sufficiently specified and all prerequisites are complete.
 - `IMPLEMENTING`: A named worker has accepted the order and its dispatch record is complete.

@@ -86,8 +86,9 @@ Batch 01 is complete only when `CROSS-003` is `DONE`. Backend or frontend automa
 | [BACK-002](back/BACK-002-canonical-model-persistence.md)   | Cursor agent | `feat/back-002-canonical-model-persistence` | 2026-08-16T20:46:00-03:00 | Canonical job catalog models, migrations, and repositories                                                  |
 | [BACK-004](back/BACK-004-adapter-contract-source-one.md)   | Cursor agent | `development`                               | 2026-08-16T23:00:00-03:00 | Adapter contract and Himalayas source one                                                                   |
 | [BACK-007](back/BACK-007-search-api.md)                    | Cursor agent | `development`                               | 2026-08-16T22:58:00-03:00 | Persisted V1 search and details API; parallel with BACK-004 on this branch                                  |
-| [BACK-005](back/BACK-005-source-two-adapter.md)            | Cursor agent | `development`                               | 2026-08-17T00:13:00-03:00 | Jobicy source-two adapter; shared `development` checkout                                                    |
-| [BACK-006](back/BACK-006-source-three-adapter.md)          | Cursor agent | `development`                               | 2026-08-17T00:30:00-03:00 | Remote OK source-three adapter; bound from CROSS-002 `APPROVED_BACKUP`; shared `development` checkout      |
+| [BACK-005](back/BACK-005-source-two-adapter.md)            | Cursor agent      | `development`                               | 2026-08-17T00:13:00-03:00 | Jobicy source-two adapter; shared `development` checkout                                                    |
+| [BACK-006](back/BACK-006-source-three-adapter.md)          | Cursor agent      | `development`                               | 2026-08-17T00:30:00-03:00 | Remote OK source-three adapter; bound from CROSS-002 `APPROVED_BACKUP`; shared `development` checkout      |
+| [FRONT-002](front/FRONT-002-unified-search-ui.md)          | Antigravity agent | `development`                               | 2026-08-17T00:50:30-03:00 | URL-backed unified search and results UI; shared `development` checkout                                     |
 
 
 
