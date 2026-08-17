@@ -1423,17 +1423,17 @@ a {
 
 .dark {
   color-scheme: dark;
-  --color-bg: #000000;
-  --color-card-bg: #000000;
-  --color-fg: #ffffff;
+  --color-bg: #111111;
+  --color-card-bg: #1a1a1a;
+  --color-fg: #f4f4f5;
   --color-muted: #a3a3a3;
-  --color-border: #262626;
-  --color-border-hover: #404040;
+  --color-border: #2a2a2a;
+  --color-border-hover: #3f3f3f;
   --color-primary: #f5f5f5;
   --color-primary-hover: #ffffff;
-  --color-primary-fg: #000000;
+  --color-primary-fg: #111111;
   --color-focus: #60a5fa;
-  --color-badge-bg: #171717;
+  --color-badge-bg: #262626;
   --color-badge-fg: #e5e5e5;
   --color-badge-remote: #0c4a6e;
   --color-badge-remote-fg: #7dd3fc;
