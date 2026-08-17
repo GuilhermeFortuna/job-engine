@@ -43,6 +43,15 @@ Initial dispatchable orders:
 
 All other Batch 01 orders begin `BLOCKED` and become `READY` only after every listed prerequisite is `DONE`.
 
+## Batch 02: On-Demand Live Search & Sync
+
+Batch 02 extends the V1 catalog search with real-time multi-source streaming synchronization and interactive UI progress tracking.
+
+Orders:
+- [`BACK-008`](back/BACK-008-live-sync-streaming-api.md): on-demand live sync and SSE streaming API
+- [`FRONT-004`](front/FRONT-004-interactive-live-search-ui.md): interactive live search and progress feedback UI
+- [`CROSS-004`](cross-repo/CROSS-004-live-search-acceptance.md): live search end-to-end integration and acceptance
+
 ## Work Order contract
 
 Every order must define:

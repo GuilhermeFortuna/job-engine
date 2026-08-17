@@ -11,5 +11,6 @@ Backend orders own Python/FastAPI domain behavior, source ingestion, PostgreSQL 
 | [BACK-005](BACK-005-source-two-adapter.md) | Source two adapter | `REVIEW` |
 | [BACK-006](BACK-006-source-three-adapter.md) | Source three adapter | `REVIEW` |
 | [BACK-007](BACK-007-search-api.md) | Search API | `REVIEW` |
+| [BACK-008](BACK-008-live-sync-streaming-api.md) | On-Demand Live Sync and Streaming API | `BLOCKED` |
 
 The authoritative live status is the project-wide [Work Order Status](../STATUS.md).

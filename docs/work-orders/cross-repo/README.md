@@ -7,5 +7,6 @@ Job Engine is a monorepo. `CROSS-` orders own root-level concerns spanning backe
 | [CROSS-001](CROSS-001-repository-foundation.md) | Repository foundation | `REVIEW` |
 | [CROSS-002](CROSS-002-source-feasibility.md) | Source feasibility and selection | `REVIEW` |
 | [CROSS-003](CROSS-003-v1-integration-acceptance.md) | V1 integration and acceptance | `BLOCKED` |
+| [CROSS-004](CROSS-004-live-search-acceptance.md) | Live search integration and acceptance | `BLOCKED` |
 
 The authoritative live status is the project-wide [Work Order Status](../STATUS.md).
