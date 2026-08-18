@@ -1,6 +1,6 @@
 # BACK-010: Application Orchestration, Queue, and Audit
 
-**Status:** `BLOCKED`
+**Status:** `DONE`
 
 **Owner:** Unassigned
 

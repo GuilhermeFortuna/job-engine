@@ -1,6 +1,6 @@
 # BACK-011: Grounded Application Answering
 
-**Status:** `BLOCKED`
+**Status:** `DONE`
 
 **Owner:** Unassigned
 

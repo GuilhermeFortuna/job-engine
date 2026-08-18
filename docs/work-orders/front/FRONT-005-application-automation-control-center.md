@@ -1,118 +1,127 @@
-# FRONT-005: Application Automation Control Center
+# FRONT-005: Embedded Application Workspace
 
 **Status:** `BLOCKED`
 
 **Owner:** Unassigned
 
-**Depends on:** CROSS-005, BACK-009, BACK-010, CROSS-006
+**Depends on:** CROSS-010
 
 **Unblocks:** CROSS-009
 
-**Product spec:** `docs/v2-assisted-apply-spec.md` (bound by CROSS-005)
+**Product spec:** `docs/v2-assisted-apply-spec.md`
 
 ## Objective
 
-Give the owner a clear, high-automation workflow: select one or more jobs, choose the resume and automation mode, queue them once, monitor live progress, resolve only named exceptions, and inspect trustworthy submission receipts and history.
+Turn the existing Next.js job experience into the trusted presentation layer for one visible assisted application: launch from an explicitly selected job, reserve and report the embedded browser rectangle, show job/resume/form provenance beside the real page, resolve exceptions in context, require explicit final release, and present truthful receipt or uncertainty states.
 
 ## Owned files
 
-- `/apps/web/src/app/applications/page.tsx` (new)
-- `/apps/web/src/app/applications/[runId]/page.tsx` (new)
-- `/apps/web/src/app/applications/loading.tsx` (new)
-- `/apps/web/src/app/applications/error.tsx` (new)
+- `/apps/web/src/app/applications/[runId]/workspace/page.tsx` (new)
+- `/apps/web/src/app/applications/[runId]/workspace/loading.tsx` (new)
+- `/apps/web/src/app/applications/[runId]/workspace/error.tsx` (new)
 - `/apps/web/src/features/applications/api.ts` (new)
 - `/apps/web/src/features/applications/types.ts` (new)
-- `/apps/web/src/features/applications/components/AutomationLauncher.tsx` (new)
-- `/apps/web/src/features/applications/components/ApplicationQueue.tsx` (new)
-- `/apps/web/src/features/applications/components/ApplicationRunDetails.tsx` (new)
+- `/apps/web/src/features/applications/desktop-bridge.ts` (new)
+- `/apps/web/src/features/applications/components/ApplicationLauncher.tsx` (new)
+- `/apps/web/src/features/applications/components/ApplicationWorkspace.tsx` (new)
+- `/apps/web/src/features/applications/components/BrowserViewport.tsx` (new)
+- `/apps/web/src/features/applications/components/BrowserToolbar.tsx` (new)
+- `/apps/web/src/features/applications/components/JobContextPanel.tsx` (new)
+- `/apps/web/src/features/applications/components/FieldReviewPanel.tsx` (new)
+- `/apps/web/src/features/applications/components/ApplicationStatusBar.tsx` (new)
 - `/apps/web/src/features/applications/components/ExceptionResolver.tsx` (new)
-- `/apps/web/src/features/applications/components/ReceiptEvidence.tsx` (new)
-- `/apps/web/src/features/applications/components/*.test.tsx` (new; application components only)
-- `/apps/web/src/features/jobs/components/JobCard.tsx` (selection/automation action only)
-- `/apps/web/src/features/jobs/components/JobCard.test.tsx` (selection/automation tests only)
-- `/apps/web/src/features/jobs/components/JobDetails.tsx` (automation action only)
-- `/apps/web/src/features/jobs/components/JobDetails.test.tsx` (automation tests only)
-- `/apps/web/src/app/globals.css` (application-control styles only)
-- `/apps/web/e2e/application-automation.spec.ts` (new)
-- `/apps/web/e2e/mock-server.mjs` (application API fixtures only)
+- `/apps/web/src/features/applications/components/SubmissionReceipt.tsx` (new)
+- `/apps/web/src/features/applications/components/*.test.tsx` (new; workspace components only)
+- `/apps/web/src/features/jobs/components/JobCard.tsx` (desktop assisted-apply action only)
+- `/apps/web/src/features/jobs/components/JobCard.test.tsx` (action tests only)
+- `/apps/web/src/features/jobs/components/JobDetails.tsx` (desktop assisted-apply action only)
+- `/apps/web/src/features/jobs/components/JobDetails.test.tsx` (action tests only)
+- `/apps/web/src/app/globals.css` (workspace styles only)
+- `/apps/web/e2e/embedded-application-workspace.spec.ts` (new)
+- `/apps/web/e2e/mock-server.mjs` (workspace API/bridge fixtures only)
 
-## Fixed user flow
+Do not edit Electron main/preload code, backend domain/API behavior, form observers/fillers, or ATS adapters.
 
-### Launch
+## Fixed launch contract
 
-- Job cards and details expose `Apply automatically` only when a validated application URL exists.
-- The owner may select one job or a bounded set of visible results, then chooses a registered resume and an automation mode defined by CROSS-005 (`FULL_AUTO` or `SEMI_AUTO_PAUSE_BEFORE_SUBMIT`).
-- The launch confirmation shows the exact jobs, application origins, resume label/checksum summary, current profile version, and whether automatic final submission is enabled.
-- One confirmation creates the queue through `POST /api/v1/application-runs`. It is not followed by a routine per-job final-review step.
-- Duplicate conflicts are shown per job and require the explicit backend override flow; the UI cannot silently retry or create a second run.
+- `Apply in Job Engine` appears only for a job with a validated application URL and when `getCapabilities().embeddedBrowser === true`.
+- Ordinary web-browser use retains the existing safe external application link and does not attempt iframe embedding.
+- Launch is one job at a time. The owner selects one registered resume and confirms the exact job, company, application origin, resume label/checksum summary, and assisted/manual-release behavior.
+- Create the run with `POST /api/v1/application-runs` using one `job_group_id` and `automation_mode: "semi_auto_pause_before_submit"`.
+- Do not display or send `FULL_AUTO`; do not offer multi-job application queues.
+- After creation, navigate to `/applications/{runId}/workspace` and invoke `openApplication({ runId })`. The UI never passes the application URL to Electron.
+- Duplicate conflicts are displayed with the existing run link. Explicit override uses the backend contract and cannot be hidden behind an ordinary retry.
 
-### Monitor
+## Fixed workspace layout
 
-- `/applications` shows queued, running, needs-input, paused-auth, submitted, failed, cancelled, and submission-unknown states with timestamps and current steps.
-- The UI consumes the Server-Sent Events (SSE) stream (`GET /api/v1/application-runs/stream`) bound by CROSS-005 for live updates; it must not infer progress from timers.
-- Existing job search remains usable while runs execute.
-- The run-details route shows a redacted ordered event timeline, current exception, selected job/resume, attempt count, and receipt state.
+Desktop layout has three coordinated regions:
 
-### Exceptions
+1. **Context rail:** job title/company/source, application origin, selected resume, current run status, and checkpoint.
+2. **Browser viewport:** a real empty layout rectangle measured with `ResizeObserver`; Electron owns the `WebContentsView` rendered over it. Include trusted back, forward, reload, blocked-navigation, loading, and desktop-unavailable states.
+3. **Assistance rail/status bar:** filled/review/unresolved counts, field decision summaries, confidence, policy category, provenance, reason, exceptions, and final submission/receipt state.
 
-- `NEEDS_INPUT` displays the exact normalized question, why automation paused, available options/constraints, relevant evidence, and the proposed answer if any.
-- Owner responses state whether the value is one-time or should update the reusable answer bank, then call the backend resolution endpoint.
-- A `SEMI_AUTO_PAUSE_BEFORE_SUBMIT` run paused at `SUBMIT_ARMED` presents the prepared summary and calls `POST /api/v1/application-runs/{run_id}/release-submit`; it does not reuse the answer-resolution endpoint.
-- `PAUSED_AUTH` instructs the owner to complete login/challenge in the dedicated runner browser and provides a resume action; it never asks for credentials in Job Engine.
-- `SUBMISSION_UNKNOWN` is visibly distinct from success and offers evidence inspection, not blind retry.
+React must not pretend the remote page is a DOM child. Send bounded coordinates after mount, resize, scroll, zoom/device-pixel-ratio change, panel collapse, and route transition. Close the application view before leaving the workspace.
 
-### Receipts
+At the minimum supported desktop viewport (1280x720), the embedded page remains large enough to complete a form and both rails remain reachable. Narrower windows show a deliberate unsupported-size message rather than overlapping the native view. Mobile web behavior remains the existing external-link experience.
 
-- `SUBMITTED` requires backend receipt evidence. Show platform, confirmation timestamp, receipt identifier or final URL when safe, and redacted screenshot/DOM artifact availability.
-- The UI must never declare submission based on a button click, navigation attempt, optimistic state, or missing runner heartbeat.
+## Review, exception, and submission behavior
+
+- Consume `GET /api/v1/application-runs/{run_id}` plus its SSE stream. Backend status is authoritative; do not infer completion from browser navigation.
+- Show only redacted field metadata emitted by CROSS-010. Never display runner tokens, hidden values, raw DOM, cookies, absolute resume paths, or unredacted audit payloads.
+- `REVIEW_REQUIRED` displays question, proposed value if present, confidence, provenance/evidence labels, reason, options/constraints, and whether the answer may be saved to the answer bank.
+- Submit resolutions through `POST /api/v1/application-runs/{run_id}/resolve-answers` and resume the same run.
+- `PAUSED_AUTH`/CAPTCHA instructs the owner to complete the challenge directly in the embedded page and then use the existing resume action. Never request credentials in Job Engine controls.
+- Enable trusted `Submit application` only when the run is `NEEDS_INPUT`, the latest exception is `SEMI_AUTO_ARMED`, the checkpoint is `submit_armed`, every required field is resolved, and the desktop bridge reports the matching run open.
+- Show a concise final summary, require one explicit activation, call `release-submit`, immediately disable the action, and follow backend events. Do not optimistically show success.
+- `SUBMISSION_UNKNOWN` is visually distinct and offers evidence inspection, never blind retry. `SUBMITTED` requires a backend receipt.
 
 ## Procedure
 
-1. Add typed clients for profile/resume summaries, run creation/list/detail, exception resolution, resume/cancel, duplicate override, and evidence metadata.
-2. Implement single-job and bounded multi-selection launch with a resume selector and explicit auto-submit summary.
-3. Build the applications queue and run-details routes with backend-owned state labels and accessible live updates.
-4. Build exception-specific resolution for missing answers and auth/challenge pauses without accepting credentials.
-5. Build receipt/evidence presentation and strong distinction among submitted, unknown, failed, paused, and cancelled outcomes.
-6. Add unit tests for every state, duplicate conflicts, partial queue creation, stale profile/resume versions, sensitive-value redaction, and keyboard/focus behavior.
-7. Add Playwright tests against the synthetic runner/API fixtures for queue launch, unattended success, answer exception/resume, auth pause, duplicate conflict, failure, cancellation, and submission unknown.
+1. Add exact TypeScript projections for implemented applicant/resume, application-run, event, exception, decision-summary, and receipt responses.
+2. Add a runtime-safe optional desktop bridge wrapper with SSR/ordinary-browser fallbacks; never import Electron in Next.js code.
+3. Implement single-job launch and duplicate-conflict handling from job card/details.
+4. Build the split workspace, browser rectangle measurement/cleanup, toolbar, minimum-size behavior, and browser-state announcements.
+5. Build field review and exception resolution using backend/CROSS-010 state without duplicating answer policy.
+6. Implement guarded final release and truthful submitted/unknown/failure/receipt states.
+7. Add unit tests for launch payload, no-desktop fallback, bounds updates/cleanup, every decision/outcome, stale/mismatched run protection, duplicate conflict, keyboard/focus, and sensitive-value redaction.
+8. Add Playwright E2E with a mocked desktop bridge and deterministic API/SSE fixtures for launch, multi-step progress, review resolution, auth pause, prepared submit, confirmed receipt, unknown submission, cancellation, resize, and route cleanup.
 
 ## Required validation
 
 ```bash
 corepack pnpm --filter @job-engine/web run check
 corepack pnpm --filter @job-engine/web run test
-corepack pnpm --filter @job-engine/web run test:e2e -- application-automation.spec.ts
+corepack pnpm --filter @job-engine/web run test:e2e -- embedded-application-workspace.spec.ts
 corepack pnpm --filter @job-engine/web run build
 git diff --check
 ```
 
 ## Acceptance criteria
 
-- One confirmation can queue a supported single job or bounded selection for automatic final submission.
-- Queue and details states come from the backend and remain truthful through refresh, restart, partial failure, and runner disconnect.
-- Successful supported fixture runs require no routine final-review interaction.
-- Missing-answer and authentication exceptions are actionable and resume the same run without duplicate creation.
-- Duplicate submissions and submission-unknown outcomes cannot be bypassed by an ordinary retry button.
-- Receipt evidence is available only for backend-confirmed submissions and is redacted/accessibly presented.
-- Keyboard navigation, focus management, live announcements, contrast, responsive layouts, and reduced-motion behavior pass automated and manual checks.
+- An eligible job launches exactly one semi-auto run and opens its workspace through the typed desktop bridge; ordinary browser use remains safe and functional.
+- The browser rectangle tracks all relevant layout changes and is closed on navigation/unmount without covering trusted controls.
+- Job context, resume, field counts, confidence/provenance, exceptions, and backend progress remain understandable beside the real application page.
+- Missing/sensitive answers and auth/CAPTCHA cases are actionable in the same workspace and resume the same run.
+- Final submission always requires the owner's trusted-UI action; the button cannot double-fire and does not claim success before backend receipt reconciliation.
+- Submitted, submission-unknown, failed, cancelled, and disconnected states are visually and semantically distinct.
+- Keyboard navigation, focus order, live announcements, contrast, reduced motion, and the 1280x720 minimum layout pass automated and manual review.
 
 ## Forbidden decisions
 
-- Do not request, display, or store passwords, cookies, runner tokens, absolute resume paths, or raw sensitive audit values.
-- Do not create runs automatically from search results without owner selection and launch confirmation.
-- Do not add a mandatory final-review screen to every otherwise authorized application.
-- Do not infer submitted state client-side or allow blind retry after `SUBMISSION_UNKNOWN`.
-- Do not implement browser selectors, platform rules, answer generation, run transitions, or duplicate policy in React.
-- Do not add application scoring, CRM stages beyond the fixed execution states, notifications, or analytics.
+- Do not embed remote pages with iframe or `<webview>` and do not import Electron APIs into React.
+- Do not expose `FULL_AUTO`, multi-job application queues, background application controls, or automatic launch.
+- Do not accept arbitrary URLs, DOM, JavaScript, IPC channels, tokens, paths, credentials, or cookies through UI code.
+- Do not reimplement answer policy, run transitions, duplicate rules, selectors, or receipt truth in React.
+- Do not add scoring, research, resume tailoring, CRM stages, notifications, analytics, or extension support.
 
 ## Handoff evidence
 
-- Single and multi-job launch walkthrough
-- Unattended success and receipt evidence
-- Missing-answer/auth/unknown-submission exception evidence
-- Duplicate and stale-version behavior
-- Accessibility and responsive evidence
-- Unit, E2E, and build transcripts
+- Desktop and ordinary-browser launch walkthroughs
+- Bounds/resize/route-cleanup evidence
+- Field review and auth/CAPTCHA exception evidence
+- Explicit release, confirmed receipt, and submission-unknown evidence
+- Duplicate and stale/mismatched-run behavior
+- Accessibility, minimum-viewport, unit, E2E, and build transcripts
 
 ## Dispatch record
 

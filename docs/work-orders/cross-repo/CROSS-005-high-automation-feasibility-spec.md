@@ -1,6 +1,6 @@
 # CROSS-005: High-Automation Application Feasibility and V2 Specification
 
-**Status:** `READY`
+**Status:** `DONE`
 
 **Owner:** Unassigned
 

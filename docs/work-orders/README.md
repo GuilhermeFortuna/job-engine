@@ -1,6 +1,6 @@
 # Job Engine Work Order Registry
 
-This directory is the execution registry for Job Engine. Batch 01 and Batch 02 scope comes from [the V1 product specification](../v1-product-spec.md). Batch 03 begins with a research/specification gate that creates the successor V2 Assisted Apply specification; implementation orders must not silently change either accepted scope.
+This directory is the execution registry for Job Engine. Batch 01 and Batch 02 scope comes from [the V1 product specification](../v1-product-spec.md). Batch 03 scope comes from the owner-approved [V2 Embedded Assisted Apply specification](../v2-assisted-apply-spec.md); implementation orders must not silently change either accepted scope.
 
 ## Prefix and ownership rules
 
@@ -52,26 +52,27 @@ Orders:
 - [`FRONT-004`](front/FRONT-004-interactive-live-search-ui.md): interactive live search and progress feedback UI
 - [`CROSS-004`](cross-repo/CROSS-004-live-search-acceptance.md): live search end-to-end integration and acceptance
 
-## Batch 03: High-Automation Applications
+## Batch 03: Embedded Assisted Apply
 
-Batch 03 turns an explicitly selected job or bounded selection into an automated application run. Supported flows navigate multi-page forms, upload the selected resume, resolve approved or grounded answers, submit without a routine second review, capture receipt evidence, and pause only for named exceptions.
+Batch 03 turns one explicitly selected job into a visible desktop application workspace. The embedded runtime assists with supported fields and navigation, the owner reviews the real form and unresolved decisions, and final submission requires an explicit trusted-UI release.
 
 Initial dispatchable order:
 
 - [`CROSS-005`](cross-repo/CROSS-005-high-automation-feasibility-spec.md): bind the V2 specification, runtime, two primary application platforms, answer policy, and security/acceptance contracts
 
-All implementation orders begin `BLOCKED`. CROSS-005 must replace every runtime, provider, browser, platform, filename, host, and validation placeholder in the affected downstream orders and registry documents before handoff.
+The accepted backend foundation remains in force. The 2026-08-18 owner pivot replaces the undispatched runtime and presentation path without reopening BACK-009, BACK-010, or BACK-011.
 
 - [`BACK-009`](back/BACK-009-applicant-data-vault.md): applicant profile, reusable answer bank, and local resume-asset catalog
 - [`BACK-010`](back/BACK-010-application-orchestration-audit.md): durable queue, runner leases, idempotency, exceptions, and audit evidence
 - [`BACK-011`](back/BACK-011-grounded-application-answering.md): policy-driven deterministic and grounded application answers
-- [`CROSS-006`](cross-repo/CROSS-006-browser-automation-runner.md): local browser-automation runtime and generic form contract
-- [`CROSS-007`](cross-repo/CROSS-007-first-platform-automation.md): Greenhouse platform automated submission adapter
-- [`CROSS-008`](cross-repo/CROSS-008-second-platform-automation.md): Lever platform automated submission adapter
-- [`FRONT-005`](front/FRONT-005-application-automation-control-center.md): launch, queue, exceptions, progress, and receipt interface
-- [`CROSS-009`](cross-repo/CROSS-009-automated-application-acceptance.md): independent end-to-end automated-submission acceptance
+- [`CROSS-006`](cross-repo/CROSS-006-browser-automation-runner.md): secure Electron shell and embedded-browser foundation
+- [`CROSS-010`](cross-repo/CROSS-010-generic-form-assistance.md): normalized generic form assistance and reconciled manual-release runtime
+- [`CROSS-007`](cross-repo/CROSS-007-first-platform-automation.md): Greenhouse embedded assisted-apply adapter
+- [`CROSS-008`](cross-repo/CROSS-008-second-platform-automation.md): Lever embedded assisted-apply adapter
+- [`FRONT-005`](front/FRONT-005-application-automation-control-center.md): embedded application workspace, review, exceptions, and receipt interface
+- [`CROSS-009`](cross-repo/CROSS-009-automated-application-acceptance.md): independent end-to-end embedded assisted-apply acceptance
 
-Batch 03 does not authorize autonomous job selection, CAPTCHA/access-control bypass, unauthorized live test applications, or fabricated applicant facts. These constraints do not add a routine final-review requirement to an otherwise authorized supported run.
+Batch 03 does not authorize `FULL_AUTO`, background multi-job queues, autonomous job selection, CAPTCHA/access-control bypass, unauthorized live test applications, or fabricated applicant facts. The retained backend enum is not product authorization.
 
 ## Work Order contract
 

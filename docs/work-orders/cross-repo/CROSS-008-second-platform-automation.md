@@ -1,99 +1,101 @@
-# CROSS-008: Lever Platform Automation
+# CROSS-008: Lever Embedded Assisted Apply
 
 **Status:** `BLOCKED`
 
 **Owner:** Unassigned
 
-**Depends on:** CROSS-005, BACK-011, CROSS-006
+**Depends on:** CROSS-010
 
 **Unblocks:** CROSS-009
 
-**Product spec:** `docs/v2-assisted-apply-spec.md` (bound by CROSS-005)
+**Product spec:** `docs/v2-assisted-apply-spec.md`
 
 ## Objective
 
-Implement complete automatic application support for `lever`, the second independent platform family selected by CROSS-005, without coupling its selectors, stages, authentication behavior, or receipt rules to the first adapter.
+Implement an independent Lever adapter for the visible embedded workspace: exact detection, platform-specific observation and filling, resume upload, custom fields, prepared review, owner-released one-time submission, and receipt capture without importing Greenhouse selectors or flow assumptions.
 
 ## Owned files
 
-- `/apps/automation/src/adapters/lever.ts` (new)
-- `/apps/automation/src/adapters/registry.ts` (registration only)
-- `/apps/automation/tests/adapters/lever.test.ts` (new)
-- `/apps/automation/tests/fixtures/lever/**` (new; sanitized/minimal)
-- `/docs/automation/platform-register.md` (implementation evidence for this platform only)
+- `/apps/desktop/src/main/adapters/lever.ts` (new)
+- `/apps/desktop/src/main/adapters/registry.ts` (Lever registration only)
+- `/apps/desktop/tests/adapters/lever.test.ts` (new)
+- `/apps/desktop/tests/fixtures/lever/**` (new; sanitized/minimal)
+- `/docs/automation/platform-register.md` (Lever evidence/support update only)
 
 ## Platform contract
 
-- `lever` is a technical primary, but live automated submission remains blocked by `LEGAL-GATE-ATS-001` in the platform register. Fixture implementation and owner-authorized non-submitting inspection may proceed without closing that gate.
-- Match only the exact HTTPS hosts/path families approved in the platform register.
-- Detect the platform using at least two stable signals and prove it does not collide with `greenhouse` or the generic adapter.
-- Model the second platform's actual stages rather than forcing the first adapter's page assumptions into shared code.
-- Normalize observed controls through the CROSS-006 contract and obtain BACK-011 decisions; applicant answers never live in adapter code.
-- Verify resume-upload acceptance and all required field values after platform-side validation.
-- Re-observe the final page, checkpoint `SUBMIT_ARMED`, obtain the backend permit, activate submit once, and capture the bound receipt signals.
-- Report missing/ambiguous confirmation as `SUBMISSION_UNKNOWN` without an automatic second click.
+- Bind only adapter ID `lever` and the exact HTTPS host/path families in the platform register.
+- Require at least two stable detection signals and prove no collision with Greenhouse or generic fixtures.
+- Model Lever's actual page, validation, custom-field, upload, and confirmation behavior; do not force Greenhouse stages into shared code.
+- Normalize observations and obtain decisions through CROSS-010/BACK-011. Do not store applicant answers in the adapter.
+- Keep the application page visible and publish sanitized field/review progress to the trusted workspace.
+- Verify platform-visible values and upload acceptance after mutation.
+- Pause on legal/signature questions, missing decisions, unsupported composite controls, challenge/rate-limit state, unexpected origin, or unclear validation.
+- Re-observe before `SUBMIT_ARMED`; submit only after trusted owner release and same-run reclaim; activate the site control once.
+- Missing or ambiguous confirmation becomes `SUBMISSION_UNKNOWN` without retry.
 
 ## Fixture requirements
 
-Create minimal synthetic fixtures for every platform-specific stage bound by CROSS-005, plus:
+Use minimal synthetic fixtures covering:
 
-- Logged-out/authenticated entry where applicable
-- Required standard, custom, and conditional questions
-- Platform-specific composite controls or autocomplete widgets
-- Resume upload success/rejection
-- Navigation validation and server error
-- CAPTCHA/challenge or rate-limit detection
-- Confirmed and ambiguous submission outcomes
+- Approved Lever host/path and lookalike rejection
+- Standard, custom, conditional, and voluntary demographic questions
+- Lever-specific composite/autocomplete behavior encountered in current evidence
+- Resume acceptance and rejection
+- Validation/server error and challenge/rate-limit markers
+- Prepared review with unresolved and resolved variants
+- Owner release, confirmed receipt, and ambiguous response
 - Minor DOM drift and explicit unsupported variants
-- Detection-collision tests against the first and generic adapters
+- Detection collisions against Greenhouse and generic fixtures
 
-Fixtures must not contain complete copied pages, third-party scripts, employer branding, personal data, production tokens, or real application payloads.
+Do not commit complete copied pages, third-party scripts, employer branding, personal data, production tokens, or real application payloads.
 
 ## Procedure
 
-1. Reconfirm the platform binding, permitted method, first-party evidence, and flow variants on the implementation date.
-2. Implement platform detection and step observation independently from CROSS-007.
-3. Implement platform-specific fill, upload, navigation, validation, and checkpoint behavior while reusing only the shared adapter contract/utilities.
-4. Implement authentication/challenge handling, review/submit arming, one-time submission, and receipt capture.
-5. Add full fixture coverage, detection-collision coverage, DOM drift, and ambiguous-submit tests.
-6. Run a headed owner-authorized dry run without submitting. A genuine owner-selected application or explicitly authorized test submission is executed only by CROSS-009.
-7. Update the platform register with supported variants, known gaps, evidence date, and maintenance triggers.
+1. Reconfirm current first-party Lever candidate-flow evidence, host patterns, and `LEGAL-GATE-ATS-001` on the implementation date.
+2. Implement read-only detection/observation independently from CROSS-007.
+3. Implement Lever-specific fill, upload, conditional behavior, validation, and navigation while reusing only CROSS-010 contracts/utilities.
+4. Implement visible prepared review, explicit owner release, one-time submit, and receipt reconciliation.
+5. Test every fixture outcome plus adapter collision, hostile text, DOM drift, unsupported controls, and ambiguous submit.
+6. Perform an owner-authorized live non-submitting inspection in the embedded workspace. Stop before submission unless the owner separately names an exact desired job or authorized test target.
+7. Update only Lever support variants, evidence date, known gaps, and maintenance triggers in the platform register.
 
 ## Required validation
 
 ```bash
-corepack pnpm --filter @job-engine/automation run check
-corepack pnpm --filter @job-engine/automation run test -- lever
-corepack pnpm --filter @job-engine/automation run test -- adapter-detection-collisions
-corepack pnpm --filter @job-engine/automation run build
+corepack pnpm --filter @job-engine/desktop run check
+corepack pnpm --filter @job-engine/desktop run test -- lever
+corepack pnpm --filter @job-engine/desktop run test -- adapter-detection-collisions
+corepack pnpm --filter @job-engine/desktop run test:fixtures -- lever
+corepack pnpm --filter @job-engine/desktop run build
 git diff --check
 ```
 
 ## Acceptance criteria
 
-- The adapter supports the complete approved second-platform flow through confirmed synthetic submission.
-- Detection is stable, host-bounded, and collision-free against the first and generic adapters.
-- Platform-specific controls, conditional behavior, uploads, authentication, validation, challenges, and receipts behave as bound.
-- Submit is activated at most once and ambiguous outcomes never auto-retry.
-- The implementation does not contaminate the first adapter with second-platform selectors or stage assumptions.
-- The platform register records supported/unsupported variants and current evidence truthfully.
+- Detection is host-bounded, collision-free, and rejects unapproved/lookalike flows.
+- A complete synthetic Lever application remains visible, fills verified values, handles platform-specific controls/upload/validation, pauses for review, and submits once only after owner release.
+- Sensitive, unresolved, challenge, unsupported, and ambiguous cases retain the session and report truthful outcomes.
+- No Greenhouse selector or stage assumption contaminates the Lever adapter or shared contract.
+- The platform register truthfully distinguishes fixture support, authorized live inspection, and live submission evidence.
 
 ## Forbidden decisions
 
-- Do not clone the first adapter and retain selectors or assumptions that are not evidenced for the second platform.
-- Do not broaden platform scope, host allowlists, or add a third adapter.
-- Do not hardcode applicant data, credentials, resume paths, or employer-specific values.
-- Do not bypass CAPTCHA, authentication, rate limits, validation, or disabled controls.
-- Do not claim production support from fixtures alone.
-- Do not perform a live submission while `LEGAL-GATE-ATS-001` is open.
+- Do not expose or execute `FULL_AUTO`.
+- Do not clone Greenhouse assumptions, broaden hosts, add another platform, or silently fall back after Lever detection.
+- Do not hardcode applicant values, credentials, resume paths, or employer-specific data.
+- Do not bypass CAPTCHA, auth, validation, rate limits, consent, or disabled controls.
+- Do not claim production support from fixtures or inspection alone.
+- Do not submit a live application without exact owner authorization.
 
 ## Handoff evidence
 
-- Independent second-platform flow/detection map
+- Independent detection and flow map
 - Sanitized fixture manifest and provenance
-- Collision, multi-step, upload, submit, and receipt test transcripts
-- Headed authorized dry-run notes
-- Platform-register maintenance update
+- Collision and visible fill/upload/review/release/receipt transcripts
+- Challenge, validation, drift, unsupported, and ambiguous-submit evidence
+- Authorized live non-submitting inspection notes
+- Lever platform-register update
 
 ## Dispatch record
 

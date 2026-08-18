@@ -1,99 +1,100 @@
-# CROSS-007: Greenhouse Platform Automation
+# CROSS-007: Greenhouse Embedded Assisted Apply
 
 **Status:** `BLOCKED`
 
 **Owner:** Unassigned
 
-**Depends on:** CROSS-005, BACK-011, CROSS-006
+**Depends on:** CROSS-010
 
 **Unblocks:** CROSS-009
 
-**Product spec:** `docs/v2-assisted-apply-spec.md` (bound by CROSS-005)
+**Product spec:** `docs/v2-assisted-apply-spec.md`
 
 ## Objective
 
-Implement complete automatic application support for `greenhouse`, the first platform family selected by CROSS-005: detection, multi-step/single-page navigation, conditional fields, resume upload, answer resolution, final submission, and receipt capture.
+Implement a Greenhouse adapter for the visible embedded workspace: exact platform detection, field observation, authorized filling, resume upload, conditional questions, prepared-review handoff, owner-released one-time submission, and receipt capture. Do not create a background or unattended submission path.
 
 ## Owned files
 
-- `/apps/automation/src/adapters/greenhouse.ts` (new)
-- `/apps/automation/src/adapters/registry.ts` (registration only)
-- `/apps/automation/tests/adapters/greenhouse.test.ts` (new)
-- `/apps/automation/tests/fixtures/greenhouse/**` (new; sanitized/minimal)
-- `/docs/automation/platform-register.md` (implementation evidence for this platform only)
+- `/apps/desktop/src/main/adapters/greenhouse.ts` (new)
+- `/apps/desktop/src/main/adapters/registry.ts` (Greenhouse registration only)
+- `/apps/desktop/tests/adapters/greenhouse.test.ts` (new)
+- `/apps/desktop/tests/fixtures/greenhouse/**` (new; sanitized/minimal)
+- `/docs/automation/platform-register.md` (Greenhouse evidence/support update only)
 
 ## Platform contract
 
-- `greenhouse` is a technical primary, but live automated submission remains blocked by `LEGAL-GATE-ATS-001` in the platform register. Fixture implementation and owner-authorized non-submitting inspection may proceed without closing that gate.
-- Match only the exact HTTPS hosts/path families approved in the platform register.
-- Detect the platform using at least two independent stable signals; hostname alone is insufficient when employers can host unrelated pages on the same domain.
-- Support every required application stage documented by CROSS-005, including login/account creation only to the extent explicitly approved there.
-- Normalize all observed controls through the CROSS-006 field contract and obtain BACK-011 decisions; do not embed applicant answers in selectors or adapter code.
-- Upload only the run-selected PDF and verify the platform displays an accepted filename/status before advancing.
-- Immediately before final submit, re-observe required fields, compare them with authorized decisions, checkpoint `SUBMIT_ARMED`, and obtain the backend idempotency permit.
-- Capture the platform-bound receipt signals. If confirmation is missing or ambiguous, report `SUBMISSION_UNKNOWN` without clicking again.
+- Bind only adapter ID `greenhouse` and the exact HTTPS host/path families in the platform register.
+- Require at least two stable detection signals; hostname alone is insufficient.
+- Normalize all controls through CROSS-010. Applicant answers and policies remain backend-owned.
+- Support standard contact/link fields, resume upload, labelled custom questions, voluntary demographic groups, conditional reveal, validation, and the platform's actual review/confirmation behavior evidenced during implementation.
+- Keep the application page visible while observing/filling and expose sanitized field/review progress to the trusted workspace.
+- Pause for any legal attestation, signature, missing decision, unsupported control, CAPTCHA/challenge, unexpected origin, or unclear platform state.
+- Checkpoint `SUBMIT_ARMED` only after re-observing the final form and verifying every required value.
+- Submit only after the owner activates the trusted workspace action and the same run is released/reclaimed. Activate the Greenhouse submit control once.
+- Capture only platform-bound confirmation signals. Missing or ambiguous confirmation becomes `SUBMISSION_UNKNOWN` without another click.
 
 ## Fixture requirements
 
-Committed fixtures must be minimal, synthetic, and license/terms-compatible. Cover:
+Use minimal, synthetic, license-compatible fixtures covering:
 
-- Logged-out and authenticated entry
-- Required standard and custom questions
-- Conditional question reveal
-- Select/radio/checkbox/text/textarea controls
-- Resume upload success and rejection
-- Client/server validation error
-- Multi-page back/forward behavior
-- CAPTCHA/challenge detection
-- Submit disabled, submit error, confirmation, and ambiguous post-submit response
-- Minor non-semantic DOM drift that the adapter should tolerate
+- Approved Greenhouse host/path and lookalike rejection
+- Standard, custom, conditional, and voluntary demographic questions
+- Text, textarea, select, radio, checkbox, and resume controls
+- Resume acceptance and rejection
+- Client/server validation errors
+- CAPTCHA/challenge marker
+- Prepared review with unresolved and fully resolved variants
+- Owner release, confirmed receipt, and ambiguous post-submit response
+- Minor non-semantic DOM drift
 
-Do not commit complete copied pages, third-party scripts, employer branding, personal data, production tokens, or a real application payload.
+Do not commit complete copied pages, third-party scripts, employer branding, personal data, production tokens, or real application payloads.
 
 ## Procedure
 
-1. Reconfirm the CROSS-005 platform binding, host patterns, first-party evidence, and permitted test method on the implementation date.
-2. Implement stable detection and step observation against sanitized fixtures before mutation behavior.
-3. Implement fill/advance/upload with post-action verification and checkpoint events.
-4. Implement authenticated continuation, challenge detection, review/submit arming, one-time submit, and receipt capture.
-5. Add fixture tests for every bound stage and failure mode, including DOM drift and ambiguous submit.
-6. Run a headed dry run against an owner-authorized non-production or non-submitting target. Submission of a genuine owner-selected application or an explicitly authorized test application belongs to CROSS-009 acceptance.
-7. Update the platform register with supported flow versions, known unsupported controls, evidence date, and maintenance triggers.
+1. Reconfirm current first-party Greenhouse candidate-flow evidence, host patterns, and `LEGAL-GATE-ATS-001` on the implementation date.
+2. Implement collision-safe detection and read-only observation against fixtures.
+3. Implement platform-specific fill, upload, validation, conditional re-observation, and intermediate navigation using CROSS-010 decisions/checkpoints.
+4. Implement visible prepared review, explicit owner release, one-time submit, and receipt reconciliation.
+5. Test every fixture outcome, including hostile text, DOM drift, unresolved fields, and ambiguous submit.
+6. Perform an owner-authorized live non-submitting inspection in the embedded workspace. Stop before submission unless the owner separately names an exact desired job or authorized test target.
+7. Update only Greenhouse support variants, evidence date, known gaps, and maintenance triggers in the platform register.
 
 ## Required validation
 
 ```bash
-corepack pnpm --filter @job-engine/automation run check
-corepack pnpm --filter @job-engine/automation run test -- greenhouse
-corepack pnpm --filter @job-engine/automation run build
+corepack pnpm --filter @job-engine/desktop run check
+corepack pnpm --filter @job-engine/desktop run test -- greenhouse
+corepack pnpm --filter @job-engine/desktop run test:fixtures -- greenhouse
+corepack pnpm --filter @job-engine/desktop run build
 git diff --check
 ```
 
 ## Acceptance criteria
 
-- The adapter detects only the approved platform flow and rejects lookalikes/unapproved origins.
-- Synthetic authenticated and multi-step applications complete through confirmed submission with correct checkpoints and field decisions.
-- Conditional fields, file rejection, validation errors, challenge pages, and minor DOM drift behave as specified.
-- Submit is activated at most once per armed run; ambiguous outcomes never trigger an automatic retry.
-- The platform register truthfully lists supported and unsupported variants and current evidence.
-- No personal data, real application, broad page capture, or third-party code is committed.
+- Detection accepts only the registered Greenhouse flows and rejects lookalikes and unapproved origins.
+- A complete synthetic Greenhouse application remains visible, fills verified values, handles conditional fields/upload/validation, pauses for review, and submits once only after owner release.
+- Sensitive, unresolved, challenge, unsupported, and ambiguous cases produce the correct exception/outcome without losing the application session.
+- The adapter contains no applicant data and no Lever/generic fallback assumptions.
+- The platform register truthfully distinguishes fixture support, authorized live inspection, and live submission evidence.
 
 ## Forbidden decisions
 
-- Do not broaden the host allowlist or add another platform.
-- Do not hardcode applicant answers, credentials, resume paths, or employer-specific personal data.
-- Do not bypass CAPTCHA, login, platform validation, or disabled controls.
-- Do not silently fall back to the generic adapter after a recognized platform adapter fails mid-run.
-- Do not claim production support from fixtures alone.
-- Do not perform a live submission while `LEGAL-GATE-ATS-001` is open.
+- Do not expose or execute `FULL_AUTO`.
+- Do not broaden host patterns, add another platform, or silently fall back after a recognized Greenhouse flow fails.
+- Do not hardcode applicant answers, credentials, resume paths, or employer-specific data.
+- Do not bypass CAPTCHA, validation, consent, authentication, rate limits, or disabled controls.
+- Do not claim production support from fixtures or inspection alone.
+- Do not submit a live application without exact owner authorization.
 
 ## Handoff evidence
 
-- Platform detection/flow map
+- Detection and flow map
 - Sanitized fixture manifest and provenance
-- Multi-step/upload/submit/receipt test transcript
-- Headed authorized dry-run notes
-- Known-variant and maintenance-trigger register update
+- Visible fill/upload/conditional/review/release/receipt transcript
+- Challenge, validation, drift, and ambiguous-submit evidence
+- Authorized live non-submitting inspection notes
+- Greenhouse platform-register update
 
 ## Dispatch record
 

@@ -4,13 +4,13 @@
 
 **Retrieved / Evaluated:** 2026-08-17 (UTC)
 
-**Status:** Draft candidate awaiting owner acceptance under CROSS-005
+**Status:** Accepted technical platform register; runtime direction superseded by owner on 2026-08-18
 
 ---
 
 ## 1. Decision summary
 
-This register records the research, evaluation, first-party legal/terms analysis, technical feasibility, empirical spikes, and binding decisions for application platforms and runtime architectures evaluated for Job Engine V2 high-automation assisted apply.
+This register records research, first-party legal/terms analysis, technical feasibility, empirical spikes, and platform bindings for Job Engine V2 embedded assisted apply. The 2026-08-17 Playwright runner comparison remains historical evidence; the owner-approved 2026-08-18 product runtime is Electron with a sandboxed `WebContentsView`, while Playwright remains the synthetic/E2E test harness.
 
 ### 1.1 Platform Decision Matrix
 
@@ -24,7 +24,7 @@ This register records the research, evaluation, first-party legal/terms analysis
 
 ### 1.2 Named platform-permission gate
 
-- **`LEGAL-GATE-ATS-001` — OPEN:** The first-party materials reviewed below establish candidate-facing application flows but do not expressly authorize unattended browser automation. `APPROVED_PRIMARY` and `APPROVED_BACKUP` are technical rankings only. No live automated submission may occur until the owner records legal/risk acceptance for the exact platform and target job, or obtains explicit platform/employer authorization. Synthetic fixtures and non-submitting inspection remain permitted.
+- **`LEGAL-GATE-ATS-001` — OPEN:** The first-party materials reviewed below establish candidate-facing application flows but do not expressly authorize automated form interaction. `APPROVED_PRIMARY` and `APPROVED_BACKUP` are technical rankings only. Synthetic fixtures and owner-authorized visual/non-submitting inspection are permitted. Automated mutation or final submission against a live target requires the owner to record legal/risk acceptance for the exact platform and target job, or obtain explicit platform/employer authorization.
 
 ---
 
@@ -46,11 +46,11 @@ Why `greenhouse` and `lever` are approved as primaries:
 
 ---
 
-## 3. Automation Runtime Comparison and Decision
+## 3. Runtime decision history and current binding
 
-We evaluated three candidate runtime architectures for executing local browser automation against first-party documentation and requirements:
+On 2026-08-17 CROSS-005 evaluated three candidates for a separate local automation runner:
 
-1. **Option A: Playwright Persistent Context Runner (Selected)**
+1. **Option A: Playwright Persistent Context Runner (initially selected)**
 2. **Option B: Chromium Manifest V3 (MV3) Browser Extension**
 3. **Option C: Hybrid Design (Playwright + Local Helper Extension)**
 
@@ -63,9 +63,9 @@ First-party runtime sources, retrieved 2026-08-17:
 - [Chrome extension permissions](https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions)
 - [Chrome Tabs API and visible-tab capture](https://developer.chrome.com/docs/extensions/reference/api/tabs)
 
-### 3.1 Architectural Comparison Matrix
+### 3.1 Historical comparison matrix
 
-| Evaluation Dimension | Option A: Playwright Persistent Context (Selected) | Option B: Manifest V3 Extension | Option C: Hybrid Design |
+| Evaluation Dimension | Option A: Playwright Persistent Context | Option B: Manifest V3 Extension | Option C: Hybrid Design |
 | :--- | :--- | :--- | :--- |
 | **Authentication & Session Continuity** | Excellent. `launchPersistentContext` retains cookies, localStorage, indexedDB across restarts in `JOB_ENGINE_AUTOMATION_PROFILE_DIR`. | Excellent. Runs directly in the user's browser with natural access to existing sessions. | Excellent. Inherits browser profile cookies with Playwright automation hooks. |
 | **Multi-Page Navigation & Popups** | Native event-driven handling (`context.on('page')`, `page.waitForNavigation()`, frame navigation listeners). | Complex. MV3 background service workers frequently suspend; tab tracking across popup windows requires extensive `chrome.tabs` messaging. | Complex. Requires bridging Playwright CDP events with extension background message buses. |
@@ -76,16 +76,28 @@ First-party runtime sources, retrieved 2026-08-17:
 | **Screenshot / DOM Evidence & Redaction** | Native `page.screenshot()`, `page.content()`, element handle evaluation with DOM masking before persistence. | Restricted. `chrome.tabs.captureVisibleTab` requires broad `<all_urls>` permission and cannot capture full-page scrolling without stitching. | Functional via Playwright. |
 | **Installation, Update & Local Dev** | Clean standard npm package (`playwright@1.62.1` in monorepo). Integrated with pnpm workspace and standard CI/CD. | Complex. Requires developer mode sideloading, unpacked extension loading, and browser restart on extension updates. | Highly complex. Requires maintaining two separate codebases and packaging workflows. |
 
-### 3.2 Runtime Selection Decision
+### 3.2 Superseding 2026-08-18 product decision
 
-**Selected Architecture**: **Option A (Playwright Persistent Context Runner)**
-- **Package**: `playwright@1.62.1`
-- **Browser Channel**: `chromium`
-- **Profile Directory**: `JOB_ENGINE_AUTOMATION_PROFILE_DIR` (defaults to `~/.job-engine/browser-profile`)
-- **Backend Transport**: Local loopback HTTP REST + SSE (`http://127.0.0.1:8000`), authenticated via `Authorization: Bearer <JOB_ENGINE_RUNNER_SECRET>`.
+The owner replaced the undispatched separate-runner UX with a visible embedded application workspace.
 
-**Rationale**:
-Playwright provides the required file-upload, multi-page/popup, headed execution, and dedicated-profile primitives through one local process. A pure extension would require additional privileged machinery for unattended local-file custody, while a hybrid would retain Playwright and add a second privileged lifecycle without satisfying another Batch 03 requirement. The selection is based on bounded scope and custody, not any claim that Playwright is undetectable.
+Current first-party runtime sources, retrieved 2026-08-18:
+
+- [Electron 43.2.0 release](https://releases.electronjs.org/release/v43.2.0)
+- [Electron web embeds](https://www.electronjs.org/docs/latest/tutorial/web-embeds)
+- [Electron `WebContentsView`](https://www.electronjs.org/docs/latest/api/web-contents-view)
+- [Electron security checklist](https://www.electronjs.org/docs/latest/tutorial/security)
+- [Electron debugger / Chrome DevTools Protocol transport](https://www.electronjs.org/docs/latest/api/debugger)
+- [Chrome DevTools Protocol `DOM.setFileInputFiles`](https://chromedevtools.github.io/devtools-protocol/tot/DOM/#method-setFileInputFiles)
+
+- **Product shell/runtime:** `electron@43.2.0`
+- **Embedded surface:** main-process-owned `WebContentsView`
+- **Trusted renderer:** existing `/apps/web` Next.js application loaded from the exact configured loopback origin
+- **Remote isolation:** dedicated persistent Electron session; Node disabled; context isolation, sandbox, and web security enabled; no remote preload or raw IPC
+- **Assisted runtime:** `/apps/desktop`, accepting only `SEMI_AUTO_PAUSE_BEFORE_SUBMIT`
+- **Backend transport:** existing loopback REST + SSE authenticated from Electron main; secrets never enter React or remote content
+- **Test harness:** `@playwright/test@1.62.1` for deterministic fixtures/E2E only
+
+Playwright spike results below remain useful proof of synthetic navigation, upload, persistence, and one-time submission behavior, but they no longer bind the product browser architecture. The browser extension remains deferred.
 
 ---
 
@@ -130,7 +142,7 @@ Playwright provides the required file-upload, multi-page/popup, headed execution
   - **Success DOM Signals**: Presence of `#application_confirmation`, `.application-completed`, or text content matching `Thank you for applying`, `Application submitted`, or `Your application has been received`.
   - **Receipt Identifier**: Application confirmation ID or timestamped confirmation message.
 - **Testing & Fixture Strategy**:
-  - Sanitized synthetic HTML fixture matching Greenhouse form layout (`tests/fixtures/greenhouse/application_form.html`).
+  - Sanitized synthetic HTML fixture matching Greenhouse form semantics (`apps/desktop/tests/fixtures/greenhouse/application_form.html`).
   - Unit tests for step observation, field fingerprinting, file upload verification, pre-submit arming, and receipt capture.
 
 ---
@@ -172,7 +184,7 @@ Playwright provides the required file-upload, multi-page/popup, headed execution
   - **Success Route**: Navigation / redirect to `https://jobs.lever.co/{company}/{job_id}/thanks`.
   - **Success DOM Signals**: `.application-confirmation`, heading containing `Application Submitted!`, or text `Thank you for your interest`.
 - **Testing & Fixture Strategy**:
-  - Sanitized synthetic HTML fixture matching Lever apply page structure (`tests/fixtures/lever/application_form.html`).
+  - Sanitized synthetic HTML fixture matching Lever apply-page semantics (`apps/desktop/tests/fixtures/lever/application_form.html`).
   - Tests covering resume attachment, custom field matching, EEO decline selection, and `/thanks` receipt detection.
 
 ---

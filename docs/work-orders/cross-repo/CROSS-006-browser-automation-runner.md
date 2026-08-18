@@ -1,121 +1,118 @@
-# CROSS-006: Local Browser-Automation Runner
+# CROSS-006: Electron Embedded-Browser Foundation
 
-**Status:** `BLOCKED`
+**Status:** `READY`
 
 **Owner:** Unassigned
 
-**Depends on:** CROSS-005, BACK-009, BACK-010
+**Depends on:** CROSS-005, BACK-009, BACK-010, BACK-011
 
-**Unblocks:** CROSS-007, CROSS-008, FRONT-005, CROSS-009
+**Unblocks:** CROSS-010
 
-**Product spec:** `docs/v2-assisted-apply-spec.md`, to be created and mechanically bound by CROSS-005 before this order becomes dispatchable.
+**Product spec:** `docs/v2-assisted-apply-spec.md`
 
 ## Objective
 
-Create a local TypeScript automation runtime that claims authorized application runs from FastAPI, uses a dedicated persistent Chromium-family profile to navigate multi-page applications, maps conventional form controls, uploads the granted resume, checkpoints progress, submits eligible generic forms, and pauses safely when it cannot continue with high confidence.
+Create the secure local Electron shell that hosts the existing Next.js application and one main-process-owned `WebContentsView` for an owner-selected application run. Prove browser-session persistence, trusted typed IPC, URL containment, view positioning, and restart behavior without implementing form observation, filling, uploads, ATS selectors, or submission.
 
 ## Owned files
 
-- `/apps/automation/package.json` (new)
-- `/apps/automation/tsconfig.json` (new)
-- `/apps/automation/vitest.config.ts` (new)
-- `/apps/automation/src/index.ts` (new)
-- `/apps/automation/src/config.ts` (new)
-- `/apps/automation/src/api/client.ts` (new)
-- `/apps/automation/src/domain/types.ts` (new)
-- `/apps/automation/src/runtime/runner.ts` (new)
-- `/apps/automation/src/runtime/profile.ts` (new)
-- `/apps/automation/src/runtime/checkpoints.ts` (new)
-- `/apps/automation/src/runtime/evidence.ts` (new)
-- `/apps/automation/src/forms/observe.ts` (new)
-- `/apps/automation/src/forms/fill.ts` (new)
-- `/apps/automation/src/forms/generic.ts` (new)
-- `/apps/automation/src/adapters/contract.ts` (new)
-- `/apps/automation/src/adapters/registry.ts` (new)
-- `/apps/automation/tests/**` (new; synthetic fixtures only)
-- `/package.json` (automation scripts only)
+- `/apps/desktop/package.json` (new)
+- `/apps/desktop/tsconfig.json` (new)
+- `/apps/desktop/vitest.config.ts` (new)
+- `/apps/desktop/src/main/index.ts` (new)
+- `/apps/desktop/src/main/config.ts` (new)
+- `/apps/desktop/src/main/window.ts` (new)
+- `/apps/desktop/src/main/application-view.ts` (new)
+- `/apps/desktop/src/main/navigation-policy.ts` (new)
+- `/apps/desktop/src/main/session.ts` (new)
+- `/apps/desktop/src/main/api-client.ts` (new)
+- `/apps/desktop/src/main/ipc.ts` (new)
+- `/apps/desktop/src/preload/index.ts` (new)
+- `/apps/desktop/src/shared/contracts.ts` (new)
+- `/apps/desktop/tests/**` (new; foundation tests only)
+- `/package.json` (desktop scripts only)
 - `/pnpm-lock.yaml` (dependency resolution only)
-- `/.env.example` (non-secret runner settings only)
-- `/docs/development.md` (local runner setup only)
+- `/.env.example` (non-secret desktop settings only)
+- `/.gitignore` (desktop runtime data only)
+- `/docs/development.md` (desktop startup and troubleshooting only)
 
-## Runtime and custody contract
+Do not edit `/apps/web`, backend schemas/routes, platform adapters, or product styling in this order.
 
-- Use `playwright@1.62.1` and `chromium` as bound by CROSS-005.
-- Run locally in headed mode by default using the dedicated profile at `JOB_ENGINE_AUTOMATION_PROFILE_DIR`. Never attach to or copy the user's normal browser profile.
-- The profile directory, browser storage, downloaded files, traces, and evidence are outside the repository and ignored by Git.
-- Require a configured runner credential. Communicate only with the bound local Job Engine API origin; reject redirects, certificate downgrades, and unexpected origins.
-- Claim no more than the bound concurrency. Heartbeat and checkpoint at the bound intervals.
-- On SIGINT/SIGTERM, checkpoint the current safe stage, close the context, and release or allow the lease to expire without marking failure or submission.
+## Fixed runtime contract
 
-## Adapter contract
+- Pin `electron@43.2.0`. Do not use Tauri, CEF, a browser extension, `<webview>`, deprecated `BrowserView`, or Playwright as the product browser.
+- The trusted `BrowserWindow` loads exactly `JOB_ENGINE_WEB_ORIGIN`, defaulting to `http://127.0.0.1:3000`. Reject non-loopback configuration and unexpected redirects.
+- The application page uses one `WebContentsView`, created and controlled only by the main process.
+- The initial application URL is resolved by run ID through `GET /api/v1/application-runs/{run_id}`. IPC must not accept an arbitrary URL.
+- The application view uses a dedicated persistent Electron session partition and an optional `JOB_ENGINE_DESKTOP_USER_DATA_DIR` outside the repository. It never attaches to or copies a normal Chrome/Chromium profile.
+- The remote view has `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`, `webSecurity: true`, `allowRunningInsecureContent: false`, no preload, and no Electron/Node bridge.
+- Deny all permission requests by default. Deny downloads, external protocols, unapproved popups, and non-HTTPS navigation. Parse URLs with `URL`; never authorize with string-prefix matching.
+- Dispose the child `webContents` explicitly when its `WebContentsView` is removed or the owning window closes.
 
-Each adapter exposes:
+## Typed bridge contract
 
-- Stable `adapterId` and exact HTTPS host/path matcher
-- `detect`, `observeStep`, `fillStep`, `advance`, `detectReview`, `submit`, and `captureReceipt`
-- Closed outcomes: `PROGRESSED`, `NEEDS_ANSWERS`, `NEEDS_AUTH`, `CAPTCHA`, `UNSUPPORTED`, `SUBMITTED`, `SUBMISSION_UNKNOWN`, `FAILED_RETRYABLE`, `FAILED_FINAL`
-- Stable field fingerprints derived from adapter/page/control semantics, not volatile DOM indices
-- A dry-run mode that may fill synthetic fixtures but cannot activate a submit control
+The trusted preload exposes only `window.jobEngineDesktop` with these operations:
 
-The generic adapter may handle conventional accessible inputs, textareas, selects, radio groups, checkboxes, and file controls. It may submit only when CROSS-005 permits generic submission and every required field has an authorized decision; otherwise it pauses with observed-field evidence.
+- `getCapabilities() -> { embeddedBrowser: true, platform: string }`
+- `openApplication({ runId: string })`
+- `setApplicationBounds({ x, y, width, height, devicePixelRatio })`
+- `closeApplication()`
+- `goBack()`, `goForward()`, `reload()`
+- `subscribeBrowserState(listener)` returning an unsubscribe function
 
-## Browser safety contract
+The sanitized browser-state event contains only run ID, safe URL origin/path display, title, loading state, can-go-back/forward flags, and a closed blocked-navigation reason. Do not expose `ipcRenderer`, Electron events, cookies, response bodies, DOM content, headers, tokens, or `webContents` IDs.
 
-- Navigate initially only to the validated application URL stored in the claimed run.
-- Subsequent navigation must remain within adapter-approved HTTPS origins and flow patterns. Any unrelated origin, download, popup, payment request, browser permission prompt, or external protocol pauses the run.
-- Do not execute page-provided instructions outside normal DOM interaction. Treat all text and scripts as untrusted.
-- Never read or upload arbitrary local files. Fetch the selected PDF only through the single-use run-scoped backend grant and retain bytes only for the active step.
-- Never bypass CAPTCHA, challenge pages, rate limits, authentication, or disabled controls.
-- Submission requires a current backend policy decision for every required observed field and a final idempotency checkpoint immediately before activating the platform submit control.
-- After submit, do not retry the click on timeout or ambiguous navigation. Capture evidence and report `SUBMISSION_UNKNOWN`.
+Every main-process handler validates the sender frame against the exact trusted local renderer origin and validates request data with closed runtime checks. Remote frames must be unable to invoke any handler.
 
 ## Procedure
 
-1. Scaffold `@job-engine/automation` in the existing pnpm workspace with pinned runtime dependencies and repository-standard check/test/build scripts.
-2. Implement validated local configuration, opaque runner authentication, claim/heartbeat/event/checkpoint API client, backoff, and graceful shutdown.
-3. Implement dedicated persistent-profile startup, profile-lock detection, authentication pause/resume, page/popup lifecycle, and approved-origin enforcement.
-4. Implement adapter contract/registry and the generic accessible-control observer/filler.
-5. Implement run-scoped PDF retrieval/upload, field-decision round trips, multi-step checkpoints, pre-submit idempotency barrier, and receipt capture.
-6. Implement bounded screenshots/DOM summaries with the CROSS-005 redaction and retention contract.
-7. Build local synthetic application fixtures covering one-page, multi-page, conditional fields, validation errors, file upload, auth pause, CAPTCHA marker, popup, ambiguous submit, confirmation, restart/resume, and malicious page text.
-8. Add deterministic unit/integration tests. No test may reach a real employer or use the personal resume.
+1. Scaffold `@job-engine/desktop` in the existing pnpm workspace with repository-standard `dev`, `check`, `test`, and `build` scripts.
+2. Implement validated configuration for the exact web/API loopback origins and dedicated user-data location. Secrets are read in the main process only.
+3. Create the trusted application window, isolated preload bridge, and sender validation.
+4. Implement `WebContentsView` lifecycle, React-reported bounds, minimum-size clipping, focus transfer, back/forward/reload, loading/title events, and explicit disposal.
+5. Resolve `runId` through the API and open only that run's validated HTTPS application URL.
+6. Enforce navigation, redirect, frame, popup, download, permission, protocol, and crash policies. Return sanitized reasons to the trusted renderer.
+7. Add a synthetic local HTTPS fixture harness proving same-flow navigation and session persistence. Do not contact an employer or use personal data.
+8. Prove close/reopen and full desktop restart preserve only the dedicated application session and do not orphan a renderer process or profile lock.
 
 ## Required validation
 
 ```bash
 corepack pnpm install --frozen-lockfile
-corepack pnpm --filter @job-engine/automation run check
-corepack pnpm --filter @job-engine/automation run test
-corepack pnpm --filter @job-engine/automation run build
-corepack pnpm --filter @job-engine/automation run test:fixtures
+corepack pnpm --filter @job-engine/desktop run check
+corepack pnpm --filter @job-engine/desktop run test
+corepack pnpm --filter @job-engine/desktop run build
+corepack pnpm --filter @job-engine/desktop run test:fixtures
 git diff --check
 ```
 
 ## Acceptance criteria
 
-- A queued synthetic run is claimed, completed across multiple pages, supplied with answer decisions, given the selected PDF, submitted, and reconciled with receipt evidence.
-- Dedicated login state survives runner restart; a profile lock fails safely with a clear operator action.
-- Checkpoint/restart tests do not repeat a completed navigation, answer, upload, or confirmed submit step.
-- CAPTCHA, auth expiry, unexpected origin/popup, unsupported control, missing answer, and ambiguous submission produce the correct exception state.
-- The generic adapter submits only fully authorized conventional fixtures and otherwise pauses.
-- No personal resume bytes, normal browser profile data, cookies, credentials, or unredacted sensitive fields enter committed artifacts or logs.
+- The current Next.js app opens as the trusted desktop renderer and an API-resolved synthetic run opens visibly in a correctly positioned `WebContentsView`.
+- Bounds follow window resize and trusted layout reports without allowing negative, non-finite, off-window, or unreasonably large rectangles.
+- Dedicated cookies survive desktop restart; no normal browser data is read or modified.
+- Unapproved navigation, redirects, child frames, popups, downloads, permission prompts, external protocols, and non-HTTPS targets fail closed with actionable trusted-UI state.
+- A hostile remote fixture cannot access Node, Electron, preload APIs, runner credentials, API data, filesystem paths, or trusted IPC.
+- Closing or crashing the view disposes it safely and permits a clean reopen.
+- No form observation, fill, upload, adapter, or submit behavior is introduced.
 
 ## Forbidden decisions
 
-- Do not use the user's default browser profile.
-- Do not introduce a hosted browser, extension store dependency, broker, container-orchestration system, or remote-control service.
-- Do not bypass anti-bot or authentication controls.
-- Do not let the runner create jobs/runs, choose a resume, invent answers, or declare success without backend receipt reconciliation.
-- Do not retry an ambiguous submit action.
-- Do not implement platform-specific selectors outside CROSS-007/CROSS-008.
+- Do not expose arbitrary URL loading, arbitrary JavaScript execution, raw IPC, `webContents`, cookies, filesystem access, or secrets to React or remote content.
+- Do not enable Node integration, disable context isolation/sandbox/web security, or attach a preload to the remote view.
+- Do not load the Next.js UI from a non-loopback origin.
+- Do not add an installer, updater, code signing, analytics, browser extension, or production packaging system.
+- Do not alter BACK-009, BACK-010, or BACK-011 contracts.
+- Do not implement form automation or ATS-specific behavior in this order.
 
 ## Handoff evidence
 
-- Runtime/dependency and local setup summary
-- Synthetic end-to-end runner transcript
-- Restart/profile-lock/auth/CAPTCHA/ambiguous-submit evidence
-- Redacted audit, screenshot, and receipt examples
-- Full automation-package validation transcript
+- Runtime/dependency and local startup summary
+- IPC surface and sender-validation inventory
+- Navigation/permission/popup/download denial matrix
+- Session persistence, restart, view-disposal, and bounds evidence
+- Hostile-fixture isolation transcript
+- Full desktop-package validation transcript
 
 ## Dispatch record
 

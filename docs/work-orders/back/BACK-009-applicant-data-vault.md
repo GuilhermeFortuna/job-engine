@@ -1,6 +1,6 @@
 # BACK-009: Applicant Data Vault and Resume Assets
 
-**Status:** `READY`
+**Status:** `DONE`
 
 **Owner:** Unassigned
 

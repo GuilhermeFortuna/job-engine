@@ -1,6 +1,6 @@
 # Job Engine Work Order Status
 
-**Scope authorities:** [Job Engine V1 Product Specification](../v1-product-spec.md) for Batch 01–02; the owner-approved Batch 03 direction recorded below until CROSS-005 creates and binds the successor V2 Assisted Apply specification.
+**Scope authorities:** [Job Engine V1 Product Specification](../v1-product-spec.md) for Batch 01–02; [V2 Embedded Assisted Apply Specification](../v2-assisted-apply-spec.md) for Batch 03.
 
 **Registry:** [Work Order Registry](README.md)
 
@@ -55,13 +55,14 @@ then continue. A stale placeholder is not an owner-approval request.
 | [CROSS-004](cross-repo/CROSS-004-live-search-acceptance.md)           | Cross    | `DONE`    | BACK-008, FRONT-004                                            | Live search end-to-end integration and acceptance                         |
 | [CROSS-005](cross-repo/CROSS-005-high-automation-feasibility-spec.md) | Cross    | `DONE`    | CROSS-004                                                      | V2 automation/platform feasibility, specification, and binding gate       |
 | [BACK-009](back/BACK-009-applicant-data-vault.md)                     | Backend  | `DONE`    | CROSS-005                                                      | Applicant profile, answer bank, and local resume-asset catalog            |
-| [BACK-010](back/BACK-010-application-orchestration-audit.md)          | Backend  | `READY`   | CROSS-005, BACK-009                                            | Durable application queue, state, idempotency, exceptions, and audit      |
-| [BACK-011](back/BACK-011-grounded-application-answering.md)           | Backend  | `READY`   | CROSS-005, BACK-009                                            | Policy-driven deterministic and grounded application answers              |
-| [CROSS-006](cross-repo/CROSS-006-browser-automation-runner.md)        | Cross    | `BLOCKED` | CROSS-005, BACK-009, BACK-010                                  | Local browser runner and generic form automation contract                 |
-| [CROSS-007](cross-repo/CROSS-007-first-platform-automation.md)        | Cross    | `BLOCKED` | CROSS-005, BACK-011, CROSS-006                                 | Greenhouse platform automated submission adapter                          |
-| [CROSS-008](cross-repo/CROSS-008-second-platform-automation.md)       | Cross    | `BLOCKED` | CROSS-005, BACK-011, CROSS-006                                 | Lever platform automated submission adapter                               |
-| [FRONT-005](front/FRONT-005-application-automation-control-center.md) | Frontend | `BLOCKED` | CROSS-005, BACK-009, BACK-010, CROSS-006                       | Automation launch, queue, exceptions, and receipt UI                      |
-| [CROSS-009](cross-repo/CROSS-009-automated-application-acceptance.md) | Cross    | `BLOCKED` | BACK-010, BACK-011, CROSS-006, CROSS-007, CROSS-008, FRONT-005 | Batch 03 end-to-end automated-application acceptance                      |
+| [BACK-010](back/BACK-010-application-orchestration-audit.md)          | Backend  | `DONE`    | CROSS-005, BACK-009                                            | Durable application queue, state, idempotency, exceptions, and audit      |
+| [BACK-011](back/BACK-011-grounded-application-answering.md)           | Backend  | `DONE`    | CROSS-005, BACK-009                                            | Policy-driven deterministic and grounded application answers              |
+| [CROSS-006](cross-repo/CROSS-006-browser-automation-runner.md)        | Cross    | `READY`   | CROSS-005, BACK-009, BACK-010, BACK-011                        | Secure Electron shell and embedded-browser foundation                     |
+| [CROSS-010](cross-repo/CROSS-010-generic-form-assistance.md)          | Cross    | `BLOCKED` | CROSS-006, BACK-009, BACK-010, BACK-011                        | Generic normalized form assistance runtime                               |
+| [CROSS-007](cross-repo/CROSS-007-first-platform-automation.md)        | Cross    | `BLOCKED` | CROSS-010                                                      | Greenhouse embedded assisted-apply adapter                                |
+| [CROSS-008](cross-repo/CROSS-008-second-platform-automation.md)       | Cross    | `BLOCKED` | CROSS-010                                                      | Lever embedded assisted-apply adapter                                     |
+| [FRONT-005](front/FRONT-005-application-automation-control-center.md) | Frontend | `BLOCKED` | CROSS-010                                                      | Embedded application workspace and review UI                              |
+| [CROSS-009](cross-repo/CROSS-009-automated-application-acceptance.md) | Cross    | `BLOCKED` | BACK-009, BACK-010, BACK-011, CROSS-006, CROSS-010, CROSS-007, CROSS-008, FRONT-005 | Batch 03 embedded assisted-apply acceptance              |
 
 
 
@@ -83,18 +84,20 @@ BACK-004 + BACK-005 + BACK-006 + BACK-007 + FRONT-003 -> CROSS-003 (Batch 01 Acc
 CROSS-004 -> CROSS-005 -> BACK-009 -> BACK-010
                                    -> BACK-011
 
-CROSS-005 + BACK-009 + BACK-010 -> CROSS-006
-CROSS-005 + BACK-009 + BACK-010 + CROSS-006 -> FRONT-005
-CROSS-005 + BACK-011 + CROSS-006 -> CROSS-007
-                                      -> CROSS-008
+CROSS-005 + BACK-009 + BACK-010 + BACK-011 -> CROSS-006
+CROSS-006 + BACK-009 + BACK-010 + BACK-011 -> CROSS-010
+CROSS-010 -> CROSS-007
+          -> CROSS-008
+          -> FRONT-005
 
-BACK-010 + BACK-011 + CROSS-006 + CROSS-007 + CROSS-008 + FRONT-005
+BACK-009 + BACK-010 + BACK-011 + CROSS-006 + CROSS-010
+    + CROSS-007 + CROSS-008 + FRONT-005
     -> CROSS-009 (Batch 03 Acceptance)
 ```
 
 `BACK-005`, `BACK-006`, and `BACK-007` may proceed in parallel after their prerequisites are `DONE`. Documentation research in `CROSS-002` may proceed in parallel with `CROSS-001`.
 
-For Batch 03, only `CROSS-005` starts `READY`. After it is `DONE` and has propagated every bound runtime/platform/provider value, `BACK-009` becomes the first implementation dependency. `BACK-011` may proceed in parallel with `BACK-010` after `BACK-009`; the two platform adapters may proceed in parallel after `BACK-011` and `CROSS-006`.
+For the remaining Batch 03 work, `CROSS-006` is the only `READY` order. It creates the secure Electron/browser foundation without form automation. After `CROSS-006` is `DONE`, `CROSS-010` adds the generic assisted runtime. `CROSS-007`, `CROSS-008`, and `FRONT-005` may then proceed in parallel.
 
 ### Batch completion rule
 
@@ -143,5 +146,5 @@ For Batch 03, only `CROSS-005` starts `READY`. After it is `DONE` and has propag
 | 2026-08-17 | CROSS-004 | Batch 02 live search acceptance complete; all 6 criteria verified; GO issued                                                                                                                                                                                                        | Antigravity agent |
 | 2026-08-17 | CROSS-005 | Batch 03 targets automatic completion and final submission for owner-selected jobs on supported platforms; routine success has no second review click, while genuine exceptions pause for owner input                                                                               | Project owner     |
 | 2026-08-17 | CROSS-005 | Bound [playwright@1.62.1](mailto:playwright@1.62.1), chromium, greenhouse (primary 1), lever (primary 2), ashby (backup 1), smartrecruiters (backup 2), 6-category answer policy, automation modes (FULL_AUTO, SEMI_AUTO), SUBMISSION_UNKNOWN state, retry stages, and LLM cost cap | Antigravity agent |
-
+| 2026-08-18 | Batch 03  | Owner superseded unattended-first presentation/runtime scope with an Electron embedded application workspace. Batch 03 exposes one visible `SEMI_AUTO_PAUSE_BEFORE_SUBMIT` run, requires explicit owner release, retains Playwright for testing, and defers `FULL_AUTO`. | Project owner |
 
