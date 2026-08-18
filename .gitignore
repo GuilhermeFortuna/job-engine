@@ -46,3 +46,9 @@ out/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# User resume & personal profile files (local only)
+docs/resume/*
+!docs/resume/README.md
+!docs/resume/*.template.*
+!docs/resume/*.example.*
