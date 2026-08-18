@@ -6,12 +6,33 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import delete, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from job_engine.db import models as orm
+from job_engine.domain.applicant import (
+    ApplicantProfile,
+    ApplicantProfileInput,
+    CertificationEntry,
+    CompensationExpectation,
+    ConfirmedField,
+    DemographicPreferences,
+    EducationEntry,
+    EmploymentEntry,
+    FieldSource,
+    LanguageProficiency,
+    LocationPreferences,
+    PolicyCategory,
+    QuestionIntent,
+    ResumeAsset,
+    ResumeAssetInput,
+    ReusableAnswer,
+    ReusableAnswerInput,
+    ValueState,
+    WorkAuthorization,
+)
 from job_engine.domain.enums import (
     EmploymentType,
     IngestionRunStatus,
@@ -777,3 +798,590 @@ def _apply_search_filters(stmt: Any, criteria: JobSearchCriteria) -> Any:
         posted = func.coalesce(orm.JobGroup.published_at, orm.JobGroup.first_seen_at)
         stmt = stmt.where(posted >= criteria.posted_after)
     return stmt
+
+
+class OptimisticLockError(Exception):
+    """Raised when an update/delete fails due to an unexpected version."""
+
+
+class ResourceNotFoundError(LookupError):
+    """Raised when a requested resource does not exist."""
+
+
+class DefaultResumeConflictError(Exception):
+    """Raised when a default resume constraint or invariant is violated."""
+
+
+_PROFILE_FIELD_NAMES: tuple[str, ...] = (
+    "first_name",
+    "last_name",
+    "email",
+    "phone",
+    "city",
+    "region",
+    "country",
+    "timezone",
+    "headline",
+    "summary",
+    "portfolio_url",
+    "linkedin_url",
+    "github_url",
+    "custom_urls",
+    "notice_period_days",
+    "employment_history",
+    "education_history",
+    "skills",
+    "languages",
+    "certifications",
+    "work_authorizations",
+    "compensation_expectation",
+    "location_preferences",
+    "demographics",
+)
+
+
+def _serialize_field_value(field_name: str, value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): str(v) for k, v in value.items()}
+    if isinstance(value, (tuple, list)):
+        items: list[Any] = []
+        for item in value:
+            if hasattr(item, "model_dump"):
+                items.append(item.model_dump(mode="json"))
+            else:
+                items.append(str(item))
+        return items
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    return str(value)
+
+
+def _deserialize_field_value(field_name: str, payload: Any) -> Any:
+    if payload is None:
+        return None
+    if field_name in {
+        "first_name",
+        "last_name",
+        "email",
+        "phone",
+        "city",
+        "region",
+        "country",
+        "timezone",
+        "headline",
+        "summary",
+        "portfolio_url",
+        "linkedin_url",
+        "github_url",
+    }:
+        return str(payload)
+    if field_name == "custom_urls":
+        return dict(payload)
+    if field_name == "notice_period_days":
+        return int(payload)
+    if field_name == "skills":
+        return tuple(str(x) for x in payload)
+    if field_name == "employment_history":
+        return tuple(EmploymentEntry(**item) for item in payload)
+    if field_name == "education_history":
+        return tuple(EducationEntry(**item) for item in payload)
+    if field_name == "certifications":
+        return tuple(CertificationEntry(**item) for item in payload)
+    if field_name == "languages":
+        return tuple(LanguageProficiency(**item) for item in payload)
+    if field_name == "work_authorizations":
+        return tuple(WorkAuthorization(**item) for item in payload)
+    if field_name == "compensation_expectation":
+        return CompensationExpectation(**payload)
+    if field_name == "location_preferences":
+        return LocationPreferences(**payload)
+    if field_name == "demographics":
+        return DemographicPreferences(**payload)
+    return payload
+
+
+def _applicant_profile_from_row(row: orm.ApplicantProfile) -> ApplicantProfile:
+    fields_by_path = {f.field_path: f for f in row.fields}
+    field_kwargs: dict[str, Any] = {}
+    for name in _PROFILE_FIELD_NAMES:
+        f_row = fields_by_path.get(name)
+        if f_row is None:
+            field_kwargs[name] = ConfirmedField()
+        else:
+            state = ValueState(f_row.value_state)
+            value = (
+                _deserialize_field_value(name, f_row.value_payload)
+                if state == ValueState.PROVIDED
+                else None
+            )
+            source = FieldSource(f_row.source) if f_row.source else None
+            policy = PolicyCategory(f_row.policy_category)
+            field_kwargs[name] = ConfirmedField(
+                state=state,
+                value=value,
+                source=source,
+                last_confirmed_at=f_row.last_confirmed_at,
+                policy_category=policy,
+            )
+    return ApplicantProfile(
+        id=row.id,
+        version=row.version,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        **field_kwargs,
+    )
+
+
+def _resume_asset_from_row(row: orm.ResumeAsset) -> ResumeAsset:
+    return ResumeAsset(
+        id=row.id,
+        resume_id=row.resume_id,
+        label=row.label,
+        source_markdown_path=row.source_markdown_path,
+        upload_pdf_path=row.upload_pdf_path,
+        preview_html_path=row.preview_html_path,
+        sha256=row.sha256,
+        language=row.language,
+        is_default=row.is_default,
+        file_size_bytes=row.file_size_bytes,
+        last_verified_at=row.last_verified_at,
+        version=row.version,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def _reusable_answer_from_row(row: orm.ReusableAnswer) -> ReusableAnswer:
+    return ReusableAnswer(
+        id=row.id,
+        answer_id=row.answer_id,
+        question_intent=QuestionIntent(row.question_intent),
+        jurisdiction=row.jurisdiction,
+        platform_scope=row.platform_scope,
+        answer_text=row.answer_text,
+        policy_category=PolicyCategory(row.policy_category),
+        provenance=row.provenance,
+        last_confirmed_at=row.last_confirmed_at,
+        expires_at=row.expires_at,
+        version=row.version,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+class ApplicantVaultRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_profile(self) -> ApplicantProfile | None:
+        stmt = (
+            select(orm.ApplicantProfile)
+            .options(selectinload(orm.ApplicantProfile.fields))
+            .execution_options(populate_existing=True)
+        )
+        row = await self._session.scalar(stmt)
+        if row is None:
+            return None
+        return _applicant_profile_from_row(row)
+
+    async def replace_profile(
+        self, profile_input: ApplicantProfileInput, expected_version: int | None
+    ) -> ApplicantProfile:
+        now = _utcnow()
+        if expected_version is None:
+            existing = await self._session.scalar(select(orm.ApplicantProfile.id))
+            if existing is not None:
+                raise OptimisticLockError(
+                    "Applicant profile already exists; expected_version required"
+                )
+            profile_row = orm.ApplicantProfile(
+                id=uuid4(),
+                version=1,
+                created_at=now,
+                updated_at=now,
+            )
+            self._session.add(profile_row)
+            for name in _PROFILE_FIELD_NAMES:
+                field: ConfirmedField[Any] = getattr(profile_input, name)
+                profile_row.fields.append(
+                    orm.ApplicantProfileField(
+                        profile_id=profile_row.id,
+                        field_path=name,
+                        value_state=field.state.value,
+                        value_payload=_serialize_field_value(name, field.value),
+                        source=field.source.value if field.source else None,
+                        last_confirmed_at=field.last_confirmed_at,
+                        policy_category=field.policy_category.value,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+            await self._session.flush()
+            loaded = await self.get_profile()
+            if loaded is None:
+                raise RuntimeError("Failed to load created applicant profile")
+            return loaded
+
+        stmt = (
+            update(orm.ApplicantProfile)
+            .where(orm.ApplicantProfile.version == expected_version)
+            .values(
+                version=orm.ApplicantProfile.version + 1,
+                updated_at=now,
+            )
+            .returning(orm.ApplicantProfile.id, orm.ApplicantProfile.version)
+        )
+        result = await self._session.execute(stmt)
+        updated_row = result.first()
+        if updated_row is None:
+            existing = await self._session.scalar(select(orm.ApplicantProfile.id))
+            if existing is None:
+                raise ResourceNotFoundError("Applicant profile does not exist")
+            raise OptimisticLockError(
+                "Optimistic lock conflict on applicant profile with "
+                f"expected version {expected_version}"
+            )
+
+        profile_id = updated_row.id
+        await self._session.execute(
+            delete(orm.ApplicantProfileField).where(
+                orm.ApplicantProfileField.profile_id == profile_id
+            )
+        )
+        for name in _PROFILE_FIELD_NAMES:
+            field_val: ConfirmedField[Any] = getattr(profile_input, name)
+            self._session.add(
+                orm.ApplicantProfileField(
+                    profile_id=profile_id,
+                    field_path=name,
+                    value_state=field_val.state.value,
+                    value_payload=_serialize_field_value(name, field_val.value),
+                    source=field_val.source.value if field_val.source else None,
+                    last_confirmed_at=field_val.last_confirmed_at,
+                    policy_category=field_val.policy_category.value,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        await self._session.flush()
+        loaded = await self.get_profile()
+        if loaded is None:
+            raise RuntimeError("Failed to load updated applicant profile")
+        return loaded
+
+    async def list_resumes(self) -> tuple[ResumeAsset, ...]:
+        stmt = (
+            select(orm.ResumeAsset)
+            .order_by(orm.ResumeAsset.is_default.desc(), orm.ResumeAsset.label.asc())
+            .execution_options(populate_existing=True)
+        )
+        rows = (await self._session.scalars(stmt)).all()
+        return tuple(_resume_asset_from_row(row) for row in rows)
+
+    async def get_resume(self, resume_id: str) -> ResumeAsset | None:
+        stmt = (
+            select(orm.ResumeAsset)
+            .where(orm.ResumeAsset.resume_id == resume_id)
+            .execution_options(populate_existing=True)
+        )
+        row = await self._session.scalar(stmt)
+        if row is None:
+            return None
+        return _resume_asset_from_row(row)
+
+    async def create_resume(
+        self,
+        resume: ResumeAssetInput,
+        sha256: str,
+        *,
+        file_size_bytes: int | None = None,
+        last_verified_at: datetime | None = None,
+    ) -> ResumeAsset:
+        now = _utcnow()
+        count = await self._session.scalar(
+            select(func.count()).select_from(orm.ResumeAsset)
+        )
+        is_default = resume.is_default or (count == 0)
+        if is_default and count and count > 0:
+            await self._session.execute(
+                update(orm.ResumeAsset)
+                .where(orm.ResumeAsset.is_default.is_(True))
+                .values(is_default=False, updated_at=now)
+            )
+
+        row = orm.ResumeAsset(
+            id=uuid4(),
+            resume_id=resume.resume_id,
+            label=resume.label,
+            source_markdown_path=resume.source_markdown_path,
+            upload_pdf_path=resume.upload_pdf_path,
+            preview_html_path=resume.preview_html_path,
+            sha256=sha256,
+            language=resume.language,
+            is_default=is_default,
+            file_size_bytes=file_size_bytes,
+            last_verified_at=last_verified_at or now,
+            version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return _resume_asset_from_row(row)
+
+    async def update_resume(
+        self,
+        resume_id: str,
+        *,
+        label: str | None = None,
+        is_default: bool | None = None,
+        sha256: str | None = None,
+        file_size_bytes: int | None = None,
+        last_verified_at: datetime | None = None,
+        expected_version: int,
+    ) -> ResumeAsset:
+        now = _utcnow()
+        current = await self.get_resume(resume_id)
+        if current is None:
+            raise ResourceNotFoundError(f"Resume asset {resume_id} does not exist")
+
+        if is_default is True:
+            await self._session.execute(
+                update(orm.ResumeAsset)
+                .where(
+                    orm.ResumeAsset.resume_id != resume_id,
+                    orm.ResumeAsset.is_default.is_(True),
+                )
+                .values(is_default=False, updated_at=now)
+            )
+        elif is_default is False and current.is_default:
+            count = await self._session.scalar(
+                select(func.count()).select_from(orm.ResumeAsset)
+            )
+            if count and count > 1:
+                raise DefaultResumeConflictError(
+                    "Cannot unset default without promoting another default resume"
+                )
+
+        values: dict[str, Any] = {
+            "version": orm.ResumeAsset.version + 1,
+            "updated_at": now,
+        }
+        if label is not None:
+            values["label"] = label
+        if is_default is not None:
+            values["is_default"] = is_default
+        if sha256 is not None:
+            values["sha256"] = sha256
+        if file_size_bytes is not None:
+            values["file_size_bytes"] = file_size_bytes
+        if last_verified_at is not None:
+            values["last_verified_at"] = last_verified_at
+
+        stmt = (
+            update(orm.ResumeAsset)
+            .where(
+                orm.ResumeAsset.resume_id == resume_id,
+                orm.ResumeAsset.version == expected_version,
+            )
+            .values(**values)
+            .returning(orm.ResumeAsset.id)
+        )
+        result = await self._session.execute(stmt)
+        if result.scalar() is None:
+            raise OptimisticLockError(
+                f"Optimistic lock conflict on resume asset {resume_id} with "
+                f"expected version {expected_version}"
+            )
+        await self._session.flush()
+        loaded = await self.get_resume(resume_id)
+        if loaded is None:
+            raise RuntimeError("Failed to load updated resume asset")
+        return loaded
+
+    async def delete_resume(self, resume_id: str, expected_version: int) -> None:
+        current = await self.get_resume(resume_id)
+        if current is None:
+            raise ResourceNotFoundError(f"Resume asset {resume_id} does not exist")
+        count = await self._session.scalar(
+            select(func.count()).select_from(orm.ResumeAsset)
+        )
+        if current.is_default and count and count > 1:
+            raise DefaultResumeConflictError(
+                f"Cannot delete default resume {resume_id} while other resumes "
+                "exist. Promote another resume first."
+            )
+
+        stmt = (
+            delete(orm.ResumeAsset)
+            .where(
+                orm.ResumeAsset.resume_id == resume_id,
+                orm.ResumeAsset.version == expected_version,
+            )
+            .returning(orm.ResumeAsset.id)
+        )
+        result = await self._session.execute(stmt)
+        if result.scalar() is None:
+            raise OptimisticLockError(
+                f"Optimistic lock conflict on resume asset {resume_id} with "
+                f"expected version {expected_version}"
+            )
+        await self._session.flush()
+
+    async def list_answers(
+        self,
+        *,
+        question_intent: QuestionIntent | str | None = None,
+        jurisdiction: str | None = None,
+        platform_scope: str | None = None,
+    ) -> tuple[ReusableAnswer, ...]:
+        stmt = select(orm.ReusableAnswer).execution_options(populate_existing=True)
+        if question_intent is not None:
+            intent_val = (
+                question_intent.value
+                if isinstance(question_intent, QuestionIntent)
+                else str(question_intent)
+            )
+            stmt = stmt.where(orm.ReusableAnswer.question_intent == intent_val)
+        if jurisdiction is not None:
+            stmt = stmt.where(orm.ReusableAnswer.jurisdiction == jurisdiction)
+        if platform_scope is not None:
+            stmt = stmt.where(orm.ReusableAnswer.platform_scope == platform_scope)
+
+        stmt = stmt.order_by(
+            orm.ReusableAnswer.question_intent.asc(),
+            orm.ReusableAnswer.answer_id.asc(),
+        )
+        rows = (await self._session.scalars(stmt)).all()
+        return tuple(_reusable_answer_from_row(row) for row in rows)
+
+    async def get_answer(self, answer_id: str) -> ReusableAnswer | None:
+        stmt = (
+            select(orm.ReusableAnswer)
+            .where(orm.ReusableAnswer.answer_id == answer_id)
+            .execution_options(populate_existing=True)
+        )
+        row = await self._session.scalar(stmt)
+        if row is None:
+            return None
+        return _reusable_answer_from_row(row)
+
+    async def create_answer(self, answer: ReusableAnswerInput) -> ReusableAnswer:
+        now = _utcnow()
+        intent_val = (
+            answer.question_intent.value
+            if isinstance(answer.question_intent, QuestionIntent)
+            else str(answer.question_intent)
+        )
+        policy_val = (
+            answer.policy_category.value
+            if isinstance(answer.policy_category, PolicyCategory)
+            else str(answer.policy_category)
+        )
+        row = orm.ReusableAnswer(
+            id=uuid4(),
+            answer_id=answer.answer_id,
+            question_intent=intent_val,
+            jurisdiction=answer.jurisdiction,
+            platform_scope=answer.platform_scope,
+            answer_text=answer.answer_text,
+            policy_category=policy_val,
+            provenance=answer.provenance,
+            last_confirmed_at=answer.last_confirmed_at,
+            expires_at=answer.expires_at,
+            version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return _reusable_answer_from_row(row)
+
+    async def update_answer(
+        self,
+        answer_id: str,
+        answer: ReusableAnswerInput,
+        expected_version: int,
+    ) -> ReusableAnswer:
+        now = _utcnow()
+        intent_val = (
+            answer.question_intent.value
+            if isinstance(answer.question_intent, QuestionIntent)
+            else str(answer.question_intent)
+        )
+        policy_val = (
+            answer.policy_category.value
+            if isinstance(answer.policy_category, PolicyCategory)
+            else str(answer.policy_category)
+        )
+
+        stmt = (
+            update(orm.ReusableAnswer)
+            .where(
+                orm.ReusableAnswer.answer_id == answer_id,
+                orm.ReusableAnswer.version == expected_version,
+            )
+            .values(
+                question_intent=intent_val,
+                jurisdiction=answer.jurisdiction,
+                platform_scope=answer.platform_scope,
+                answer_text=answer.answer_text,
+                policy_category=policy_val,
+                provenance=answer.provenance,
+                last_confirmed_at=answer.last_confirmed_at,
+                expires_at=answer.expires_at,
+                version=orm.ReusableAnswer.version + 1,
+                updated_at=now,
+            )
+            .returning(orm.ReusableAnswer.id)
+        )
+        result = await self._session.execute(stmt)
+        if result.scalar() is None:
+            existing = await self._session.scalar(
+                select(orm.ReusableAnswer.id).where(
+                    orm.ReusableAnswer.answer_id == answer_id
+                )
+            )
+            if existing is None:
+                raise ResourceNotFoundError(
+                    f"Reusable answer {answer_id} does not exist"
+                )
+            raise OptimisticLockError(
+                f"Optimistic lock conflict on reusable answer {answer_id} with "
+                f"expected version {expected_version}"
+            )
+        await self._session.flush()
+        loaded = await self.get_answer(answer_id)
+        if loaded is None:
+            raise RuntimeError("Failed to load updated reusable answer")
+        return loaded
+
+    async def delete_answer(self, answer_id: str, expected_version: int) -> None:
+        stmt = (
+            delete(orm.ReusableAnswer)
+            .where(
+                orm.ReusableAnswer.answer_id == answer_id,
+                orm.ReusableAnswer.version == expected_version,
+            )
+            .returning(orm.ReusableAnswer.id)
+        )
+        result = await self._session.execute(stmt)
+        if result.scalar() is None:
+            existing = await self._session.scalar(
+                select(orm.ReusableAnswer.id).where(
+                    orm.ReusableAnswer.answer_id == answer_id
+                )
+            )
+            if existing is None:
+                raise ResourceNotFoundError(
+                    f"Reusable answer {answer_id} does not exist"
+                )
+            raise OptimisticLockError(
+                f"Optimistic lock conflict on reusable answer {answer_id} with "
+                f"expected version {expected_version}"
+            )
+        await self._session.flush()

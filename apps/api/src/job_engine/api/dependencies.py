@@ -9,7 +9,12 @@ from job_engine.config import Settings
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
     factory = request.app.state.session_factory
     async with factory() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
 
 
 def get_settings(request: Request) -> Settings:

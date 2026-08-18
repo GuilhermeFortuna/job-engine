@@ -1,6 +1,6 @@
 # BACK-009: Applicant Data Vault and Resume Assets
 
-**Status:** `BLOCKED`
+**Status:** `READY`
 
 **Owner:** Unassigned
 
@@ -24,7 +24,9 @@ Create the validated, local-only applicant profile, reusable answer bank, and re
 - `/apps/api/src/job_engine/db/repositories.py` (applicant/resume/answer persistence only)
 - `/apps/api/src/job_engine/main.py` (applicant router registration only)
 - `/apps/api/src/job_engine/config.py` (local resume-root configuration only)
-- `/apps/api/alembic/versions/<revision>_add_applicant_vault.py` (new; replace with the actual revision filename before handoff)
+- `/apps/api/migrations/versions/0003_add_applicant_vault.py` (new)
+- `/apps/api/pyproject.toml` (pypdf dependency addition)
+- `/apps/api/uv.lock` (lockfile update)
 - `/apps/api/tests/domain/test_applicant.py` (new)
 - `/apps/api/tests/services/test_applicant.py` (new)
 - `/apps/api/tests/api/test_applicant.py` (new)

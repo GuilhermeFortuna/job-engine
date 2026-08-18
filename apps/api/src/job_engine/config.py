@@ -1,6 +1,9 @@
-from pydantic import field_validator
+from pathlib import Path
+
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+REPO_ROOT = Path(__file__).resolve().parents[4]
 DOCUMENTED_DATABASE_URL = "postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine"
 DEFAULT_ENABLED_SOURCES: tuple[str, ...] = ("himalayas", "jobicy", "remoteok")
 HIMALAYAS_USER_AGENT = (
@@ -21,6 +24,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=None, extra="ignore")
 
     database_url: str = DOCUMENTED_DATABASE_URL
+    resume_root: Path = Field(
+        default=Path("docs/resume"),
+        validation_alias=AliasChoices("job_engine_resume_root", "resume_root"),
+    )
     # BACK-007: configured V1 source IDs for filter vocabulary, source query
     # validation, and catalog health. BACK-004 owns other source settings.
     enabled_sources: tuple[str, ...] = DEFAULT_ENABLED_SOURCES
@@ -54,6 +61,17 @@ class Settings(BaseSettings):
         if source_id == "remoteok":
             return self.remoteok_stale_after_successful_misses
         return 2
+
+    @property
+    def resolved_resume_root(self) -> Path:
+        raw = Path(self.resume_root)
+        if raw.is_absolute():
+            resolved = raw.resolve(strict=True)
+        else:
+            resolved = (REPO_ROOT / raw).resolve(strict=True)
+        if not resolved.is_dir():
+            raise ValueError(f"resume_root is not a directory: {resolved}")
+        return resolved
 
     @field_validator("enabled_sources", mode="before")
     @classmethod

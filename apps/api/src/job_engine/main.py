@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from job_engine.api.applicant import router as applicant_router
 from job_engine.api.catalog import router as catalog_router
 from job_engine.api.jobs import router as jobs_router
 from job_engine.api.sync import router as sync_router
@@ -48,4 +49,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(jobs_router, prefix="/api/v1")
     app.include_router(catalog_router, prefix="/api/v1")
     app.include_router(sync_router, prefix="/api/v1")
+    app.include_router(applicant_router, prefix="/api/v1")
     return app

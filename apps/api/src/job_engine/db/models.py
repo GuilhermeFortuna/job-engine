@@ -5,14 +5,18 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -310,3 +314,111 @@ class JobGroupRoleFamily(Base):
     family_id: Mapped[str] = mapped_column(Text, nullable=False)
 
     job_group: Mapped[JobGroup] = relationship(back_populates="role_families")
+
+
+class ApplicantProfile(Base):
+    __tablename__ = "applicant_profiles"
+
+    id: Mapped[UUID] = _uuid_pk()
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    fields: Mapped[list["ApplicantProfileField"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan"
+    )
+
+
+class ApplicantProfileField(Base):
+    __tablename__ = "applicant_profile_fields"
+    __table_args__ = (
+        UniqueConstraint(
+            "profile_id", "field_path", name="uq_applicant_profile_fields_path"
+        ),
+        Index("ix_applicant_profile_fields_profile_path", "profile_id", "field_path"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    profile_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("applicant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    field_path: Mapped[str] = mapped_column(Text, nullable=False)
+    value_state: Mapped[str] = mapped_column(Text, nullable=False)
+    value_payload: Mapped[Any | None] = mapped_column(JSONB)
+    source: Mapped[str | None] = mapped_column(Text)
+    last_confirmed_at: Mapped[datetime | None] = _optional_aware_dt()
+    policy_category: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    profile: Mapped[ApplicantProfile] = relationship(back_populates="fields")
+
+
+class ResumeAsset(Base):
+    __tablename__ = "resume_assets"
+    __table_args__ = (
+        UniqueConstraint("resume_id", name="uq_resume_assets_resume_id"),
+        Index(
+            "uq_resume_assets_single_default",
+            "is_default",
+            unique=True,
+            postgresql_where=text("is_default IS TRUE"),
+        ),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    resume_id: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    source_markdown_path: Mapped[str] = mapped_column(Text, nullable=False)
+    upload_pdf_path: Mapped[str] = mapped_column(Text, nullable=False)
+    preview_html_path: Mapped[str | None] = mapped_column(Text)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    language: Mapped[str] = mapped_column(Text, nullable=False, default="en")
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    last_verified_at: Mapped[datetime | None] = _optional_aware_dt()
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+
+class ReusableAnswer(Base):
+    __tablename__ = "reusable_answers"
+    __table_args__ = (
+        UniqueConstraint("answer_id", name="uq_reusable_answers_answer_id"),
+        Index("ix_reusable_answers_question_intent", "question_intent"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    answer_id: Mapped[str] = mapped_column(Text, nullable=False)
+    question_intent: Mapped[str] = mapped_column(Text, nullable=False)
+    jurisdiction: Mapped[str | None] = mapped_column(Text)
+    platform_scope: Mapped[str | None] = mapped_column(Text)
+    answer_text: Mapped[str] = mapped_column(Text, nullable=False)
+    policy_category: Mapped[str] = mapped_column(Text, nullable=False)
+    provenance: Mapped[str] = mapped_column(
+        Text, nullable=False, default="owner_authored"
+    )
+    last_confirmed_at: Mapped[datetime] = _required_aware_dt()
+    expires_at: Mapped[datetime | None] = _optional_aware_dt()
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
