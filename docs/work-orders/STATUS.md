@@ -1,6 +1,6 @@
 # Job Engine Work Order Status
 
-**Scope authority:** [Job Engine V1 Product Specification](../v1-product-spec.md)
+**Scope authorities:** [Job Engine V1 Product Specification](../v1-product-spec.md) for Batch 01–02; the owner-approved Batch 03 direction recorded below until CROSS-005 creates and binds the successor V2 Assisted Apply specification.
 
 **Registry:** [Work Order Registry](README.md)
 
@@ -34,6 +34,7 @@ then continue. A stale placeholder is not an owner-approval request.
 
 ## Status board
 
+### Batch 01 and Batch 02
 
 | ID                                                             | Area     | Status  | Depends on                                        | Deliverable                                                               |
 | -------------------------------------------------------------- | -------- | ------- | ------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -54,6 +55,20 @@ then continue. A stale placeholder is not an owner-approval request.
 | [FRONT-004](front/FRONT-004-interactive-live-search-ui.md)     | Frontend | `DONE`  | FRONT-003, BACK-008                               | Interactive live search and progress feedback UI                          |
 | [CROSS-004](cross-repo/CROSS-004-live-search-acceptance.md)    | Cross    | `DONE`  | BACK-008, FRONT-004                               | Live search end-to-end integration and acceptance                         |
 
+### Batch 03: High-Automation Applications
+
+| ID | Area | Status | Depends on | Deliverable |
+| --- | --- | --- | --- | --- |
+| [CROSS-005](cross-repo/CROSS-005-high-automation-feasibility-spec.md) | Cross | `READY` | CROSS-004 | V2 automation/platform feasibility, specification, and binding gate |
+| [BACK-009](back/BACK-009-applicant-data-vault.md) | Backend | `BLOCKED` | CROSS-005 | Applicant profile, answer bank, and local resume-asset catalog |
+| [BACK-010](back/BACK-010-application-orchestration-audit.md) | Backend | `BLOCKED` | CROSS-005, BACK-009 | Durable application queue, state, idempotency, exceptions, and audit |
+| [BACK-011](back/BACK-011-grounded-application-answering.md) | Backend | `BLOCKED` | CROSS-005, BACK-009 | Policy-driven deterministic and grounded application answers |
+| [CROSS-006](cross-repo/CROSS-006-browser-automation-runner.md) | Cross | `BLOCKED` | CROSS-005, BACK-009, BACK-010 | Local browser runner and generic form automation contract |
+| [CROSS-007](cross-repo/CROSS-007-first-platform-automation.md) | Cross | `BLOCKED` | CROSS-005, BACK-011, CROSS-006 | First approved platform automated submission adapter |
+| [CROSS-008](cross-repo/CROSS-008-second-platform-automation.md) | Cross | `BLOCKED` | CROSS-005, BACK-011, CROSS-006 | Second approved platform automated submission adapter |
+| [FRONT-005](front/FRONT-005-application-automation-control-center.md) | Frontend | `BLOCKED` | CROSS-005, BACK-009, BACK-010, CROSS-006 | Automation launch, queue, exceptions, and receipt UI |
+| [CROSS-009](cross-repo/CROSS-009-automated-application-acceptance.md) | Cross | `BLOCKED` | BACK-010, BACK-011, CROSS-006, CROSS-007, CROSS-008, FRONT-005 | Batch 03 end-to-end automated-application acceptance |
+
 
 
 
@@ -71,14 +86,28 @@ BACK-004 + BACK-005 + BACK-006 + BACK-007 + FRONT-003 -> CROSS-003 (Batch 01 Acc
                                                                │
                                                                ▼
                                                            BACK-008 -> FRONT-004 -> CROSS-004 (Batch 02 Acceptance)
+
+CROSS-004 -> CROSS-005 -> BACK-009 -> BACK-010
+                                   -> BACK-011
+
+CROSS-005 + BACK-009 + BACK-010 -> CROSS-006
+CROSS-005 + BACK-009 + BACK-010 + CROSS-006 -> FRONT-005
+CROSS-005 + BACK-011 + CROSS-006 -> CROSS-007
+                                      -> CROSS-008
+
+BACK-010 + BACK-011 + CROSS-006 + CROSS-007 + CROSS-008 + FRONT-005
+    -> CROSS-009 (Batch 03 Acceptance)
 ```
 
 `BACK-005`, `BACK-006`, and `BACK-007` may proceed in parallel after their prerequisites are `DONE`. Documentation research in `CROSS-002` may proceed in parallel with `CROSS-001`.
+
+For Batch 03, only `CROSS-005` starts `READY`. After it is `DONE` and has propagated every bound runtime/platform/provider value, `BACK-009` becomes the first implementation dependency. `BACK-011` may proceed in parallel with `BACK-010` after `BACK-009`; the two platform adapters may proceed in parallel after `BACK-011` and `CROSS-006`.
 
 ### Batch completion rule
 
 - Batch 01 is complete only when `CROSS-003` is `DONE`.
 - Batch 02 is complete only when `CROSS-004` is `DONE`.
+- Batch 03 is complete only when `CROSS-009` is `DONE`.
 - Backend or frontend automated checks do not independently establish product acceptance.
 
 
@@ -118,5 +147,4 @@ BACK-004 + BACK-005 + BACK-006 + BACK-007 + FRONT-003 -> CROSS-003 (Batch 01 Acc
 | 2026-08-17 | BACK-008  | Scope Batch 02 on-demand live search with SSE progress streaming; sequented after Batch 01 (FRONT-003, CROSS-003)             | Project owner     |
 | 2026-08-17 | CROSS-003 | V1 integration acceptance complete; all 12 criteria verified against commit 9a45951; GO issued                                | Antigravity agent |
 | 2026-08-17 | CROSS-004 | Batch 02 live search acceptance complete; all 6 criteria verified; GO issued                                                  | Antigravity agent |
-
-
+| 2026-08-17 | CROSS-005 | Batch 03 targets automatic completion and final submission for owner-selected jobs on supported platforms; routine success has no second review click, while genuine exceptions pause for owner input | Project owner |
