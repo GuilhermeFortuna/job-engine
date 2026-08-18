@@ -10,8 +10,8 @@ Job Engine is a monorepo. `CROSS-` orders own root-level concerns spanning backe
 | [CROSS-004](CROSS-004-live-search-acceptance.md) | Live search integration and acceptance | `DONE` |
 | [CROSS-005](CROSS-005-high-automation-feasibility-spec.md) | High-automation feasibility and V2 specification | `READY` |
 | [CROSS-006](CROSS-006-browser-automation-runner.md) | Local browser-automation runner | `BLOCKED` |
-| [CROSS-007](CROSS-007-first-platform-automation.md) | First approved platform automation | `BLOCKED` |
-| [CROSS-008](CROSS-008-second-platform-automation.md) | Second approved platform automation | `BLOCKED` |
+| [CROSS-007](CROSS-007-first-platform-automation.md) | Greenhouse platform automation | `BLOCKED` |
+| [CROSS-008](CROSS-008-second-platform-automation.md) | Lever platform automation | `BLOCKED` |
 | [CROSS-009](CROSS-009-automated-application-acceptance.md) | Automated application acceptance | `BLOCKED` |
 
 The authoritative live status is the project-wide [Work Order Status](../STATUS.md).

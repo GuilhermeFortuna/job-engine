@@ -8,7 +8,7 @@
 
 **Unblocks:** BACK-010, BACK-011, CROSS-006, FRONT-005
 
-**Product spec:** `docs/v2-assisted-apply-spec.md`, to be created and mechanically bound by CROSS-005 before this order becomes dispatchable.
+**Product spec:** `docs/v2-assisted-apply-spec.md` (bound by CROSS-005)
 
 ## Objective
 

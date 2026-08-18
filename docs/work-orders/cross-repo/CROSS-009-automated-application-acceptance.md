@@ -8,7 +8,7 @@
 
 **Unblocks:** Batch 03 completion
 
-**Product spec:** `docs/v2-assisted-apply-spec.md`, to be created and mechanically bound by CROSS-005 before this order becomes dispatchable.
+**Product spec:** `docs/v2-assisted-apply-spec.md` (bound by CROSS-005)
 
 ## Objective
 
@@ -29,14 +29,16 @@ No product implementation, selector, fixture expectation, policy threshold, or p
 - A disposable database and synthetic applicant/resume fixtures are configured.
 - The dedicated browser profile and evidence roots are outside the repository.
 - Any live submission has separate owner authorization naming either the exact genuine job the owner intends to apply to or the exact authorized test environment. Without it, run all synthetic and authorized dry-run gates but do not claim live-production submission acceptance.
+- `LEGAL-GATE-ATS-001` has explicit owner acceptance for each live-tested platform. If it remains open, live submission is prohibited and the maximum outcome is `CONDITIONAL_GO`.
+- `PROVIDER-PRIVACY-001` has explicit owner acceptance before any external generated-answer call. If it remains open, use deterministic-only behavior and treat provider-dependent acceptance scenarios as an outstanding conditional gate.
 
 ## Acceptance scenarios
 
 ### Full synthetic matrix
 
 1. Submit a one-page generic conventional application with all values pre-authorized.
-2. Submit a multi-page `<PRIMARY_ATS_ONE_ID>` fixture with resume upload, conditional questions, and generated grounded narrative.
-3. Submit a materially different `<PRIMARY_ATS_TWO_ID>` fixture and capture its receipt.
+2. Submit a multi-page `greenhouse` fixture with resume upload, conditional questions, and generated grounded narrative.
+3. Submit a materially different `lever` fixture and capture its receipt.
 4. Queue multiple explicitly selected jobs and prove concurrency/ordering bounds.
 5. Restart the API and runner during separate pre-submit stages; resume without repeated actions.
 6. Trigger missing answer, sensitive/legal question, expired login, CAPTCHA marker, unexpected origin, platform validation error, file rejection, provider timeout, and unsupported control; verify named pause/failure states and same-run resume where allowed.
@@ -75,8 +77,6 @@ corepack pnpm --filter @job-engine/web run test:e2e -- application-automation.sp
 git ls-files docs/resume | rg -v 'README.md|\.template\.|\.example\.' && exit 1 || true
 git diff --check
 ```
-
-CROSS-005 must replace the two platform placeholders in this order before dispatch.
 
 ## Acceptance criteria
 

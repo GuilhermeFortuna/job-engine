@@ -40,8 +40,8 @@ Create a local TypeScript automation runtime that claims authorized application 
 
 ## Runtime and custody contract
 
-- Use `<RUNNER_PACKAGE>@<RUNNER_VERSION>` and `<BROWSER_CHANNEL>` as bound by CROSS-005.
-- Run locally in headed mode by default using the dedicated profile at `<PROFILE_DIRECTORY_CONFIG>`. Never attach to or copy the user's normal browser profile.
+- Use `playwright@1.62.1` and `chromium` as bound by CROSS-005.
+- Run locally in headed mode by default using the dedicated profile at `JOB_ENGINE_AUTOMATION_PROFILE_DIR`. Never attach to or copy the user's normal browser profile.
 - The profile directory, browser storage, downloaded files, traces, and evidence are outside the repository and ignored by Git.
 - Require a configured runner credential. Communicate only with the bound local Job Engine API origin; reject redirects, certificate downgrades, and unexpected origins.
 - Claim no more than the bound concurrency. Heartbeat and checkpoint at the bound intervals.

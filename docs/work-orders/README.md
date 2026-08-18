@@ -66,8 +66,8 @@ All implementation orders begin `BLOCKED`. CROSS-005 must replace every runtime,
 - [`BACK-010`](back/BACK-010-application-orchestration-audit.md): durable queue, runner leases, idempotency, exceptions, and audit evidence
 - [`BACK-011`](back/BACK-011-grounded-application-answering.md): policy-driven deterministic and grounded application answers
 - [`CROSS-006`](cross-repo/CROSS-006-browser-automation-runner.md): local browser-automation runtime and generic form contract
-- [`CROSS-007`](cross-repo/CROSS-007-first-platform-automation.md): first approved platform adapter
-- [`CROSS-008`](cross-repo/CROSS-008-second-platform-automation.md): second independent approved platform adapter
+- [`CROSS-007`](cross-repo/CROSS-007-first-platform-automation.md): Greenhouse platform automated submission adapter
+- [`CROSS-008`](cross-repo/CROSS-008-second-platform-automation.md): Lever platform automated submission adapter
 - [`FRONT-005`](front/FRONT-005-application-automation-control-center.md): launch, queue, exceptions, progress, and receipt interface
 - [`CROSS-009`](cross-repo/CROSS-009-automated-application-acceptance.md): independent end-to-end automated-submission acceptance
 

@@ -170,12 +170,12 @@ Manually verify every primary first-party documentation, privacy, and terms link
 
 ## Dispatch record
 
-- Worker: Unassigned
+- Worker: Antigravity agent
 - Branch/worktree: `development`
-- Dispatched at: Not dispatched
+- Dispatched at: 2026-08-17T23:30:13-03:00
 
 ## Completion record
 
-- Commit: Pending
-- Evidence: Pending
+- Commit: Working tree on `development`
+- Evidence: `docs/v2-assisted-apply-spec.md`, `docs/automation/platform-register.md`, `docs/automation/security-model.md`
 - Independent reviewer: Pending

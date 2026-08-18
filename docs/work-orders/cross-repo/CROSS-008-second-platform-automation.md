@@ -1,4 +1,4 @@
-# CROSS-008: Second Approved Platform Automation
+# CROSS-008: Lever Platform Automation
 
 **Status:** `BLOCKED`
 
@@ -8,26 +8,25 @@
 
 **Unblocks:** CROSS-009
 
-**Product spec:** `docs/v2-assisted-apply-spec.md`, to be created and mechanically bound by CROSS-005 before this order becomes dispatchable.
+**Product spec:** `docs/v2-assisted-apply-spec.md` (bound by CROSS-005)
 
 ## Objective
 
-Implement complete automatic application support for `<PRIMARY_ATS_TWO_ID>`, the second independent platform family selected by CROSS-005, without coupling its selectors, stages, authentication behavior, or receipt rules to the first adapter.
-
-CROSS-005 must replace the placeholder, title, concrete adapter filenames, host allowlist, test commands, and platform-specific acceptance details before this order is handed off.
+Implement complete automatic application support for `lever`, the second independent platform family selected by CROSS-005, without coupling its selectors, stages, authentication behavior, or receipt rules to the first adapter.
 
 ## Owned files
 
-- `/apps/automation/src/adapters/<PRIMARY_ATS_TWO_ID>.ts` (new; bind filename in CROSS-005)
+- `/apps/automation/src/adapters/lever.ts` (new)
 - `/apps/automation/src/adapters/registry.ts` (registration only)
-- `/apps/automation/tests/adapters/<PRIMARY_ATS_TWO_ID>.test.ts` (new; bind filename)
-- `/apps/automation/tests/fixtures/<PRIMARY_ATS_TWO_ID>/**` (new; sanitized/minimal)
+- `/apps/automation/tests/adapters/lever.test.ts` (new)
+- `/apps/automation/tests/fixtures/lever/**` (new; sanitized/minimal)
 - `/docs/automation/platform-register.md` (implementation evidence for this platform only)
 
 ## Platform contract
 
+- `lever` is a technical primary, but live automated submission remains blocked by `LEGAL-GATE-ATS-001` in the platform register. Fixture implementation and owner-authorized non-submitting inspection may proceed without closing that gate.
 - Match only the exact HTTPS hosts/path families approved in the platform register.
-- Detect the platform using at least two stable signals and prove it does not collide with `<PRIMARY_ATS_ONE_ID>` or the generic adapter.
+- Detect the platform using at least two stable signals and prove it does not collide with `greenhouse` or the generic adapter.
 - Model the second platform's actual stages rather than forcing the first adapter's page assumptions into shared code.
 - Normalize observed controls through the CROSS-006 contract and obtain BACK-011 decisions; applicant answers never live in adapter code.
 - Verify resume-upload acceptance and all required field values after platform-side validation.
@@ -64,13 +63,11 @@ Fixtures must not contain complete copied pages, third-party scripts, employer b
 
 ```bash
 corepack pnpm --filter @job-engine/automation run check
-corepack pnpm --filter @job-engine/automation run test -- <PRIMARY_ATS_TWO_ID>
+corepack pnpm --filter @job-engine/automation run test -- lever
 corepack pnpm --filter @job-engine/automation run test -- adapter-detection-collisions
 corepack pnpm --filter @job-engine/automation run build
 git diff --check
 ```
-
-CROSS-005 must replace placeholders with the bound test selectors.
 
 ## Acceptance criteria
 
@@ -88,6 +85,7 @@ CROSS-005 must replace placeholders with the bound test selectors.
 - Do not hardcode applicant data, credentials, resume paths, or employer-specific values.
 - Do not bypass CAPTCHA, authentication, rate limits, validation, or disabled controls.
 - Do not claim production support from fixtures alone.
+- Do not perform a live submission while `LEGAL-GATE-ATS-001` is open.
 
 ## Handoff evidence
 

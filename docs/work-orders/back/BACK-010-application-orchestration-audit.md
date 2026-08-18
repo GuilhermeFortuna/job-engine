@@ -8,7 +8,7 @@
 
 **Unblocks:** CROSS-006, FRONT-005, CROSS-009
 
-**Product spec:** `docs/v2-assisted-apply-spec.md`, to be created and mechanically bound by CROSS-005 before this order becomes dispatchable.
+**Product spec:** `docs/v2-assisted-apply-spec.md` (bound by CROSS-005)
 
 ## Objective
 
@@ -42,17 +42,18 @@ QUEUED -> CLAIMED -> RUNNING -> SUBMITTED
                      |  -> PAUSED_AUTH -> QUEUED
                      -> FAILED_RETRYABLE -> QUEUED
                      -> FAILED_FINAL
+                     -> SUBMISSION_UNKNOWN
 QUEUED/NEEDS_INPUT/PAUSED_AUTH/FAILED_RETRYABLE -> CANCELLED
 ```
 
-No terminal state may transition back to an executable state. `SUBMITTED` requires receipt evidence; reaching or clicking a submit control is not proof of submission.
+No terminal state (`SUBMITTED`, `SUBMISSION_UNKNOWN`, `FAILED_FINAL`, `CANCELLED`) may transition back to an executable state. `SUBMITTED` requires receipt evidence; reaching or clicking a submit control is not proof of submission. `SUBMISSION_UNKNOWN` captures ambiguous post-submit navigation or unverified confirmation without triggering a duplicate click.
 
-Each run records the job group, exact source posting/application URL, selected resume ID and checksum, applicant-profile version, answer-bank version, platform adapter ID, policy snapshot, timestamps, attempt count, current step, terminal reason, and redacted receipt summary.
+Each run records the job group, exact source posting/application URL, selected resume ID and checksum, automation mode (`FULL_AUTO` or `SEMI_AUTO_PAUSE_BEFORE_SUBMIT`), applicant-profile version, answer-bank version, platform adapter ID, policy snapshot, timestamps, attempt count, current step, terminal reason, and redacted receipt summary.
 
 ## Queue and idempotency contract
 
 - Runs originate only from explicit user-selected job group IDs.
-- Default concurrency is the value bound by CROSS-005 and is enforced by runner leases, not UI convention.
+- Default concurrency is 1 and queue limit is 25 (as bound by CROSS-005) and is enforced by runner leases, not UI convention.
 - Prevent a new executable run when the same canonical application URL or job group already has an active or `SUBMITTED` run.
 - A duplicate override requires an explicit endpoint call, owner confirmation text, and an audit event; retries within the same run are not duplicate applications.
 - Claims use opaque hashed runner credentials, short leases, heartbeats, and compare-and-set state/version updates.
@@ -62,10 +63,12 @@ Each run records the job group, exact source posting/application URL, selected r
 
 User-facing:
 
-- `POST /api/v1/application-runs` with one or more explicitly selected job group IDs, resume ID, and automation mode
+- `POST /api/v1/application-runs` with one or more explicitly selected job group IDs, resume ID, and automation mode (`FULL_AUTO` or `SEMI_AUTO_PAUSE_BEFORE_SUBMIT`)
 - `GET /api/v1/application-runs` with state/date/job filters and pagination
+- `GET /api/v1/application-runs/stream` for real-time Server-Sent Events (SSE) run progress and exception updates
 - `GET /api/v1/application-runs/{run_id}`
 - `POST /api/v1/application-runs/{run_id}/answers` to resolve a named exception and requeue
+- `POST /api/v1/application-runs/{run_id}/release-submit` to release only a `SEMI_AUTO_PAUSE_BEFORE_SUBMIT` run whose latest durable checkpoint is `SUBMIT_ARMED`; record owner confirmation and requeue at that checkpoint
 - `POST /api/v1/application-runs/{run_id}/resume`
 - `POST /api/v1/application-runs/{run_id}/cancel`
 - `POST /api/v1/application-runs/{run_id}/duplicate-override`

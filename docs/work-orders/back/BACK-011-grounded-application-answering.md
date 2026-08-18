@@ -8,7 +8,7 @@
 
 **Unblocks:** CROSS-007, CROSS-008, CROSS-009
 
-**Product spec:** `docs/v2-assisted-apply-spec.md`, to be created and mechanically bound by CROSS-005 before this order becomes dispatchable.
+**Product spec:** `docs/v2-assisted-apply-spec.md` (bound by CROSS-005)
 
 ## Objective
 
@@ -52,7 +52,7 @@ The service returns one decision per field:
 }
 ```
 
-The exact auto-submit confidence threshold, provider, model, token/output limit, timeout, and retention values are bound by CROSS-005.
+The auto-submit confidence threshold is 0.85. `JOB_ENGINE_ANSWER_PROVIDER=deterministic|openai|gemini` defaults to `deterministic`: generated narrative questions pause in `NEEDS_INPUT` while `PROVIDER-PRIVACY-001` is open. A non-deterministic selection also requires `JOB_ENGINE_PROVIDER_PRIVACY_ATTESTATION_ID` to match the owner-accepted gate record. Only then may the service enable `openai:gpt-4o-mini` with `gemini:gemini-2.5-flash` fallback, subject to USD 0.05 per-run and USD 5.00 batch caps, 500 output tokens, a 15s timeout, and verified provider-approved ZDR for the exact API project.
 
 ## Policy precedence
 
@@ -81,7 +81,7 @@ Work authorization, sponsorship, compensation, demographic/EEO, disability, vete
 
 1. Implement question-intent taxonomy and sensitive-policy detection with closed enums and synthetic multilingual/paraphrase fixtures.
 2. Implement deterministic answer-bank and verified-profile resolution before any provider call.
-3. Implement the provider interface and the exact provider/model bound by CROSS-005 with structured output, strict timeouts, bounded retries, and no secret logging.
+3. Implement deterministic-only behavior first. Implement provider adapters behind a fail-closed configuration gate that rejects startup unless `PROVIDER-PRIVACY-001` has owner acceptance and the selected project has attested provider-approved ZDR; then apply structured output, strict timeouts, bounded retries, and no secret logging.
 4. Implement evidence extraction, claim validation, character-limit handling, prompt-injection isolation, and the fixed decision response.
 5. Add the runner-facing authenticated endpoint under `/api/v1/runner/runs/{run_id}/answer-decisions`; validate that the request belongs to the claimed run and current policy snapshot.
 6. Add tests for exact answers, paraphrases, unknown questions, sensitive questions, malicious page instructions, unsupported claims, provider failure, low confidence, stale profile versions, and cache isolation.

@@ -8,7 +8,7 @@
 
 **Unblocks:** CROSS-009
 
-**Product spec:** `docs/v2-assisted-apply-spec.md`, to be created and mechanically bound by CROSS-005 before this order becomes dispatchable.
+**Product spec:** `docs/v2-assisted-apply-spec.md` (bound by CROSS-005)
 
 ## Objective
 
@@ -41,7 +41,7 @@ Give the owner a clear, high-automation workflow: select one or more jobs, choos
 ### Launch
 
 - Job cards and details expose `Apply automatically` only when a validated application URL exists.
-- The owner may select one job or a bounded set of visible results, then chooses a registered resume and an automation mode defined by CROSS-005.
+- The owner may select one job or a bounded set of visible results, then chooses a registered resume and an automation mode defined by CROSS-005 (`FULL_AUTO` or `SEMI_AUTO_PAUSE_BEFORE_SUBMIT`).
 - The launch confirmation shows the exact jobs, application origins, resume label/checksum summary, current profile version, and whether automatic final submission is enabled.
 - One confirmation creates the queue through `POST /api/v1/application-runs`. It is not followed by a routine per-job final-review step.
 - Duplicate conflicts are shown per job and require the explicit backend override flow; the UI cannot silently retry or create a second run.
@@ -49,7 +49,7 @@ Give the owner a clear, high-automation workflow: select one or more jobs, choos
 ### Monitor
 
 - `/applications` shows queued, running, needs-input, paused-auth, submitted, failed, cancelled, and submission-unknown states with timestamps and current steps.
-- The UI consumes the backend mechanism bound by CROSS-005 for updates; it must not infer progress from timers.
+- The UI consumes the Server-Sent Events (SSE) stream (`GET /api/v1/application-runs/stream`) bound by CROSS-005 for live updates; it must not infer progress from timers.
 - Existing job search remains usable while runs execute.
 - The run-details route shows a redacted ordered event timeline, current exception, selected job/resume, attempt count, and receipt state.
 
@@ -57,6 +57,7 @@ Give the owner a clear, high-automation workflow: select one or more jobs, choos
 
 - `NEEDS_INPUT` displays the exact normalized question, why automation paused, available options/constraints, relevant evidence, and the proposed answer if any.
 - Owner responses state whether the value is one-time or should update the reusable answer bank, then call the backend resolution endpoint.
+- A `SEMI_AUTO_PAUSE_BEFORE_SUBMIT` run paused at `SUBMIT_ARMED` presents the prepared summary and calls `POST /api/v1/application-runs/{run_id}/release-submit`; it does not reuse the answer-resolution endpoint.
 - `PAUSED_AUTH` instructs the owner to complete login/challenge in the dedicated runner browser and provides a resume action; it never asks for credentials in Job Engine.
 - `SUBMISSION_UNKNOWN` is visibly distinct from success and offers evidence inspection, not blind retry.
 

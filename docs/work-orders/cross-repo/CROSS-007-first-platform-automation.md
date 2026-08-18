@@ -1,4 +1,4 @@
-# CROSS-007: First Approved Platform Automation
+# CROSS-007: Greenhouse Platform Automation
 
 **Status:** `BLOCKED`
 
@@ -8,24 +8,23 @@
 
 **Unblocks:** CROSS-009
 
-**Product spec:** `docs/v2-assisted-apply-spec.md`, to be created and mechanically bound by CROSS-005 before this order becomes dispatchable.
+**Product spec:** `docs/v2-assisted-apply-spec.md` (bound by CROSS-005)
 
 ## Objective
 
-Implement complete automatic application support for `<PRIMARY_ATS_ONE_ID>`, the first platform family selected by CROSS-005: detection, authenticated/multi-step navigation, conditional fields, resume upload, answer resolution, final submission, and receipt capture.
-
-CROSS-005 must replace the placeholder, title, concrete adapter filenames, host allowlist, test commands, and platform-specific acceptance details before this order is handed off.
+Implement complete automatic application support for `greenhouse`, the first platform family selected by CROSS-005: detection, multi-step/single-page navigation, conditional fields, resume upload, answer resolution, final submission, and receipt capture.
 
 ## Owned files
 
-- `/apps/automation/src/adapters/<PRIMARY_ATS_ONE_ID>.ts` (new; bind filename in CROSS-005)
+- `/apps/automation/src/adapters/greenhouse.ts` (new)
 - `/apps/automation/src/adapters/registry.ts` (registration only)
-- `/apps/automation/tests/adapters/<PRIMARY_ATS_ONE_ID>.test.ts` (new; bind filename)
-- `/apps/automation/tests/fixtures/<PRIMARY_ATS_ONE_ID>/**` (new; sanitized/minimal)
+- `/apps/automation/tests/adapters/greenhouse.test.ts` (new)
+- `/apps/automation/tests/fixtures/greenhouse/**` (new; sanitized/minimal)
 - `/docs/automation/platform-register.md` (implementation evidence for this platform only)
 
 ## Platform contract
 
+- `greenhouse` is a technical primary, but live automated submission remains blocked by `LEGAL-GATE-ATS-001` in the platform register. Fixture implementation and owner-authorized non-submitting inspection may proceed without closing that gate.
 - Match only the exact HTTPS hosts/path families approved in the platform register.
 - Detect the platform using at least two independent stable signals; hostname alone is insufficient when employers can host unrelated pages on the same domain.
 - Support every required application stage documented by CROSS-005, including login/account creation only to the extent explicitly approved there.
@@ -65,12 +64,10 @@ Do not commit complete copied pages, third-party scripts, employer branding, per
 
 ```bash
 corepack pnpm --filter @job-engine/automation run check
-corepack pnpm --filter @job-engine/automation run test -- <PRIMARY_ATS_ONE_ID>
+corepack pnpm --filter @job-engine/automation run test -- greenhouse
 corepack pnpm --filter @job-engine/automation run build
 git diff --check
 ```
-
-CROSS-005 must replace the placeholder in this validation command with the bound test selector.
 
 ## Acceptance criteria
 
@@ -88,6 +85,7 @@ CROSS-005 must replace the placeholder in this validation command with the bound
 - Do not bypass CAPTCHA, login, platform validation, or disabled controls.
 - Do not silently fall back to the generic adapter after a recognized platform adapter fails mid-run.
 - Do not claim production support from fixtures alone.
+- Do not perform a live submission while `LEGAL-GATE-ATS-001` is open.
 
 ## Handoff evidence
 
