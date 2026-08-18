@@ -1,6 +1,8 @@
+from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -71,6 +73,66 @@ class Settings(BaseSettings):
             resolved = (REPO_ROOT / raw).resolve(strict=True)
         if not resolved.is_dir():
             raise ValueError(f"resume_root is not a directory: {resolved}")
+        return resolved
+
+    runner_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("job_engine_runner_secret", "runner_secret"),
+    )
+    runner_lease_duration_seconds: int = 60
+    runner_heartbeat_interval_seconds: int = 15
+    runner_concurrency_limit: int = 1
+    max_queue_limit: int = 25
+    run_timeout_seconds: int = 300
+    step_timeout_seconds: int = 30
+    frontend_origin: str = Field(
+        default="http://localhost:3000",
+        validation_alias=AliasChoices("job_engine_frontend_origin", "frontend_origin"),
+    )
+    evidence_root: Path = Field(
+        default=Path.home() / ".job-engine" / "evidence",
+        validation_alias=AliasChoices("job_engine_evidence_root", "evidence_root"),
+    )
+    evidence_retention_days: int = 30
+
+    # BACK-011: grounded application answering. deterministic-only by
+    # default; a non-deterministic provider is fail-closed until
+    # PROVIDER-PRIVACY-001 is accepted (provider_privacy_attestation_id set).
+    answer_provider: Literal["deterministic", "openai", "gemini"] = Field(
+        default="deterministic",
+        validation_alias=AliasChoices("job_engine_answer_provider", "answer_provider"),
+    )
+    provider_privacy_attestation_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "job_engine_provider_privacy_attestation_id",
+            "provider_privacy_attestation_id",
+        ),
+    )
+    openai_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("job_engine_openai_api_key", "openai_api_key"),
+    )
+    gemini_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("job_engine_gemini_api_key", "gemini_api_key"),
+    )
+    answer_provider_timeout_seconds: float = 15.0
+    answer_provider_max_output_tokens: int = 500
+    answer_provider_max_calls_per_run: int = 5
+    answer_provider_estimated_cost_per_call_usd: Decimal = Decimal("0.01")
+    answer_run_cost_cap_usd: Decimal = Decimal("0.05")
+    answer_batch_cost_cap_usd: Decimal = Decimal("5.00")
+    answer_auto_submit_confidence_threshold: float = 0.85
+
+    @property
+    def resolved_evidence_root(self) -> Path:
+        raw = Path(self.evidence_root)
+        if raw.is_absolute():
+            resolved = raw.resolve()
+        else:
+            resolved = (REPO_ROOT / raw).resolve()
+        resolved.mkdir(parents=True, exist_ok=True)
         return resolved
 
     @field_validator("enabled_sources", mode="before")

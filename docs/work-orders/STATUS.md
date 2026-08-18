@@ -54,14 +54,16 @@ then continue. A stale placeholder is not an owner-approval request.
 | [FRONT-004](front/FRONT-004-interactive-live-search-ui.md)            | Frontend | `DONE`    | FRONT-003, BACK-008                                            | Interactive live search and progress feedback UI                          |
 | [CROSS-004](cross-repo/CROSS-004-live-search-acceptance.md)           | Cross    | `DONE`    | BACK-008, FRONT-004                                            | Live search end-to-end integration and acceptance                         |
 | [CROSS-005](cross-repo/CROSS-005-high-automation-feasibility-spec.md) | Cross    | `DONE`    | CROSS-004                                                      | V2 automation/platform feasibility, specification, and binding gate       |
-| [BACK-009](back/BACK-009-applicant-data-vault.md)                     | Backend  | `READY`   | CROSS-005                                                      | Applicant profile, answer bank, and local resume-asset catalog            |
-| [BACK-010](back/BACK-010-application-orchestration-audit.md)          | Backend  | `BLOCKED` | CROSS-005, BACK-009                                            | Durable application queue, state, idempotency, exceptions, and audit      |
-| [BACK-011](back/BACK-011-grounded-application-answering.md)           | Backend  | `BLOCKED` | CROSS-005, BACK-009                                            | Policy-driven deterministic and grounded application answers              |
+| [BACK-009](back/BACK-009-applicant-data-vault.md)                     | Backend  | `DONE`    | CROSS-005                                                      | Applicant profile, answer bank, and local resume-asset catalog            |
+| [BACK-010](back/BACK-010-application-orchestration-audit.md)          | Backend  | `READY`   | CROSS-005, BACK-009                                            | Durable application queue, state, idempotency, exceptions, and audit      |
+| [BACK-011](back/BACK-011-grounded-application-answering.md)           | Backend  | `READY`   | CROSS-005, BACK-009                                            | Policy-driven deterministic and grounded application answers              |
 | [CROSS-006](cross-repo/CROSS-006-browser-automation-runner.md)        | Cross    | `BLOCKED` | CROSS-005, BACK-009, BACK-010                                  | Local browser runner and generic form automation contract                 |
 | [CROSS-007](cross-repo/CROSS-007-first-platform-automation.md)        | Cross    | `BLOCKED` | CROSS-005, BACK-011, CROSS-006                                 | Greenhouse platform automated submission adapter                          |
 | [CROSS-008](cross-repo/CROSS-008-second-platform-automation.md)       | Cross    | `BLOCKED` | CROSS-005, BACK-011, CROSS-006                                 | Lever platform automated submission adapter                               |
 | [FRONT-005](front/FRONT-005-application-automation-control-center.md) | Frontend | `BLOCKED` | CROSS-005, BACK-009, BACK-010, CROSS-006                       | Automation launch, queue, exceptions, and receipt UI                      |
 | [CROSS-009](cross-repo/CROSS-009-automated-application-acceptance.md) | Cross    | `BLOCKED` | BACK-010, BACK-011, CROSS-006, CROSS-007, CROSS-008, FRONT-005 | Batch 03 end-to-end automated-application acceptance                      |
+
+
 
 
 ### Dependency sequence
@@ -101,6 +103,8 @@ For Batch 03, only `CROSS-005` starts `READY`. After it is `DONE` and has propag
 - Batch 03 is complete only when `CROSS-009` is `DONE`.
 - Backend or frontend automated checks do not independently establish product acceptance.
 
+
+
 ## Project dispatch record
 
 
@@ -120,6 +124,8 @@ For Batch 03, only `CROSS-005` starts `READY`. After it is `DONE` and has propag
 | [CROSS-003](cross-repo/CROSS-003-v1-integration-acceptance.md)        | Antigravity agent | `development`                               | 2026-08-17T03:53:14-03:00 | Integrated three-source V1 acceptance evidence; GO decision in `/docs/evidence/v1-acceptance.md`             |
 | [CROSS-004](cross-repo/CROSS-004-live-search-acceptance.md)           | Antigravity agent | `development`                               | 2026-08-17T19:03:44-03:00 | Live search end-to-end integration and acceptance; GO decision in `/docs/evidence/live-search-acceptance.md` |
 | [CROSS-005](cross-repo/CROSS-005-high-automation-feasibility-spec.md) | Antigravity agent | `development`                               | 2026-08-17T23:30:13-03:00 | V2 specification, platform register, security model, and downstream Batch 03 bindings                        |
+
+
 
 
 ## Project decision and exception record

@@ -13,6 +13,19 @@ from job_engine.domain.applicant import (
     QuestionIntent,
     ValueState,
 )
+from job_engine.domain.application_answers import (
+    AnswerDecisionType,
+    ControlType,
+    ReasonCode,
+)
+from job_engine.domain.applications import (
+    ApplicationRunStatus,
+    AutomationMode,
+    EvidenceType,
+    ExceptionStatus,
+    ExceptionType,
+    RunCheckpoint,
+)
 from job_engine.domain.enums import (
     EmploymentType,
     JobStatus,
@@ -616,3 +629,264 @@ class ReusableAnswerUpdateRequest(BaseModel):
     provenance: str = "owner_authored"
     last_confirmed_at: datetime
     expires_at: datetime | None = None
+
+
+# --- Application Orchestration Schemas (BACK-010) ---
+
+
+class DuplicateOverrideInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    owner_confirmation: str = Field(min_length=1, max_length=500)
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class ApplicationRunCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_group_ids: list[UUID] = Field(min_length=1, max_length=25)
+    resume_id: str | None = None
+    automation_mode: AutomationMode = AutomationMode.FULL_AUTO
+
+
+class ApplicationRunConflictItem(ApiModel):
+    job_group_id: UUID
+    canonical_application_url: str
+    existing_run_id: UUID
+    existing_status: ApplicationRunStatus
+    message: str
+
+
+class ApplicationRunReceiptRead(ApiModel):
+    platform_adapter_id: str
+    final_url: str | None = None
+    platform_receipt_id: str | None = None
+    confirmation_signal: str
+    capture_timestamp: datetime
+    artifact_hash: str
+    summary_notes: str | None = None
+
+
+class ApplicationRunEventRead(ApiModel):
+    id: UUID
+    run_id: UUID
+    attempt: int
+    sequence_num: int
+    event_type: str
+    event_payload: dict[str, Any]
+    idempotency_key: str | None = None
+    created_at: datetime
+
+
+class ApplicationExceptionRead(ApiModel):
+    id: UUID
+    run_id: UUID
+    exception_type: ExceptionType
+    status: ExceptionStatus
+    context_payload: dict[str, Any]
+    resolution_payload: dict[str, Any] | None = None
+    created_at: datetime
+    resolved_at: datetime | None = None
+
+
+class EvidenceArtifactRead(ApiModel):
+    id: UUID
+    run_id: UUID
+    attempt: int
+    evidence_type: EvidenceType
+    relative_path: str
+    sha256: str
+    file_size_bytes: int | None = None
+    captured_at: datetime
+    metadata_payload: dict[str, Any] | None = None
+
+
+class ApplicationRunRead(ApiModel):
+    id: UUID
+    job_group_id: UUID
+    source_posting_id: UUID | None = None
+    canonical_application_url: str
+    application_url: str
+    platform_adapter_id: str
+    resume_asset_id: UUID
+    resume_sha256: str
+    applicant_profile_version: int
+    answer_bank_snapshot: dict[str, int]
+    answer_bank_hash: str
+    automation_mode: AutomationMode
+    status: ApplicationRunStatus
+    current_step: str | None = None
+    current_checkpoint: str | None = None
+    submit_attempted_at: datetime | None = None
+    attempt_count: int
+    max_retries: int
+    idempotency_key: str
+    terminal_reason: str | None = None
+    receipt_summary: ApplicationRunReceiptRead | None = None
+    policy_snapshot: dict[str, Any] | None = None
+    duplicate_override_confirmed_at: datetime | None = None
+    duplicate_override_reason: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class ApplicationRunDetailRead(ApplicationRunRead):
+    events: tuple[ApplicationRunEventRead, ...] = ()
+    exceptions: tuple[ApplicationExceptionRead, ...] = ()
+    evidence: tuple[EvidenceArtifactRead, ...] = ()
+
+
+class ApplicationRunCreateResponse(ApiModel):
+    created_runs: tuple[ApplicationRunRead, ...]
+    conflicts: tuple[ApplicationRunConflictItem, ...] = ()
+
+
+class ApplicationRunListResponse(ApiModel):
+    items: tuple[ApplicationRunRead, ...]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class ResolveAnswerItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question_intent: QuestionIntent | str
+    answer_text: str
+    save_to_answer_bank: bool = False
+    jurisdiction: str | None = None
+    platform_scope: str | None = None
+    policy_category: PolicyCategory = PolicyCategory.APPROVED_REUSABLE
+
+
+class ResolveAnswersRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    exception_id: UUID
+    answers: list[ResolveAnswerItem]
+
+
+class ReleaseSubmitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    owner_confirmation: str
+
+
+class CancelRunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = None
+
+
+class DuplicateOverrideRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    owner_confirmation: str
+    reason: str
+
+
+# --- Runner-facing schemas ---
+
+
+class RunnerClaimResponse(ApiModel):
+    run: ApplicationRunRead
+    lease_token: str
+    grant_token: str
+    lease_expires_at: datetime
+
+
+class RunnerHeartbeatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    extend_seconds: int = Field(default=60, ge=10, le=300)
+
+
+class RunnerEventRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    attempt: int = Field(ge=1)
+    sequence_num: int = Field(ge=1)
+    event_type: str
+    event_payload: dict[str, Any] = Field(default_factory=dict)
+    idempotency_key: str | None = None
+
+
+class RunnerCheckpointRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    checkpoint: RunCheckpoint | str
+    step_description: str | None = None
+
+
+class RunnerExceptionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    exception_type: ExceptionType
+    context_payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class RunnerCompleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    terminal_status: ApplicationRunStatus
+    terminal_reason: str | None = None
+    receipt: ApplicationRunReceiptRead | None = None
+
+
+class EvidenceUploadResponse(ApiModel):
+    id: UUID
+    relative_path: str
+    sha256: str
+    file_size_bytes: int
+
+
+# --- Grounded Application Answering Schemas (BACK-011) ---
+
+
+class ObservationValidationConstraintsSchema(ApiModel):
+    min_length: int | None = None
+    max_length: int | None = None
+    pattern: str | None = None
+
+
+class QuestionObservationSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    adapter_id: str
+    page_id: str
+    field_fingerprint: str
+    label: str
+    accessible_name: str | None = None
+    help_text: str | None = None
+    required: bool
+    control_type: ControlType
+    options: tuple[str, ...] = ()
+    validation_constraints: ObservationValidationConstraintsSchema | None = None
+
+
+class AnswerDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    observations: tuple[QuestionObservationSchema, ...]
+
+
+class EvidenceReferenceSchema(ApiModel):
+    source: Literal["profile", "resume", "answer_bank", "job"]
+    reference: str
+
+
+class AnswerDecisionSchema(ApiModel):
+    field_fingerprint: str
+    decision: AnswerDecisionType
+    answer: str | None = None
+    policy_category: PolicyCategory
+    confidence: float
+    evidence: tuple[EvidenceReferenceSchema, ...] = ()
+    reason_code: ReasonCode
+
+
+class AnswerDecisionResponse(ApiModel):
+    decisions: tuple[AnswerDecisionSchema, ...]

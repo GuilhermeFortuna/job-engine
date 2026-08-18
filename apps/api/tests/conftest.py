@@ -12,7 +12,10 @@ UNREACHABLE_DATABASE_URL = "postgresql://job_engine:job_engine@127.0.0.1:1/job_e
 
 @pytest.fixture
 def settings() -> Settings:
-    return Settings(database_url=UNREACHABLE_DATABASE_URL)
+    return Settings(
+        database_url=UNREACHABLE_DATABASE_URL,
+        runner_secret="test-runner-secret-at-least-thirty-two-characters",
+    )
 
 
 @pytest.fixture
@@ -23,5 +26,9 @@ def app(settings: Settings) -> FastAPI:
 @pytest.fixture
 async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as http_client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Origin": "http://localhost:3000"},
+    ) as http_client:
         yield http_client

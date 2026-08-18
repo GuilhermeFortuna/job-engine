@@ -422,3 +422,214 @@ class ReusableAnswer(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
     )
+
+
+class ApplicationRun(Base):
+    __tablename__ = "application_runs"
+    __table_args__ = (
+        Index("ix_application_runs_status", "status"),
+        Index("ix_application_runs_canonical_url", "canonical_application_url"),
+        Index("ix_application_runs_queue_order", "status", "created_at"),
+        Index("ix_application_runs_lease_expires", "lease_expires_at"),
+        Index(
+            "uq_application_runs_active_or_submitted_url",
+            "canonical_application_url",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('queued', 'claimed', 'running', 'needs_input', "
+                "'paused_auth', 'failed_retryable', 'submitted') "
+                "AND duplicate_override_confirmed_at IS NULL"
+            ),
+        ),
+        Index(
+            "uq_application_runs_active_or_submitted_job_group",
+            "job_group_id",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('queued', 'claimed', 'running', 'needs_input', "
+                "'paused_auth', 'failed_retryable', 'submitted') "
+                "AND duplicate_override_confirmed_at IS NULL"
+            ),
+        ),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    job_group_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("job_groups.id"), nullable=False
+    )
+    source_posting_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("source_postings.id")
+    )
+    canonical_application_url: Mapped[str] = mapped_column(Text, nullable=False)
+    application_url: Mapped[str] = mapped_column(Text, nullable=False)
+    platform_adapter_id: Mapped[str] = mapped_column(Text, nullable=False)
+    resume_asset_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("resume_assets.id"), nullable=False
+    )
+    resume_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    applicant_profile_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    answer_bank_snapshot: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False)
+    answer_bank_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    automation_mode: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="queued")
+    current_step: Mapped[str | None] = mapped_column(Text)
+    current_checkpoint: Mapped[str | None] = mapped_column(Text)
+    submit_attempted_at: Mapped[datetime | None] = _optional_aware_dt()
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+    idempotency_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    lease_token_hash: Mapped[str | None] = mapped_column(String(64))
+    lease_expires_at: Mapped[datetime | None] = _optional_aware_dt()
+    runner_id: Mapped[str | None] = mapped_column(Text)
+    terminal_reason: Mapped[str | None] = mapped_column(Text)
+    receipt_summary: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    policy_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    duplicate_override_confirmed_at: Mapped[datetime | None] = _optional_aware_dt()
+    duplicate_override_reason: Mapped[str | None] = mapped_column(Text)
+    provider_call_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    provider_reserved_cost_usd: Mapped[Decimal] = mapped_column(
+        Numeric(10, 4), nullable=False, default=Decimal("0")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+    started_at: Mapped[datetime | None] = _optional_aware_dt()
+    completed_at: Mapped[datetime | None] = _optional_aware_dt()
+
+    job_group: Mapped[JobGroup] = relationship()
+    resume_asset: Mapped[ResumeAsset] = relationship()
+    events: Mapped[list["ApplicationRunEvent"]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="ApplicationRunEvent.sequence_num.asc()",
+    )
+    exceptions: Mapped[list["ApplicationRunException"]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="ApplicationRunException.created_at.asc()",
+    )
+    evidence: Mapped[list["ApplicationRunEvidence"]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="ApplicationRunEvidence.captured_at.asc()",
+    )
+    resume_grants: Mapped[list["ApplicationRunResumeGrant"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+
+
+class ApplicationRunEvent(Base):
+    __tablename__ = "application_run_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "sequence_num", name="uq_application_run_events_sequence"
+        ),
+        Index(
+            "uq_application_run_events_idempotency",
+            "run_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+        ),
+        Index("ix_application_run_events_run_created", "run_id", "created_at"),
+        Index("ix_application_run_events_created", "created_at"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    sequence_num: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    event_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    idempotency_key: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    run: Mapped[ApplicationRun] = relationship(back_populates="events")
+
+
+class ApplicationRunException(Base):
+    __tablename__ = "application_run_exceptions"
+    __table_args__ = (
+        Index("ix_application_run_exceptions_run_status", "run_id", "status"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    exception_type: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    context_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    resolution_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    resolved_at: Mapped[datetime | None] = _optional_aware_dt()
+
+    run: Mapped[ApplicationRun] = relationship(back_populates="exceptions")
+
+
+class ApplicationRunEvidence(Base):
+    __tablename__ = "application_run_evidence"
+    __table_args__ = (Index("ix_application_run_evidence_run", "run_id"),)
+
+    id: Mapped[UUID] = _uuid_pk()
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    evidence_type: Mapped[str] = mapped_column(Text, nullable=False)
+    relative_path: Mapped[str] = mapped_column(Text, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    captured_at: Mapped[datetime] = _required_aware_dt()
+    metadata_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+    run: Mapped[ApplicationRun] = relationship(back_populates="evidence")
+
+
+class ApplicationRunResumeGrant(Base):
+    __tablename__ = "application_run_resume_grants"
+    __table_args__ = (
+        UniqueConstraint(
+            "grant_token_hash", name="uq_application_run_resume_grants_token_hash"
+        ),
+        Index("ix_application_run_resume_grants_run_expires", "run_id", "expires_at"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    resume_asset_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("resume_assets.id"), nullable=False
+    )
+    grant_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = _required_aware_dt()
+    consumed_at: Mapped[datetime | None] = _optional_aware_dt()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    run: Mapped[ApplicationRun] = relationship(back_populates="resume_grants")
+    resume_asset: Mapped[ResumeAsset] = relationship()

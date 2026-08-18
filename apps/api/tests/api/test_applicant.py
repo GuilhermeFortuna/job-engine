@@ -65,6 +65,7 @@ async def applicant_app(
     settings = Settings(
         database_url=disposable_database_url,
         resume_root=tmp_path,
+        runner_secret="test-runner-secret-at-least-thirty-two-characters",
     )
     application = create_app(settings)
     try:
@@ -76,7 +77,11 @@ async def applicant_app(
 @pytest.fixture
 async def applicant_client(applicant_app: FastAPI) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=applicant_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as http_client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Origin": "http://localhost:3000"},
+    ) as http_client:
         yield http_client
 
 
