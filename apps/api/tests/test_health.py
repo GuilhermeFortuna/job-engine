@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from httpx import ASGITransport, AsyncClient
 from pytest import MonkeyPatch
 
@@ -18,7 +19,10 @@ async def test_health_returns_ok_status_and_body(client: AsyncClient) -> None:
 
 
 async def test_create_app_succeeds_when_database_is_unavailable() -> None:
-    settings = Settings(database_url=UNREACHABLE_DATABASE_URL)
+    settings = Settings(
+        database_url=UNREACHABLE_DATABASE_URL,
+        runner_secret="test-runner-secret-at-least-thirty-two-characters",
+    )
     app = create_app(settings)
 
     transport = ASGITransport(app=app)
@@ -27,6 +31,11 @@ async def test_create_app_succeeds_when_database_is_unavailable() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_create_app_rejects_missing_runner_secret() -> None:
+    with pytest.raises(ValueError, match="JOB_ENGINE_RUNNER_SECRET"):
+        create_app(Settings(database_url=UNREACHABLE_DATABASE_URL))
 
 
 def test_settings_ignores_dotenv_file(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:

@@ -5,14 +5,18 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -310,3 +314,367 @@ class JobGroupRoleFamily(Base):
     family_id: Mapped[str] = mapped_column(Text, nullable=False)
 
     job_group: Mapped[JobGroup] = relationship(back_populates="role_families")
+
+
+class ApplicantProfile(Base):
+    __tablename__ = "applicant_profiles"
+
+    id: Mapped[UUID] = _uuid_pk()
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    fields: Mapped[list["ApplicantProfileField"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan"
+    )
+
+
+class ApplicantProfileField(Base):
+    __tablename__ = "applicant_profile_fields"
+    __table_args__ = (
+        UniqueConstraint(
+            "profile_id", "field_path", name="uq_applicant_profile_fields_path"
+        ),
+        Index("ix_applicant_profile_fields_profile_path", "profile_id", "field_path"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    profile_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("applicant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    field_path: Mapped[str] = mapped_column(Text, nullable=False)
+    value_state: Mapped[str] = mapped_column(Text, nullable=False)
+    value_payload: Mapped[Any | None] = mapped_column(JSONB)
+    source: Mapped[str | None] = mapped_column(Text)
+    last_confirmed_at: Mapped[datetime | None] = _optional_aware_dt()
+    policy_category: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    profile: Mapped[ApplicantProfile] = relationship(back_populates="fields")
+
+
+class ResumeAsset(Base):
+    __tablename__ = "resume_assets"
+    __table_args__ = (
+        UniqueConstraint("resume_id", name="uq_resume_assets_resume_id"),
+        Index(
+            "uq_resume_assets_single_default",
+            "is_default",
+            unique=True,
+            postgresql_where=text("is_default IS TRUE"),
+        ),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    resume_id: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    source_markdown_path: Mapped[str] = mapped_column(Text, nullable=False)
+    upload_pdf_path: Mapped[str] = mapped_column(Text, nullable=False)
+    preview_html_path: Mapped[str | None] = mapped_column(Text)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    language: Mapped[str] = mapped_column(Text, nullable=False, default="en")
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    last_verified_at: Mapped[datetime | None] = _optional_aware_dt()
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+
+class ReusableAnswer(Base):
+    __tablename__ = "reusable_answers"
+    __table_args__ = (
+        UniqueConstraint("answer_id", name="uq_reusable_answers_answer_id"),
+        Index("ix_reusable_answers_question_intent", "question_intent"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    answer_id: Mapped[str] = mapped_column(Text, nullable=False)
+    question_intent: Mapped[str] = mapped_column(Text, nullable=False)
+    jurisdiction: Mapped[str | None] = mapped_column(Text)
+    platform_scope: Mapped[str | None] = mapped_column(Text)
+    answer_text: Mapped[str] = mapped_column(Text, nullable=False)
+    policy_category: Mapped[str] = mapped_column(Text, nullable=False)
+    provenance: Mapped[str] = mapped_column(
+        Text, nullable=False, default="owner_authored"
+    )
+    last_confirmed_at: Mapped[datetime] = _required_aware_dt()
+    expires_at: Mapped[datetime | None] = _optional_aware_dt()
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+
+class ApplicationRun(Base):
+    __tablename__ = "application_runs"
+    __table_args__ = (
+        Index("ix_application_runs_status", "status"),
+        Index("ix_application_runs_canonical_url", "canonical_application_url"),
+        Index("ix_application_runs_queue_order", "status", "created_at"),
+        Index("ix_application_runs_lease_expires", "lease_expires_at"),
+        Index(
+            "uq_application_runs_active_or_submitted_url",
+            "canonical_application_url",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('queued', 'claimed', 'running', 'needs_input', "
+                "'paused_auth', 'failed_retryable', 'submitted') "
+                "AND duplicate_override_confirmed_at IS NULL"
+            ),
+        ),
+        Index(
+            "uq_application_runs_active_or_submitted_job_group",
+            "job_group_id",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('queued', 'claimed', 'running', 'needs_input', "
+                "'paused_auth', 'failed_retryable', 'submitted') "
+                "AND duplicate_override_confirmed_at IS NULL"
+            ),
+        ),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    job_group_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("job_groups.id"), nullable=False
+    )
+    source_posting_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("source_postings.id")
+    )
+    canonical_application_url: Mapped[str] = mapped_column(Text, nullable=False)
+    application_url: Mapped[str] = mapped_column(Text, nullable=False)
+    platform_adapter_id: Mapped[str] = mapped_column(Text, nullable=False)
+    resume_asset_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("resume_assets.id"), nullable=False
+    )
+    resume_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    applicant_profile_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    answer_bank_snapshot: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False)
+    answer_bank_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    automation_mode: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="queued")
+    current_step: Mapped[str | None] = mapped_column(Text)
+    current_checkpoint: Mapped[str | None] = mapped_column(Text)
+    submit_attempted_at: Mapped[datetime | None] = _optional_aware_dt()
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    retry_failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+    idempotency_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    lease_token_hash: Mapped[str | None] = mapped_column(String(64))
+    lease_expires_at: Mapped[datetime | None] = _optional_aware_dt()
+    runner_id: Mapped[str | None] = mapped_column(Text)
+    terminal_reason: Mapped[str | None] = mapped_column(Text)
+    receipt_summary: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    policy_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    duplicate_override_confirmed_at: Mapped[datetime | None] = _optional_aware_dt()
+    duplicate_override_reason: Mapped[str | None] = mapped_column(Text)
+    provider_call_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    provider_reserved_cost_usd: Mapped[Decimal] = mapped_column(
+        Numeric(10, 4), nullable=False, default=Decimal("0")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+    started_at: Mapped[datetime | None] = _optional_aware_dt()
+    completed_at: Mapped[datetime | None] = _optional_aware_dt()
+
+    job_group: Mapped[JobGroup] = relationship()
+    resume_asset: Mapped[ResumeAsset] = relationship()
+    events: Mapped[list["ApplicationRunEvent"]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="ApplicationRunEvent.sequence_num.asc()",
+    )
+    exceptions: Mapped[list["ApplicationRunException"]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="ApplicationRunException.created_at.asc()",
+    )
+    evidence: Mapped[list["ApplicationRunEvidence"]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="ApplicationRunEvidence.captured_at.asc()",
+    )
+    resume_grants: Mapped[list["ApplicationRunResumeGrant"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+    lease_releases: Mapped[list["ApplicationRunLeaseRelease"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+
+
+class ApplicationRunEvent(Base):
+    __tablename__ = "application_run_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "sequence_num", name="uq_application_run_events_sequence"
+        ),
+        Index(
+            "uq_application_run_events_idempotency",
+            "run_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+        ),
+        Index("ix_application_run_events_run_created", "run_id", "created_at"),
+        Index("ix_application_run_events_created", "created_at"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    sequence_num: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    event_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    idempotency_key: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    run: Mapped[ApplicationRun] = relationship(back_populates="events")
+
+
+class ApplicationRunException(Base):
+    __tablename__ = "application_run_exceptions"
+    __table_args__ = (
+        Index("ix_application_run_exceptions_run_status", "run_id", "status"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    exception_type: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    context_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    resolution_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    resolved_at: Mapped[datetime | None] = _optional_aware_dt()
+
+    run: Mapped[ApplicationRun] = relationship(back_populates="exceptions")
+
+
+class ApplicationRunEvidence(Base):
+    __tablename__ = "application_run_evidence"
+    __table_args__ = (Index("ix_application_run_evidence_run", "run_id"),)
+
+    id: Mapped[UUID] = _uuid_pk()
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    evidence_type: Mapped[str] = mapped_column(Text, nullable=False)
+    relative_path: Mapped[str] = mapped_column(Text, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    file_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    captured_at: Mapped[datetime] = _required_aware_dt()
+    metadata_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+
+    run: Mapped[ApplicationRun] = relationship(back_populates="evidence")
+
+
+class ApplicationRunResumeGrant(Base):
+    __tablename__ = "application_run_resume_grants"
+    __table_args__ = (
+        UniqueConstraint(
+            "grant_token_hash", name="uq_application_run_resume_grants_token_hash"
+        ),
+        Index("ix_application_run_resume_grants_run_expires", "run_id", "expires_at"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    resume_asset_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("resume_assets.id"), nullable=False
+    )
+    grant_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = _required_aware_dt()
+    consumed_at: Mapped[datetime | None] = _optional_aware_dt()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    run: Mapped[ApplicationRun] = relationship(back_populates="resume_grants")
+    resume_asset: Mapped[ResumeAsset] = relationship()
+
+
+class ApplicationRunLeaseRelease(Base):
+    """Durable record of a runner voluntarily relinquishing a claim.
+
+    Authorizes idempotent replay of ``release-claim``: a replay must present the
+    same lease token, runner ID, reason, and request ID that produced the row,
+    and the row must not have been superseded by a later claim.
+    """
+
+    __tablename__ = "application_run_lease_releases"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "released_lease_token_hash",
+            name="uq_application_run_lease_releases_run_token",
+        ),
+        Index(
+            "ix_application_run_lease_releases_run_superseded",
+            "run_id",
+            "superseded_at",
+        ),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    released_lease_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    runner_id: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    request_id: Mapped[str] = mapped_column(Text, nullable=False)
+    superseded_at: Mapped[datetime | None] = _optional_aware_dt()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    run: Mapped[ApplicationRun] = relationship(back_populates="lease_releases")

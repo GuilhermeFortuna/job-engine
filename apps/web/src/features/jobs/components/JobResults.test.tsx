@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { JobResults } from "./JobResults";
 import { renderWithProviders, screen } from "@/test/render";
 import type { JobListItem } from "../types";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 const sampleJob: JobListItem = {
   id: "22222222-2222-4222-8222-222222222222",

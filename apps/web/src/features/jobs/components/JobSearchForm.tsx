@@ -2,6 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { FieldLegend, FieldSet } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { buildSearchUrl, updateSearchParams } from "../search-params";
 import type {
   CatalogFilters,
@@ -14,6 +25,34 @@ import type {
   SortValue,
 } from "../types";
 
+function FilterCheckbox({
+  name,
+  value,
+  checked,
+  label,
+  onChange,
+}: {
+  name: string;
+  value: string;
+  checked: boolean;
+  label: string;
+  onChange: () => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+      <input
+        type="checkbox"
+        name={name}
+        value={value}
+        checked={checked}
+        onChange={onChange}
+        className="size-4 accent-primary"
+      />
+      <span>{label}</span>
+    </label>
+  );
+}
+
 export function JobSearchForm({
   params,
   catalogFilters,
@@ -22,13 +61,6 @@ export function JobSearchForm({
   catalogFilters: CatalogFilters;
 }) {
   const router = useRouter();
-  const [keywordInput, setKeywordInput] = useState(params.q ?? "");
-  const [prevQ, setPrevQ] = useState(params.q);
-  if (params.q !== prevQ) {
-    setPrevQ(params.q);
-    setKeywordInput(params.q ?? "");
-  }
-
   const [minCompInput, setMinCompInput] = useState(
     params.minimum_annual_usd !== undefined
       ? String(params.minimum_annual_usd)
@@ -43,19 +75,6 @@ export function JobSearchForm({
         : "",
     );
   }
-
-  const handleKeywordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = keywordInput.trim();
-    const next = updateSearchParams(
-      params,
-      {
-        q: trimmed.length > 0 ? trimmed : undefined,
-      },
-      true,
-    );
-    router.push(buildSearchUrl(next));
-  };
 
   const handleMinCompSubmit = () => {
     const trimmed = minCompInput.trim();
@@ -95,298 +114,270 @@ export function JobSearchForm({
     router.push(buildSearchUrl(next));
   };
 
+  const selectClassName =
+    "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
+
   return (
     <form
-      role="search"
-      aria-label="Job Search and Filters"
-      className="job-search-form"
-      onSubmit={handleKeywordSubmit}
+      aria-label="Job filters"
+      className="flex flex-col gap-4"
+      onSubmit={(e) => e.preventDefault()}
     >
-      {/* 1. Keywords */}
-      <div className="form-group keyword-search-group">
-        <label htmlFor="search-keywords" className="form-label font-bold">
-          Keywords
-        </label>
-        <div className="keyword-input-wrapper">
-          <input
-            id="search-keywords"
-            type="search"
-            name="q"
-            value={keywordInput}
-            onChange={(e) => setKeywordInput(e.target.value)}
-            placeholder="Title, company, tech, or keywords..."
-            className="form-input keyword-input"
-          />
-          <button type="submit" className="btn btn-primary btn-search">
-            Search
-          </button>
-        </div>
-      </div>
+      <Accordion defaultValue={["filters"]} keepMounted>
+        <AccordionItem value="filters" className="border-border">
+          <AccordionTrigger className="px-0 text-sm font-semibold hover:no-underline">
+            Filter & Refine Results
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="flex flex-col gap-4 border-t border-border pt-3">
+              <FieldSet>
+                <FieldLegend variant="label" className="text-muted-foreground uppercase tracking-wide">
+                  Role Family
+                </FieldLegend>
+                <div className="flex flex-col gap-2">
+                  {catalogFilters.role_families.map((rf) => (
+                    <FilterCheckbox
+                      key={rf.id}
+                      name="role_family"
+                      value={rf.id}
+                      label={rf.label}
+                      checked={params.role_family.includes(rf.id)}
+                      onChange={() =>
+                        toggleArrayItem(
+                          params.role_family,
+                          rf.id as RoleFamilyId,
+                          "role_family",
+                        )
+                      }
+                    />
+                  ))}
+                </div>
+              </FieldSet>
 
-      <details className="filters-details-accordion" open>
-        <summary className="filters-summary-btn">
-          <span>Filter & Refine Results</span>
-        </summary>
+              <FieldSet>
+                <FieldLegend variant="label" className="text-muted-foreground uppercase tracking-wide">
+                  Technologies
+                </FieldLegend>
+                <ScrollArea className="h-48 pr-2">
+                  <div className="flex flex-col gap-2">
+                    {catalogFilters.technologies.map((tech) => (
+                      <FilterCheckbox
+                        key={tech.value}
+                        name="technology"
+                        value={tech.value}
+                        label={tech.label}
+                        checked={params.technology.includes(tech.value)}
+                        onChange={() =>
+                          toggleArrayItem(
+                            params.technology,
+                            tech.value,
+                            "technology",
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
+                </ScrollArea>
+              </FieldSet>
 
-        <div className="filters-grid">
-          {/* 2. Role family */}
-          <fieldset className="form-fieldset">
-            <legend className="form-legend">Role Family</legend>
-            <div className="checkbox-options-list">
-              {catalogFilters.role_families.map((rf) => (
-                <label key={rf.id} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    name="role_family"
-                    value={rf.id}
-                    checked={params.role_family.includes(rf.id)}
-                    onChange={() =>
-                      toggleArrayItem(
-                        params.role_family,
-                        rf.id as RoleFamilyId,
-                        "role_family",
-                      )
-                    }
-                  />
-                  <span>{rf.label}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          {/* 3. Technologies */}
-          <fieldset className="form-fieldset">
-            <legend className="form-legend">Technologies</legend>
-            <div className="checkbox-options-list tech-options-scroll">
-              {catalogFilters.technologies.map((tech) => (
-                <label key={tech.value} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    name="technology"
-                    value={tech.value}
-                    checked={params.technology.includes(tech.value)}
-                    onChange={() =>
-                      toggleArrayItem(
-                        params.technology,
-                        tech.value,
-                        "technology",
-                      )
-                    }
-                  />
-                  <span>{tech.label}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          {/* 4. Remote status */}
-          <fieldset className="form-fieldset">
-            <legend className="form-legend">Remote Arrangement</legend>
-            <div className="checkbox-options-list">
-              {catalogFilters.remote_status.map((rs) => (
-                <label key={rs.value} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    name="remote_status"
-                    value={rs.value}
-                    checked={params.remote_status.includes(
-                      rs.value as RemoteStatus,
-                    )}
-                    onChange={() =>
-                      toggleArrayItem(
-                        params.remote_status,
+              <FieldSet>
+                <FieldLegend variant="label" className="text-muted-foreground uppercase tracking-wide">
+                  Remote Arrangement
+                </FieldLegend>
+                <div className="flex flex-col gap-2">
+                  {catalogFilters.remote_status.map((rs) => (
+                    <FilterCheckbox
+                      key={rs.value}
+                      name="remote_status"
+                      value={rs.value}
+                      label={rs.label}
+                      checked={params.remote_status.includes(
                         rs.value as RemoteStatus,
-                        "remote_status",
-                      )
-                    }
-                  />
-                  <span>{rs.label}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+                      )}
+                      onChange={() =>
+                        toggleArrayItem(
+                          params.remote_status,
+                          rs.value as RemoteStatus,
+                          "remote_status",
+                        )
+                      }
+                    />
+                  ))}
+                </div>
+              </FieldSet>
 
-          {/* 5. Location eligibility */}
-          <fieldset className="form-fieldset">
-            <legend className="form-legend">Location Eligibility</legend>
-            <div className="checkbox-options-list">
-              {catalogFilters.location_eligibility.map((le) => (
-                <label key={le.value} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    name="location_eligibility"
-                    value={le.value}
-                    checked={params.location_eligibility.includes(
-                      le.value as LocationEligibilityFilter,
-                    )}
-                    onChange={() =>
-                      toggleArrayItem(
-                        params.location_eligibility,
+              <FieldSet>
+                <FieldLegend variant="label" className="text-muted-foreground uppercase tracking-wide">
+                  Location Eligibility
+                </FieldLegend>
+                <div className="flex flex-col gap-2">
+                  {catalogFilters.location_eligibility.map((le) => (
+                    <FilterCheckbox
+                      key={le.value}
+                      name="location_eligibility"
+                      value={le.value}
+                      label={le.label}
+                      checked={params.location_eligibility.includes(
                         le.value as LocationEligibilityFilter,
-                        "location_eligibility",
-                      )
-                    }
+                      )}
+                      onChange={() =>
+                        toggleArrayItem(
+                          params.location_eligibility,
+                          le.value as LocationEligibilityFilter,
+                          "location_eligibility",
+                        )
+                      }
+                    />
+                  ))}
+                </div>
+              </FieldSet>
+
+              <FieldSet>
+                <FieldLegend variant="label" className="text-muted-foreground uppercase tracking-wide">
+                  Seniority
+                </FieldLegend>
+                <div className="flex flex-col gap-2">
+                  {catalogFilters.seniority.map((sen) => (
+                    <FilterCheckbox
+                      key={sen.value}
+                      name="seniority"
+                      value={sen.value}
+                      label={sen.label}
+                      checked={params.seniority.includes(sen.value as Seniority)}
+                      onChange={() =>
+                        toggleArrayItem(
+                          params.seniority,
+                          sen.value as Seniority,
+                          "seniority",
+                        )
+                      }
+                    />
+                  ))}
+                </div>
+              </FieldSet>
+
+              <FieldSet>
+                <FieldLegend variant="label" className="text-muted-foreground uppercase tracking-wide">
+                  Compensation (USD/yr)
+                </FieldLegend>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="min-comp-input" className="sr-only">
+                    Minimum Annual USD
+                  </Label>
+                  <Input
+                    id="min-comp-input"
+                    type="number"
+                    name="minimum_annual_usd"
+                    min="0"
+                    step="1000"
+                    placeholder="Min USD / year (e.g. 80000)"
+                    value={minCompInput}
+                    onChange={(e) => setMinCompInput(e.target.value)}
+                    onBlur={handleMinCompSubmit}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleMinCompSubmit();
+                      }
+                    }}
                   />
-                  <span>{le.label}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="include_unknown_compensation"
+                      checked={params.include_unknown_compensation !== false}
+                      onChange={(e) => {
+                        const next = updateSearchParams(
+                          params,
+                          {
+                            include_unknown_compensation: e.target.checked,
+                          },
+                          true,
+                        );
+                        router.push(buildSearchUrl(next));
+                      }}
+                      className="size-4 accent-primary"
+                    />
+                    <span>Include jobs with unknown compensation</span>
+                  </label>
+                </div>
+              </FieldSet>
 
-          {/* 6. Seniority */}
-          <fieldset className="form-fieldset">
-            <legend className="form-legend">Seniority</legend>
-            <div className="checkbox-options-list">
-              {catalogFilters.seniority.map((sen) => (
-                <label key={sen.value} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    name="seniority"
-                    value={sen.value}
-                    checked={params.seniority.includes(sen.value as Seniority)}
-                    onChange={() =>
-                      toggleArrayItem(
-                        params.seniority,
-                        sen.value as Seniority,
-                        "seniority",
-                      )
-                    }
-                  />
-                  <span>{sen.label}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+              <FieldSet>
+                <FieldLegend variant="label" className="text-muted-foreground uppercase tracking-wide">
+                  Job Source
+                </FieldLegend>
+                <div className="flex flex-col gap-2">
+                  {catalogFilters.sources.map((src) => (
+                    <FilterCheckbox
+                      key={src.id}
+                      name="source"
+                      value={src.id}
+                      label={src.label}
+                      checked={params.source.includes(src.id)}
+                      onChange={() =>
+                        toggleArrayItem(params.source, src.id, "source")
+                      }
+                    />
+                  ))}
+                </div>
+              </FieldSet>
 
-          {/* 7. Compensation */}
-          <fieldset className="form-fieldset">
-            <legend className="form-legend">Compensation (USD/yr)</legend>
-            <div className="comp-inputs-wrapper">
-              <div className="min-comp-input-group">
-                <label htmlFor="min-comp-input" className="sr-only">
-                  Minimum Annual USD
-                </label>
-                <input
-                  id="min-comp-input"
-                  type="number"
-                  name="minimum_annual_usd"
-                  min="0"
-                  step="1000"
-                  placeholder="Min USD / year (e.g. 80000)"
-                  value={minCompInput}
-                  onChange={(e) => setMinCompInput(e.target.value)}
-                  onBlur={handleMinCompSubmit}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleMinCompSubmit();
-                    }
-                  }}
-                  className="form-input min-comp-input"
-                />
-              </div>
-
-              <label className="checkbox-label comp-include-unknown-label">
-                <input
-                  type="checkbox"
-                  name="include_unknown_compensation"
-                  checked={params.include_unknown_compensation !== false}
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="posted-within-select">Posted Within</Label>
+                <select
+                  id="posted-within-select"
+                  name="posted_within"
+                  value={params.posted_within}
                   onChange={(e) => {
                     const next = updateSearchParams(
                       params,
                       {
-                        include_unknown_compensation: e.target.checked,
+                        posted_within: e.target.value as PostedWithin,
                       },
                       true,
                     );
                     router.push(buildSearchUrl(next));
                   }}
-                />
-                <span>Include jobs with unknown compensation</span>
-              </label>
+                  className={selectClassName}
+                >
+                  {catalogFilters.posted_within.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="sort-select">Sort Order</Label>
+                <select
+                  id="sort-select"
+                  name="sort"
+                  value={params.sort}
+                  onChange={(e) => {
+                    const next = updateSearchParams(
+                      params,
+                      {
+                        sort: e.target.value as SortValue,
+                      },
+                      true,
+                    );
+                    router.push(buildSearchUrl(next));
+                  }}
+                  className={selectClassName}
+                >
+                  {catalogFilters.sort.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          </fieldset>
-
-          {/* 8. Source */}
-          <fieldset className="form-fieldset">
-            <legend className="form-legend">Job Source</legend>
-            <div className="checkbox-options-list">
-              {catalogFilters.sources.map((src) => (
-                <label key={src.id} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    name="source"
-                    value={src.id}
-                    checked={params.source.includes(src.id)}
-                    onChange={() =>
-                      toggleArrayItem(params.source, src.id, "source")
-                    }
-                  />
-                  <span>{src.label}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          {/* 9. Posted date */}
-          <div className="form-group select-group">
-            <label htmlFor="posted-within-select" className="form-label">
-              Posted Within
-            </label>
-            <select
-              id="posted-within-select"
-              name="posted_within"
-              value={params.posted_within}
-              onChange={(e) => {
-                const next = updateSearchParams(
-                  params,
-                  {
-                    posted_within: e.target.value as PostedWithin,
-                  },
-                  true,
-                );
-                router.push(buildSearchUrl(next));
-              }}
-              className="form-select"
-            >
-              {catalogFilters.posted_within.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 10. Sort */}
-          <div className="form-group select-group">
-            <label htmlFor="sort-select" className="form-label">
-              Sort Order
-            </label>
-            <select
-              id="sort-select"
-              name="sort"
-              value={params.sort}
-              onChange={(e) => {
-                const next = updateSearchParams(
-                  params,
-                  {
-                    sort: e.target.value as SortValue,
-                  },
-                  true,
-                );
-                router.push(buildSearchUrl(next));
-              }}
-              className="form-select"
-            >
-              {catalogFilters.sort.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </details>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </form>
   );
 }

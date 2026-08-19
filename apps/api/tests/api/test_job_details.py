@@ -3,9 +3,9 @@ from uuid import uuid4
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.factories import job_group_input, persist_job, source_posting_input
 
 from job_engine.domain.enums import JobStatus
+from tests.factories import job_group_input, persist_job, source_posting_input
 
 
 async def test_details_include_grouped_postings_and_omit_raw_payload(

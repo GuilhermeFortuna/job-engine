@@ -8,6 +8,8 @@ interface JobPageProps {
   params: Promise<{ jobGroupId: string }>;
 }
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata(props: JobPageProps): Promise<Metadata> {
   const { jobGroupId } = await props.params;
   try {

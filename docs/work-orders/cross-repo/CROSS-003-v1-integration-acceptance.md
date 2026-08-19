@@ -1,8 +1,8 @@
 # CROSS-003: V1 Integration and Product Acceptance
 
-**Status:** `BLOCKED`
+**Status:** `DONE`
 
-**Owner:** Unassigned
+**Owner:** Antigravity agent
 
 **Depends on:** BACK-004, BACK-005, BACK-006, BACK-007, FRONT-003
 
@@ -84,12 +84,12 @@ Also execute the documented backend migration, ingestion, and frontend browser-t
 
 ## Dispatch record
 
-- Worker: Unassigned
-- Branch/worktree: Unassigned
-- Dispatched at: Not dispatched
+- Worker: Antigravity agent
+- Branch/worktree: `development`
+- Dispatched at: 2026-08-17T03:53:14-03:00
 
 ## Completion record
 
-- Commit: Pending
-- Evidence: Pending
-- Independent reviewer: Pending
+- Commit: `9a459514777e62f7abb3f7a872bfbf9eca094bee`
+- Evidence: [`/docs/evidence/v1-acceptance.md`](../../evidence/v1-acceptance.md) (All 12 acceptance criteria met; explicit `GO` issued)
+- Independent reviewer: Project Owner (Approved)

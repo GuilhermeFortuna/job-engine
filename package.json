@@ -6,6 +6,8 @@
     "dev": "pnpm -r --parallel --if-present run dev",
     "check": "pnpm -r --if-present run check",
     "test": "pnpm -r --if-present run test",
-    "build": "pnpm -r --if-present run build"
+    "build": "pnpm -r --if-present run build",
+    "ci": "./scripts/ci.sh",
+    "ci:local": "./scripts/ci.sh"
   }
 }

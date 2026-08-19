@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Name - Resume</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+    :root {
+      --text-main: #1a1e24;
+      --text-muted: #4b5563;
+      --text-light: #6b7280;
+      --accent: #0f172a;
+      --border-color: #cbd5e1;
+      --line-height-body: 1.32;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text-main);
+      background-color: #f1f5f9;
+      line-height: var(--line-height-body);
+      font-size: 8.8pt;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .page {
+      width: 8.5in;
+      min-height: 11in;
+      max-width: 100%;
+      margin: 15px auto;
+      background: #ffffff;
+      padding: 0.36in 0.48in;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 7px;
+    }
+
+    h1 {
+      font-size: 18pt;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #090d16;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .subtitle {
+      font-size: 9.6pt;
+      font-weight: 700;
+      color: #1e293b;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .contact-bar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 4px 10px;
+      font-size: 8.3pt;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .contact-bar a {
+      color: #0f172a;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .contact-bar a:hover {
+      color: #2563eb;
+      text-decoration: underline;
+    }
+
+    .contact-bar .sep {
+      color: #94a3b8;
+    }
+
+    section {
+      margin-top: 6.5px;
+    }
+
+    h2 {
+      font-size: 9.2pt;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #0f172a;
+      border-bottom: 1.2px solid #0f172a;
+      padding-bottom: 1.5px;
+      margin-bottom: 4px;
+    }
+
+    p.summary {
+      font-size: 8.4pt;
+      line-height: 1.30;
+      color: #334155;
+      text-align: justify;
+    }
+
+    .skills-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      column-gap: 8px;
+      row-gap: 1.8px;
+      font-size: 8.3pt;
+    }
+
+    .skill-label {
+      font-weight: 700;
+      color: #0f172a;
+      white-space: nowrap;
+    }
+
+    .skill-value {
+      color: #334155;
+    }
+
+    .entry {
+      margin-bottom: 5px;
+    }
+
+    .entry:last-child {
+      margin-bottom: 0;
+    }
+
+    .entry-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 8.7pt;
+      margin-bottom: 1px;
+    }
+
+    .entry-title {
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .entry-title span.role {
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .entry-meta {
+      font-size: 8pt;
+      font-weight: 600;
+      color: #64748b;
+      white-space: nowrap;
+    }
+
+    ul.bullet-list {
+      list-style-type: disc;
+      padding-left: 13px;
+      margin: 0;
+    }
+
+    ul.bullet-list li {
+      font-size: 8.2pt;
+      line-height: 1.28;
+      color: #334155;
+      margin-bottom: 1.5px;
+    }
+
+    ul.bullet-list li:last-child {
+      margin-bottom: 0;
+    }
+
+    ul.bullet-list li strong {
+      color: #0f172a;
+      font-weight: 600;
+    }
+
+    .edu-entry {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 8.3pt;
+      line-height: 1.28;
+      margin-bottom: 1.5px;
+    }
+
+    .edu-main {
+      color: #334155;
+    }
+
+    .edu-main strong {
+      color: #0f172a;
+      font-weight: 700;
+    }
+
+    .edu-dates {
+      font-size: 8pt;
+      font-weight: 600;
+      color: #64748b;
+      white-space: nowrap;
+    }
+
+    .lang-line {
+      font-size: 8.3pt;
+      color: #334155;
+    }
+
+    .lang-line strong {
+      color: #0f172a;
+      font-weight: 700;
+    }
+
+    @media print {
+      @page {
+        size: letter;
+        margin: 0.32in 0.44in;
+      }
+      body {
+        background: transparent;
+        font-size: 8.6pt;
+      }
+      .page {
+        width: 100%;
+        min-height: auto;
+        margin: 0;
+        padding: 0;
+        box-shadow: none;
+      }
+      a {
+        text-decoration: none;
+        color: inherit;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page">
+    <header>
+      <h1>YOUR FULL NAME</h1>
+      <div class="subtitle">Primary Title / Specialization | Core Technologies</div>
+      <div class="contact-bar">
+        <span>City, Country (Remote &bull; Timezone / Overlap details)</span>
+        <span class="sep">&bull;</span>
+        <a href="mailto:your.email@example.com">your.email@example.com</a>
+        <span class="sep">&bull;</span>
+        <a href="tel:+15550000000">+1 (555) 000-0000</a>
+      </div>
+      <div class="contact-bar" style="margin-top: 2.5px;">
+        <a href="https://yourportfolio.dev" target="_blank">yourportfolio.dev</a>
+        <span class="sep">&bull;</span>
+        <a href="https://github.com/yourusername" target="_blank">github.com/yourusername</a>
+        <span class="sep">&bull;</span>
+        <a href="https://linkedin.com/in/yourprofile" target="_blank">linkedin.com/in/yourprofile</a>
+      </div>
+    </header>
+
+    <section>
+      <h2>Professional Summary</h2>
+      <p class="summary">
+        [Concise 3-4 sentence professional summary highlighting your total years of experience, core technical stack, key domain strengths, engineering philosophy, and communication/language proficiency.]
+      </p>
+    </section>
+
+    <section>
+      <h2>Technical Skills</h2>
+      <div class="skills-grid">
+        <div class="skill-label">Languages:</div>
+        <div class="skill-value">[e.g., Python, TypeScript, Go, SQL, Rust]</div>
+
+        <div class="skill-label">Frontend &amp; UI:</div>
+        <div class="skill-value">[e.g., React, Next.js, Tailwind CSS, TanStack Query, Zustand]</div>
+
+        <div class="skill-label">Backend &amp; APIs:</div>
+        <div class="skill-value">[e.g., FastAPI, Node.js, RESTful APIs, PostgreSQL, Redis]</div>
+
+        <div class="skill-label">Cloud &amp; DevOps:</div>
+        <div class="skill-value">[e.g., AWS, Docker, GitHub Actions, Linux, CI/CD]</div>
+
+        <div class="skill-label">Data &amp; AI Systems:</div>
+        <div class="skill-value">[e.g., ETL Pipelines, DuckDB, Pandas, LLM Tooling &amp; Evaluation]</div>
+
+        <div class="skill-label">Security &amp; Quality:</div>
+        <div class="skill-value">[e.g., mTLS, Pytest, Playwright, Vitest]</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Work Experience</h2>
+
+      <div class="entry">
+        <div class="entry-header">
+          <div class="entry-title">[COMPANY NAME] <span class="role">| [Job Title / Role]</span></div>
+          <div class="entry-meta">[Month Year] – [Month Year or Present] &bull; Remote</div>
+        </div>
+        <ul class="bullet-list">
+          <li><strong>[Key Project / Initiative]:</strong> [Describe accomplishments and quantifiable impact using Google's X-Y-Z formula: Accomplished [X] as measured by [Y], by doing [Z].]</li>
+          <li><strong>[Key Project / Initiative]:</strong> [Engineered / Architected / Designed ...]</li>
+          <li><strong>[Platform Integration / Optimization]:</strong> [Built / Automated / Scaled ...]</li>
+        </ul>
+      </div>
+
+      <div class="entry">
+        <div class="entry-header">
+          <div class="entry-title">[PREVIOUS COMPANY] <span class="role">| [Job Title / Role]</span></div>
+          <div class="entry-meta">[Month Year] – [Month Year] &bull; Remote</div>
+        </div>
+        <ul class="bullet-list">
+          <li><strong>[Key Project / Initiative]:</strong> [Implemented / Designed / Built ...]</li>
+          <li><strong>[Quality &amp; Delivery]:</strong> [Automated test suites / Improved CI/CD pipelines ...]</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>Selected Software Projects</h2>
+
+      <div class="entry">
+        <div class="entry-header">
+          <div class="entry-title">[Project Name] — [One-line Tagline] <span class="role">| Independent</span></div>
+          <div class="entry-meta">[Month Year] – Present &bull; Independent</div>
+        </div>
+        <ul class="bullet-list">
+          <li>[Developed / Architected ... describing technical architecture and tools.]</li>
+          <li>[Highlight unique technical challenges, benchmarks, or algorithms implemented.]</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>Education &amp; Credentials</h2>
+      <div class="edu-entry">
+        <div class="edu-main"><strong>[Institution Name]</strong> — [Degree or Program Name]</div>
+        <div class="edu-dates">[Years]</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Languages</h2>
+      <div class="lang-line">
+        <strong>[Language 1]:</strong> Native / Bilingual &nbsp;&bull;&nbsp; <strong>[Language 2]:</strong> Full Professional Proficiency
+      </div>
+    </section>
+  </div>
+
+</body>
+</html>

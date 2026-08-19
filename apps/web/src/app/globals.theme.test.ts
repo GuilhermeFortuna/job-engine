@@ -14,11 +14,12 @@ describe("dark theme tokens", () => {
     const darkBlock = globalsCss.slice(globalsCss.lastIndexOf(".dark {"));
 
     expect(darkBlock).toContain("color-scheme: dark");
-    expect(darkBlock).toMatch(/--color-bg:\s*#111111/);
-    expect(darkBlock).toMatch(/--color-card-bg:\s*#1a1a1a/);
+    expect(darkBlock).toMatch(/--color-bg:\s*#0b0b0b/);
+    expect(darkBlock).toMatch(/--color-card-bg:\s*#171717/);
     expect(darkBlock).toMatch(/--color-fg:\s*#f4f4f5/);
-    expect(darkBlock).toMatch(/--color-muted:\s*#a3a3a3/);
-    expect(darkBlock).toMatch(/--color-primary-fg:\s*#111111/);
+    expect(darkBlock).toMatch(/--color-muted:\s*#a3a8b3/);
+    expect(darkBlock).toMatch(/--color-primary-fg:\s*#0b0b0b/);
+    expect(darkBlock).toContain("--shadow-elevated:");
     expect(darkBlock).toContain("--background: var(--color-bg)");
     expect(darkBlock).toContain("--foreground: var(--color-fg)");
     expect(darkBlock).toContain("--card: var(--color-card-bg)");

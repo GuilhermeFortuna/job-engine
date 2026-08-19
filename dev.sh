@@ -13,6 +13,17 @@ echo "=========================================="
 if [ ! -f .env ]; then
   echo "📝 .env file not found. Creating from .env.example..."
   cp .env.example .env
+
+  # The API refuses to start with a runner secret under 32 characters, and the
+  # shipped placeholder must never become a real deployment secret. Mint one.
+  if command -v openssl >/dev/null 2>&1; then
+    GENERATED_RUNNER_SECRET="$(openssl rand -hex 32)"
+  else
+    GENERATED_RUNNER_SECRET="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  fi
+  sed -i.bak "s|^JOB_ENGINE_RUNNER_SECRET=.*|JOB_ENGINE_RUNNER_SECRET=${GENERATED_RUNNER_SECRET}|" .env
+  rm -f .env.bak
+  echo "🔐 Generated a unique JOB_ENGINE_RUNNER_SECRET in .env."
 fi
 
 # Export environment variables for the current session

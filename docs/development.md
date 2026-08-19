@@ -53,6 +53,16 @@ Copy the example file to a local, untracked `.env`:
 cp .env.example .env
 ```
 
+Then replace the `JOB_ENGINE_RUNNER_SECRET` placeholder with a real value. The
+API refuses to start with fewer than 32 characters:
+
+```bash
+openssl rand -hex 32
+```
+
+`./dev.sh` does this for you when it creates `.env` on first run. The shipped
+placeholder is deliberately not a usable secret — never deploy it.
+
 Do not commit `.env`. The example contains only local development placeholders:
 
 | Key | Example value |
@@ -170,5 +180,101 @@ corepack pnpm --filter @job-engine/web run build
 - `dev` serves the App Router application.
 - `check` runs `next typegen`, strict `tsc --noEmit`, and ESLint. No separate formatter is installed.
 - `test` runs Vitest unit and component tests (`vitest run`).
-- `test:e2e` runs Playwright end-to-end and Axe accessibility tests (`playwright test`).
+- `test:e2e` runs Playwright end-to-end and Axe accessibility tests. Scope it to
+  one spec by passing the file name, e.g.
+  `corepack pnpm --filter @job-engine/web run test:e2e -- jobs.spec.ts`.
+  Playwright always starts fresh `:3005` / `:8088` servers; a leftover listener
+  from an earlier run would otherwise serve a stale bundle and produce
+  misleading "element not found" failures. Set `E2E_REUSE_SERVER=1` to reuse a
+  running server only when you know it matches your working tree.
 - `build` produces the production Next.js build.
+
+## Desktop (`apps/desktop`)
+
+`JOB_ENGINE_WEB_ORIGIN` is the trusted local web origin (defaults to `http://127.0.0.1:3000`). It must be a loopback address.
+`JOB_ENGINE_API_BASE_URL` is the local backend API origin (defaults to `http://127.0.0.1:8000`).
+`JOB_ENGINE_DESKTOP_USER_DATA_DIR` optionally overrides the persistent Electron profile directory outside the repository.
+
+Workspace commands:
+
+```bash
+corepack pnpm --filter @job-engine/desktop run dev
+corepack pnpm --filter @job-engine/desktop run check
+corepack pnpm --filter @job-engine/desktop run test
+corepack pnpm --filter @job-engine/desktop run test:fixtures
+corepack pnpm --filter @job-engine/desktop run build
+```
+
+- `dev` compiles TypeScript and launches the Electron application shell.
+- `check` runs strict `tsc --noEmit` on the desktop package.
+- `test` runs Vitest unit tests for main process logic, navigation policy, IPC validation, and bounds clipping.
+- `test` runs Vitest unit tests for main-process logic, the browser-neutral form
+  layer (under jsdom), and the assisted runtime.
+- `test:fixtures` runs the Electron fixture suites: the embedded browser
+  lifecycle, the generic assisted-apply matrix, and the mandatory real-backend
+  lifecycle. Pass a filter to narrow it, for example
+  `run test:fixtures -- generic`.
+
+The fixture suites need PostgreSQL running, because the real-backend lifecycle
+fixture creates a throwaway database, migrates it, boots the API, and drops the
+database afterwards:
+
+```bash
+docker compose up -d postgres
+```
+
+That fixture never skips. If PostgreSQL is unreachable it fails, because it is
+the acceptance evidence for the assisted-apply runtime. No external model
+provider, employer site, or personal data is involved: answers come from the
+deterministic provider and every form is synthetic and served from loopback.
+- `build` compiles the main and preload TypeScript sources into `dist/`.
+
+## Local CI
+
+The GitHub Actions workflow (`.github/workflows/ci.yml`) runs the same check
+scripts as local pre-push validation. Those scripts live under `scripts/`.
+
+```bash
+# Normal pre-push validation (preferred)
+./scripts/ci.sh
+# equivalent:
+corepack pnpm run ci
+corepack pnpm run ci:local
+
+# Optional full GitHub Actions emulation
+act workflow_dispatch -W .github/workflows/ci.yml
+```
+
+### Prerequisites
+
+- Docker with Compose v2+ (local CI starts PostgreSQL from `compose.ci.yml`)
+- `uv` and CPython 3.13.14 (`.python-version`)
+- Node.js 24.18.0 (`.node-version`) and pnpm 10.34.5
+- Playwright Chromium: local runs execute `playwright install chromium` only.
+  GitHub Actions additionally uses `--with-deps` because `GITHUB_ACTIONS=true`.
+- `act` only if you emulate the workflow in Docker
+
+`./scripts/ci.sh` fails if `127.0.0.1:5432` is already bound so it does not
+mutate the persistent development volume from `compose.yaml`. Stop the
+development database first (`docker compose down`). The CI database uses
+`postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine` and is removed
+with `docker compose -f compose.ci.yml -p job-engine-ci down -v` unless
+`CI_KEEP_POSTGRES=1` is set.
+
+Individual stages can be run the same way GitHub Actions does, after the
+matching tools (and, for backend tests, PostgreSQL) are available:
+
+```bash
+./scripts/ci-backend-check.sh
+./scripts/ci-backend-test.sh
+./scripts/ci-frontend-check.sh
+./scripts/ci-frontend-test.sh
+./scripts/ci-frontend-e2e.sh
+```
+
+### `act` limitations
+
+`.actrc` maps `ubuntu-latest` to `catthehacker/ubuntu:act-latest`. Emulation is
+a secondary check. Nested PostgreSQL service containers, `actions/upload-artifact`,
+and GitHub action caches often fail or behave differently than hosted runners.
+Do not weaken `.github/workflows/ci.yml` to paper over those emulator gaps.

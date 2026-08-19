@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen } from "@/test/render";
 import { JobDetails } from "./JobDetails";
 import type { JobDetail } from "../types";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
+afterEach(() => {
+  delete window.jobEngineDesktop;
+});
 
 const sampleJob: JobDetail = {
   id: "job-1234",
@@ -166,6 +174,24 @@ describe("JobDetails", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(/application link unavailable/i),
+    ).toBeInTheDocument();
+  });
+
+  it("offers Apply in Job Engine for https jobs when the desktop bridge is present", async () => {
+    window.jobEngineDesktop = {
+      getCapabilities: async () => ({ embeddedBrowser: true, platform: "linux" }),
+      openApplication: async () => ({ success: true }),
+      setApplicationBounds: async () => ({ success: true }),
+      closeApplication: async () => ({ success: true }),
+      goBack: async () => ({ success: true }),
+      goForward: async () => ({ success: true }),
+      reload: async () => ({ success: true }),
+      subscribeBrowserState: () => () => {},
+    };
+
+    renderWithProviders(<JobDetails job={sampleJob} />);
+    expect(
+      await screen.findByRole("button", { name: /apply in job engine/i }),
     ).toBeInTheDocument();
   });
 });

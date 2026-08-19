@@ -28,6 +28,7 @@ coverage/
 *.lcov
 test-results/
 playwright-report/
+.mcp.json
 
 # Build output
 dist/
@@ -36,6 +37,10 @@ out/
 .next/
 .turbo/
 *.tsbuildinfo
+
+# Desktop & automation runtime data
+.job-engine/
+apps/desktop/dist/
 
 # IDE and OS noise
 .idea/
@@ -46,3 +51,9 @@ out/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# User resume & personal profile files (local only)
+docs/resume/*
+!docs/resume/README.md
+!docs/resume/*.template.*
+!docs/resume/*.example.*

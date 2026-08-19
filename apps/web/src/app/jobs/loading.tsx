@@ -1,27 +1,26 @@
+import { Skeleton } from "@/components/ui/skeleton";
+
 export default function JobsLoading() {
   return (
     <div
       role="status"
       aria-busy="true"
       aria-live="polite"
-      className="jobs-loading-container"
+      className="flex flex-col gap-6"
     >
       <span className="sr-only">Loading job opportunities...</span>
-      <div className="jobs-loading-header">
-        <div className="skeleton skeleton-title" />
-        <div className="skeleton skeleton-subtitle" />
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-96 max-w-full" />
       </div>
 
-      <div className="jobs-loading-layout">
-        <div className="jobs-loading-sidebar">
-          <div className="skeleton skeleton-filter-box" />
-        </div>
-
-        <div className="jobs-loading-results">
-          <div className="skeleton skeleton-status" />
-          <div className="skeleton skeleton-card" />
-          <div className="skeleton skeleton-card" />
-          <div className="skeleton skeleton-card" />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[19rem_1fr] lg:gap-8">
+        <Skeleton className="h-[28rem] rounded-xl" />
+        <div className="flex flex-col gap-4">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-48 rounded-xl" />
+          <Skeleton className="h-48 rounded-xl" />
+          <Skeleton className="h-48 rounded-xl" />
         </div>
       </div>
     </div>

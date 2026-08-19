@@ -4,9 +4,15 @@ Job Engine is a monorepo. `CROSS-` orders own root-level concerns spanning backe
 
 | ID | Title | Status |
 | --- | --- | --- |
-| [CROSS-001](CROSS-001-repository-foundation.md) | Repository foundation | `REVIEW` |
-| [CROSS-002](CROSS-002-source-feasibility.md) | Source feasibility and selection | `REVIEW` |
-| [CROSS-003](CROSS-003-v1-integration-acceptance.md) | V1 integration and acceptance | `BLOCKED` |
-| [CROSS-004](CROSS-004-live-search-acceptance.md) | Live search integration and acceptance | `BLOCKED` |
+| [CROSS-001](CROSS-001-repository-foundation.md) | Repository foundation | `DONE` |
+| [CROSS-002](CROSS-002-source-feasibility.md) | Source feasibility and selection | `DONE` |
+| [CROSS-003](CROSS-003-v1-integration-acceptance.md) | V1 integration and acceptance | `DONE` |
+| [CROSS-004](CROSS-004-live-search-acceptance.md) | Live search integration and acceptance | `DONE` |
+| [CROSS-005](CROSS-005-high-automation-feasibility-spec.md) | High-automation feasibility and initial V2 specification | `DONE` |
+| [CROSS-006](CROSS-006-browser-automation-runner.md) | Electron embedded-browser foundation | `READY` |
+| [CROSS-007](CROSS-007-first-platform-automation.md) | Greenhouse embedded assisted apply | `BLOCKED` |
+| [CROSS-008](CROSS-008-second-platform-automation.md) | Lever embedded assisted apply | `BLOCKED` |
+| [CROSS-009](CROSS-009-automated-application-acceptance.md) | Embedded assisted-apply acceptance | `BLOCKED` |
+| [CROSS-010](CROSS-010-generic-form-assistance.md) | Generic embedded form assistance runtime | `BLOCKED` |
 
 The authoritative live status is the project-wide [Work Order Status](../STATUS.md).

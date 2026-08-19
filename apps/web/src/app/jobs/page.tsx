@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AnimatedShinyText } from "@/components/ui/animated-shiny-text";
 import {
   fetchCatalogFilters,
   fetchCatalogHealth,
@@ -11,9 +12,12 @@ import {
 import { ActiveFilters } from "@/features/jobs/components/ActiveFilters";
 import { CatalogHealthNotice } from "@/features/jobs/components/CatalogHealthNotice";
 import { JobResults } from "@/features/jobs/components/JobResults";
+import { JobKeywordSearch } from "@/features/jobs/components/JobKeywordSearch";
 import { JobSearchForm } from "@/features/jobs/components/JobSearchForm";
 import { Pagination } from "@/features/jobs/components/Pagination";
 import { SearchStatus } from "@/features/jobs/components/SearchStatus";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Search Jobs - Job Engine",
@@ -40,15 +44,24 @@ export default async function JobsPage(props: JobsPageProps) {
       <header className="jobs-page-header">
         <h1 className="jobs-page-heading">Software Engineering Jobs</h1>
         <p className="jobs-page-subheading">
-          Aggregated and verified remote opportunities from multiple catalog
-          sources.
+          <AnimatedShinyText className="mx-0 max-w-none text-muted-foreground dark:text-muted-foreground">
+            Aggregated and verified remote opportunities from multiple catalog
+            sources.
+          </AnimatedShinyText>
         </p>
       </header>
 
       <CatalogHealthNotice health={catalogHealth} />
 
+      <div className="jobs-keyword-search rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-elevated)]">
+        <JobKeywordSearch params={validatedParams} />
+      </div>
+
       <div className="jobs-page-layout">
-        <aside className="jobs-sidebar" aria-label="Search and Filter Controls">
+        <aside
+          className="jobs-sidebar rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-elevated)]"
+          aria-label="Filter Controls"
+        >
           <JobSearchForm
             params={validatedParams}
             catalogFilters={catalogFilters}

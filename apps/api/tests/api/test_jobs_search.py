@@ -4,7 +4,6 @@ from uuid import UUID
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from tests.factories import job_group_input, persist_job, source_posting_input
 
 from job_engine.domain.enums import (
     JobStatus,
@@ -13,6 +12,7 @@ from job_engine.domain.enums import (
     Seniority,
 )
 from job_engine.domain.jobs import Compensation, EligibleLocation, TechnologyTerm
+from tests.factories import job_group_input, persist_job, source_posting_input
 
 
 def _ids(payload: dict[str, object]) -> list[str]:

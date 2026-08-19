@@ -4,9 +4,9 @@
   "scripts": {
     "dev": "next dev",
     "start": "next start",
-    "check": "next typegen && tsc --noEmit && eslint .",
+    "check": "next typegen && tsc --noEmit && eslint . --max-warnings 0 --no-cache",
     "test": "vitest run",
-    "test:e2e": "playwright test",
+    "test:e2e": "node ./scripts/run-e2e.mjs",
     "build": "next build"
   },
   "type": "module",
@@ -15,8 +15,10 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.31.0",
+    "motion": "^13.1.0",
     "next": "16.3.1",
     "next-themes": "^0.4.6",
+    "ogl": "^1.0.11",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "shadcn": "^4.18.0",

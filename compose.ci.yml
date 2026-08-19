@@ -1,0 +1,19 @@
+name: job-engine-ci
+
+services:
+  postgres:
+    image: postgres:17.11
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_DB: job_engine
+      POSTGRES_USER: job_engine
+      POSTGRES_PASSWORD: job_engine
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U job_engine -d job_engine"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s

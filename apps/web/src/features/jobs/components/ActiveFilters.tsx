@@ -219,26 +219,34 @@ export function ActiveFilters({
   }
 
   return (
-    <div className="active-filters-container" aria-label="Active filters">
-      <div className="active-filters-header">
-        <span className="active-filters-title">Active filters:</span>
+    <div
+      className="mb-4 rounded-lg border border-border bg-card p-3"
+      aria-label="Active filters"
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          Active filters:
+        </span>
         <button
           type="button"
           onClick={() => router.push("/jobs")}
-          className="btn-clear-all"
+          className="text-xs font-semibold text-muted-foreground underline hover:text-foreground"
         >
           Clear all
         </button>
       </div>
 
-      <ul className="active-filters-list">
+      <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
         {activeItems.map((item) => (
-          <li key={item.id} className="active-filter-chip">
-            <span className="chip-label">{item.label}</span>
+          <li
+            key={item.id}
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-2 py-0.5 text-[0.8125rem] text-secondary-foreground"
+          >
+            <span>{item.label}</span>
             <button
               type="button"
               onClick={item.onRemove}
-              className="chip-remove-btn"
+              className="px-0.5 text-base leading-none text-muted-foreground hover:text-foreground"
               aria-label={`Remove filter ${item.label}`}
             >
               ×

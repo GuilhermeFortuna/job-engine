@@ -2,6 +2,187 @@ import http from "node:http";
 
 const PORT = parseInt(process.env.MOCK_PORT || "8088", 10);
 let isDegradedGlobal = false;
+let liveSyncCooldownActive = false;
+let liveSyncDegradedSource = false;
+
+const WORKSPACE_RUN_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const EXISTING_RUN_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const WORKSPACE_EXCEPTION_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+let workspaceMode = "armed";
+let workspaceDuplicateOverride = false;
+let workspaceSequence = 1;
+
+function readJsonBody(req) {
+  return new Promise((resolve) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(body || "{}"));
+      } catch {
+        resolve({});
+      }
+    });
+  });
+}
+
+function workspaceFieldReports(status = "REVIEW_REQUIRED") {
+  return [
+    {
+      field_fingerprint: "fp_hybrid_work",
+      label: "Are you willing to work in hybrid mode?",
+      control_type: "text",
+      required: true,
+      status,
+      reason_code: status === "REVIEW_REQUIRED" ? "no_applicable_answer" : "owner_confirmed",
+      question_intent: "location_preference",
+      options: [],
+      min_length: 1,
+      max_length: 200,
+      pattern: null,
+      allow_save_to_answer_bank: true,
+    },
+  ];
+}
+
+function workspaceRunDetail(runId = WORKSPACE_RUN_ID) {
+  const now = "2026-08-19T00:00:00Z";
+  const base = {
+    id: runId,
+    job_group_id: sampleJobDetail.id,
+    canonical_application_url: sampleJobDetail.primary_application_url,
+    application_url: sampleJobDetail.primary_application_url,
+    platform_adapter_id: "greenhouse",
+    resume_asset_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    resume_sha256: "cc".repeat(32),
+    automation_mode: "semi_auto_pause_before_submit",
+    status: "queued",
+    current_step: "Run queued",
+    current_checkpoint: null,
+    terminal_reason: null,
+    receipt_summary: null,
+    policy_snapshot: { resume_id: "res_primary_pdf" },
+    created_at: now,
+    updated_at: now,
+    started_at: now,
+    completed_at: null,
+    events: [],
+    exceptions: [],
+    evidence: [],
+  };
+
+  if (workspaceMode === "progress") {
+    return { ...base, status: "running", current_step: "Filling profile", current_checkpoint: "form_discovered" };
+  }
+  if (workspaceMode === "review") {
+    return {
+      ...base,
+      status: "needs_input",
+      current_step: "Waiting for owner answers",
+      current_checkpoint: "questions_answered",
+      exceptions: [
+        {
+          id: WORKSPACE_EXCEPTION_ID,
+          run_id: runId,
+          exception_type: "unresolved_question",
+          status: "pending",
+          context_payload: { raw_dom: "should-not-render" },
+          resolution_payload: { answer_text: "secret" },
+          field_reports: workspaceFieldReports("REVIEW_REQUIRED"),
+          created_at: now,
+          resolved_at: null,
+        },
+      ],
+    };
+  }
+  if (workspaceMode === "auth") {
+    return {
+      ...base,
+      status: "paused_auth",
+      current_step: "CAPTCHA in embedded page",
+      current_checkpoint: "form_discovered",
+      exceptions: [
+        {
+          id: "ex-captcha",
+          run_id: runId,
+          exception_type: "captcha_required",
+          status: "pending",
+          context_payload: {},
+          field_reports: [],
+          created_at: now,
+          resolved_at: null,
+        },
+      ],
+    };
+  }
+  if (workspaceMode === "submitted") {
+    return {
+      ...base,
+      status: "submitted",
+      current_step: "Submitted",
+      current_checkpoint: "submitted",
+      completed_at: now,
+      receipt_summary: {
+        platform_adapter_id: "greenhouse",
+        final_url: "https://boards.greenhouse.io/thanks",
+        platform_receipt_id: "gh-1",
+        confirmation_signal: "thank_you_page",
+        capture_timestamp: now,
+        artifact_hash: "aa".repeat(32),
+        summary_notes: null,
+      },
+    };
+  }
+  if (workspaceMode === "unknown") {
+    return {
+      ...base,
+      status: "submission_unknown",
+      current_step: "Submission unknown",
+      current_checkpoint: "submitting",
+      evidence: [
+        {
+          id: "ev-1",
+          run_id: runId,
+          attempt: 1,
+          evidence_type: "receipt",
+          relative_path: "runs/secret.log",
+          sha256: "bb".repeat(32),
+          file_size_bytes: 2048,
+          captured_at: now,
+          metadata_payload: { cookie: "nope" },
+        },
+      ],
+    };
+  }
+  if (workspaceMode === "cancelled") {
+    return {
+      ...base,
+      status: "cancelled",
+      current_step: "Cancelled",
+      terminal_reason: "Owner cancelled from workspace",
+      completed_at: now,
+    };
+  }
+  return {
+    ...base,
+    status: "needs_input",
+    current_step: "Ready to submit",
+    current_checkpoint: "submit_armed",
+    exceptions: [
+      {
+        id: "ex-armed",
+        run_id: runId,
+        exception_type: "semi_auto_armed",
+        status: "pending",
+        field_reports: workspaceFieldReports("AUTO_FILL"),
+        created_at: now,
+        resolved_at: null,
+      },
+    ],
+  };
+}
 
 export const mockFilters = {
   role_families: [
@@ -283,6 +464,13 @@ const server = http.createServer((req, res) => {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
 
   if (url.pathname === "/api/v1/test/set-health" && req.method === "POST") {
     let body = "";
@@ -297,6 +485,184 @@ const server = http.createServer((req, res) => {
       res.writeHead(200);
       res.end(JSON.stringify({ ok: true, degraded: isDegradedGlobal }));
     });
+    return;
+  }
+
+  if (url.pathname === "/api/v1/test/set-live-sync-mode" && req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      try {
+        const parsed = JSON.parse(body || "{}");
+        if (typeof parsed.cooldown === "boolean") {
+          liveSyncCooldownActive = parsed.cooldown;
+        }
+        if (typeof parsed.degraded === "boolean") {
+          liveSyncDegradedSource = parsed.degraded;
+        }
+      } catch {}
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          ok: true,
+          cooldown: liveSyncCooldownActive,
+          degraded: liveSyncDegradedSource,
+        }),
+      );
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/v1/test/set-workspace-mode" && req.method === "POST") {
+    void readJsonBody(req).then((parsed) => {
+      if (typeof parsed.mode === "string") {
+        workspaceMode = parsed.mode;
+      }
+      if (parsed.resetOverride) {
+        workspaceDuplicateOverride = false;
+      }
+      workspaceSequence = 1;
+      res.writeHead(200);
+      res.end(JSON.stringify({ ok: true, mode: workspaceMode }));
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/v1/catalog/live-sync") {
+    if (liveSyncCooldownActive || url.searchParams.get("cooldown") === "true") {
+      res.writeHead(429, {
+        "Content-Type": "application/json",
+        "Retry-After": "15",
+      });
+      res.end(
+        JSON.stringify({
+          detail: "Live sync cooldown active. Please wait 15 seconds before syncing again.",
+        }),
+      );
+      return;
+    }
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+
+    const isDegraded = liveSyncDegradedSource || url.searchParams.get("degraded") === "true";
+
+    const sendEvent = (event, data) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    // 1. sync_started
+    sendEvent("sync_started", {
+      sources: ["himalayas", "jobicy", "remoteok"],
+      started_at: new Date().toISOString(),
+    });
+
+    // 2. Source progress events
+    setTimeout(() => {
+      sendEvent("source_progress", {
+        source_id: "himalayas",
+        stage: "fetching",
+        fetched_count: 50,
+        accepted_count: 48,
+        rejected_count: 2,
+      });
+      sendEvent("source_progress", {
+        source_id: "jobicy",
+        stage: "fetching",
+        fetched_count: 30,
+        accepted_count: 30,
+        rejected_count: 0,
+      });
+      sendEvent("source_progress", {
+        source_id: "remoteok",
+        stage: "fetching",
+        fetched_count: 40,
+        accepted_count: 39,
+        rejected_count: 1,
+      });
+    }, 50);
+
+    setTimeout(() => {
+      sendEvent("source_progress", {
+        source_id: "himalayas",
+        stage: "normalizing",
+        fetched_count: 50,
+        accepted_count: 48,
+        rejected_count: 2,
+      });
+      sendEvent("source_progress", {
+        source_id: "remoteok",
+        stage: "normalizing",
+        fetched_count: 40,
+        accepted_count: 39,
+        rejected_count: 1,
+      });
+    }, 100);
+
+    // 3. Source completed events
+    setTimeout(() => {
+      sendEvent("source_completed", {
+        source_id: "himalayas",
+        status: "success",
+        inserted_count: 5,
+        updated_count: 43,
+        marked_stale_count: 0,
+        error_summaries: [],
+      });
+
+      if (isDegraded) {
+        sendEvent("source_completed", {
+          source_id: "jobicy",
+          status: "failure",
+          inserted_count: 0,
+          updated_count: 0,
+          marked_stale_count: 0,
+          error_summaries: [
+            {
+              code: "upstream_timeout",
+              message: "Jobicy API connection timed out",
+            },
+          ],
+        });
+      } else {
+        sendEvent("source_completed", {
+          source_id: "jobicy",
+          status: "success",
+          inserted_count: 3,
+          updated_count: 27,
+          marked_stale_count: 0,
+          error_summaries: [],
+        });
+      }
+
+      sendEvent("source_completed", {
+        source_id: "remoteok",
+        status: "success",
+        inserted_count: 4,
+        updated_count: 35,
+        marked_stale_count: 1,
+        error_summaries: [],
+      });
+    }, 150);
+
+    // 4. sync_completed
+    setTimeout(() => {
+      sendEvent("sync_completed", {
+        status: isDegraded ? "partial_success" : "success",
+        total_inserted: isDegraded ? 9 : 12,
+        total_updated: isDegraded ? 78 : 105,
+        total_stale: 1,
+        completed_at: new Date().toISOString(),
+      });
+      res.end();
+    }, 200);
+
     return;
   }
 
@@ -411,6 +777,133 @@ const server = http.createServer((req, res) => {
     res.writeHead(404);
     res.end(JSON.stringify({ detail: "Job group not found" }));
     return;
+  }
+
+  if (url.pathname === "/api/v1/resumes") {
+    res.writeHead(200);
+    res.end(
+      JSON.stringify({
+        items: [
+          {
+            id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            resume_id: "res_primary_pdf",
+            label: "Primary resume",
+            source_markdown_path: "resume.md",
+            upload_pdf_path: "resume.pdf",
+            sha256: "cc".repeat(32),
+            language: "en",
+            is_default: true,
+            file_size_bytes: 1024,
+            version: 1,
+          },
+        ],
+      }),
+    );
+    return;
+  }
+
+  if (url.pathname === "/api/v1/application-runs" && req.method === "POST") {
+    void readJsonBody(req).then((parsed) => {
+      if (workspaceMode === "conflict" && !workspaceDuplicateOverride) {
+        res.writeHead(409);
+        res.end(
+          JSON.stringify({
+            created_runs: [],
+            conflicts: [
+              {
+                job_group_id: sampleJobDetail.id,
+                canonical_application_url: sampleJobDetail.primary_application_url,
+                existing_run_id: EXISTING_RUN_ID,
+                existing_status: "queued",
+                message: "An active application run already exists for this job.",
+              },
+            ],
+          }),
+        );
+        return;
+      }
+      workspaceMode = workspaceMode === "conflict" ? "armed" : workspaceMode;
+      res.writeHead(201);
+      res.end(
+        JSON.stringify({
+          created_runs: [workspaceRunDetail(WORKSPACE_RUN_ID)],
+          conflicts: [],
+        }),
+      );
+      void parsed;
+    });
+    return;
+  }
+
+  const runMatch = url.pathname.match(
+    /^\/api\/v1\/application-runs\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?$/,
+  );
+  if (runMatch) {
+    const runId = runMatch[1];
+    const action = runMatch[2];
+    const nested = runMatch[3];
+
+    if (action === "events" && nested === "stream") {
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      });
+      const eventType = workspaceMode === "progress" ? "step_progress" : "status_changed";
+      workspaceSequence += 1;
+      res.write(
+        `id: ${runId}:${workspaceSequence}\nevent: ${eventType}\ndata: ${JSON.stringify({
+          id: `evt-${workspaceSequence}`,
+          run_id: runId,
+          attempt: 1,
+          sequence_num: workspaceSequence,
+          event_type: eventType,
+          created_at: new Date().toISOString(),
+        })}\n\n`,
+      );
+      return;
+    }
+
+    if (action === "resolve-answers" && req.method === "POST") {
+      void readJsonBody(req).then(() => {
+        workspaceMode = "armed";
+        res.writeHead(200);
+        res.end(JSON.stringify(workspaceRunDetail(runId)));
+      });
+      return;
+    }
+    if (action === "resume" && req.method === "POST") {
+      workspaceMode = "armed";
+      res.writeHead(200);
+      res.end(JSON.stringify(workspaceRunDetail(runId)));
+      return;
+    }
+    if (action === "release-submit" && req.method === "POST") {
+      workspaceMode = "submitted";
+      res.writeHead(200);
+      res.end(JSON.stringify(workspaceRunDetail(runId)));
+      return;
+    }
+    if (action === "cancel" && req.method === "POST") {
+      workspaceMode = "cancelled";
+      res.writeHead(200);
+      res.end(JSON.stringify(workspaceRunDetail(runId)));
+      return;
+    }
+    if (action === "duplicate-override" && req.method === "POST") {
+      void readJsonBody(req).then(() => {
+        workspaceDuplicateOverride = true;
+        res.writeHead(200);
+        res.end(JSON.stringify(workspaceRunDetail(runId)));
+      });
+      return;
+    }
+    if (!action) {
+      res.writeHead(200);
+      res.end(JSON.stringify(workspaceRunDetail(runId)));
+      return;
+    }
   }
 
   res.writeHead(404);
