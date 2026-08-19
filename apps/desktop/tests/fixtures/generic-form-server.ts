@@ -145,6 +145,27 @@ const PAGES: Record<string, string> = {
     </form>
   `,
 
+  /** The page the mandatory real-backend lifecycle fixture drives. */
+  "/generic/lifecycle": `
+    <h1>Apply</h1>
+    <form>
+      <label for="name">Full name</label><input id="name" required />
+      <label for="email">Email address</label><input id="email" type="email" required />
+      <label for="resume">Resume</label><input id="resume" type="file" required />
+      <span id="chosen"></span>
+      <button type="button" id="submit">Submit application</button>
+    </form>
+    <script>
+      document.getElementById("resume").addEventListener("change", function (e) {
+        var f = e.target.files[0];
+        document.getElementById("chosen").textContent = f ? f.name : "";
+      });
+      document.getElementById("submit").addEventListener("click", function () {
+        document.body.innerHTML = "<h1>Application received</h1>";
+      });
+    </script>
+  `,
+
   "/generic/ambiguous-submit": `
     <h1>Apply</h1>
     <form>
