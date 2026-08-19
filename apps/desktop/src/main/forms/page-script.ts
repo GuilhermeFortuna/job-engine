@@ -32,7 +32,12 @@ export type PageScriptArgs =
         checked: boolean | null;
       }[];
     }
-  | { op: "activate"; kind: "advance" | "submit"; controlLabel: string };
+  | { op: "activate"; kind: "advance" | "submit"; controlLabel: string }
+  /**
+   * Return the file control itself, by reference, so the upload path can hand
+   * CDP an object id. The page script is never given a filesystem path.
+   */
+  | { op: "locateFileInput"; semanticKey: string };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function pageRuntimeScript(args: PageScriptArgs): unknown {
@@ -775,6 +780,19 @@ export function pageRuntimeScript(args: PageScriptArgs): unknown {
     }
 
     return { op: "fill", results: results };
+  }
+
+  if (args.op === "locateFileInput") {
+    const built = buildFields(computePageId());
+    const candidate = built.index[args.semanticKey];
+    if (!candidate || candidate.controlType !== "file") {
+      return null;
+    }
+    const input = candidate.element as HTMLInputElement;
+    if (input.disabled) {
+      return null;
+    }
+    return input;
   }
 
   // args.op === "activate"

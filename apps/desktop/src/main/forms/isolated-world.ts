@@ -166,6 +166,54 @@ export class IsolatedWorldSession {
     return response?.result?.value;
   }
 
+  /**
+   * Run the script and keep the result as a remote object reference.
+   *
+   * Used only to hand CDP a file control's object id: `DOM.setFileInputFiles`
+   * needs a node, and resolving one this way avoids inventing a selector.
+   */
+  async callForObjectId(args: PageScriptArgs): Promise<string | null> {
+    if (this.disposed) {
+      throw new IsolatedWorldError("Session already disposed");
+    }
+    const context = await this.ensureWorld();
+    const target = context.startsWith("#")
+      ? { executionContextId: Number(context.slice(1)) }
+      : { uniqueContextId: context };
+
+    const response = await this.target.sendCommand("Runtime.callFunctionOn", {
+      functionDeclaration: SCRIPT_SOURCE,
+      arguments: [{ value: args }],
+      returnByValue: false,
+      awaitPromise: true,
+      userGesture: false,
+      ...target,
+    });
+
+    if (response?.exceptionDetails) {
+      throw new IsolatedWorldError("Page script failed while locating a node");
+    }
+    const objectId = response?.result?.objectId;
+    return typeof objectId === "string" ? objectId : null;
+  }
+
+  /** Release a remote object reference obtained from `callForObjectId`. */
+  async releaseObject(objectId: string): Promise<void> {
+    try {
+      await this.target.sendCommand("Runtime.releaseObject", { objectId });
+    } catch {
+      // The context may already be gone; releasing is best effort.
+    }
+  }
+
+  /** Send a raw protocol command on this session's debugger. */
+  async send(
+    method: string,
+    params?: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.target.sendCommand(method, params);
+  }
+
   /** Force the world to be rebuilt on the next call. */
   invalidate(): void {
     this.contextId = null;
