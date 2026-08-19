@@ -172,3 +172,25 @@ corepack pnpm --filter @job-engine/web run build
 - `test` runs Vitest unit and component tests (`vitest run`).
 - `test:e2e` runs Playwright end-to-end and Axe accessibility tests (`playwright test`).
 - `build` produces the production Next.js build.
+
+## Desktop (`apps/desktop`)
+
+`JOB_ENGINE_WEB_ORIGIN` is the trusted local web origin (defaults to `http://127.0.0.1:3000`). It must be a loopback address.
+`JOB_ENGINE_API_BASE_URL` is the local backend API origin (defaults to `http://127.0.0.1:8000`).
+`JOB_ENGINE_DESKTOP_USER_DATA_DIR` optionally overrides the persistent Electron profile directory outside the repository.
+
+Workspace commands:
+
+```bash
+corepack pnpm --filter @job-engine/desktop run dev
+corepack pnpm --filter @job-engine/desktop run check
+corepack pnpm --filter @job-engine/desktop run test
+corepack pnpm --filter @job-engine/desktop run test:fixtures
+corepack pnpm --filter @job-engine/desktop run build
+```
+
+- `dev` compiles TypeScript and launches the Electron application shell.
+- `check` runs strict `tsc --noEmit` on the desktop package.
+- `test` runs Vitest unit tests for main process logic, navigation policy, IPC validation, and bounds clipping.
+- `test:fixtures` runs synthetic local HTTPS test fixtures validating embedded browser sessions, popups/downloads denial, and hostile isolation.
+- `build` compiles the main and preload TypeScript sources into `dist/`.

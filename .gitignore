@@ -37,6 +37,10 @@ out/
 .turbo/
 *.tsbuildinfo
 
+# Desktop & automation runtime data
+.job-engine/
+apps/desktop/dist/
+
 # IDE and OS noise
 .idea/
 .vscode/
