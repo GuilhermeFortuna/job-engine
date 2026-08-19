@@ -28,6 +28,7 @@ coverage/
 *.lcov
 test-results/
 playwright-report/
+.mcp.json
 
 # Build output
 dist/
