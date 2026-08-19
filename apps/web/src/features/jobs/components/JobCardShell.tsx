@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore, type ReactNode } from "react";
 
+import { GlareHover } from "@/components/ui/glare-hover";
 import { MagicCard } from "@/components/ui/magic-card";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +39,12 @@ function StaticCard({
   className?: string;
 }) {
   return (
-    <div className={cn("rounded-xl bg-card ring-1 ring-foreground/10", className)}>
+    <div
+      className={cn(
+        "rounded-xl border border-border bg-card shadow-[var(--shadow-elevated)]",
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -67,14 +73,31 @@ export function JobCardShell({
   }
 
   return (
-    <MagicCard
-      className={cn("rounded-xl", className)}
-      gradientFrom="#3D8BFF"
-      gradientTo="#7C5CBF"
-      gradientColor="rgba(61, 139, 255, 0.16)"
-      gradientOpacity={0.5}
+    <div
+      className={cn(
+        "rounded-xl shadow-[var(--shadow-elevated)]",
+        className,
+      )}
     >
-      {children}
-    </MagicCard>
+      <GlareHover
+        className="w-full max-w-none cursor-auto rounded-xl"
+        width="100%"
+        background="transparent"
+        color="#ffffff"
+        opacity={0.22}
+        playOnce
+        duration={600}
+      >
+        <MagicCard
+          className="w-full rounded-xl"
+          gradientFrom="#3D8BFF"
+          gradientTo="#7C5CBF"
+          gradientColor="rgba(61, 139, 255, 0.16)"
+          gradientOpacity={0.5}
+        >
+          {children}
+        </MagicCard>
+      </GlareHover>
+    </div>
   );
 }

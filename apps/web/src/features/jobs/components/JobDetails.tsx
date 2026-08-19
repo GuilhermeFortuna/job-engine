@@ -71,7 +71,7 @@ export function JobDetails({ job }: { job: JobDetail }) {
         </Link>
       </nav>
 
-      <header className="flex flex-col gap-5 rounded-xl bg-card p-6 ring-1 ring-foreground/10 md:flex-row md:items-start md:justify-between">
+      <header className="flex flex-col gap-5 rounded-xl border border-border bg-card p-6 shadow-[var(--shadow-elevated)] md:flex-row md:items-start md:justify-between">
         <div className="min-w-0 flex-1">
           <h1 id="job-details-title" className="m-0 mb-2 text-3xl font-bold tracking-tight">
             {job.title}

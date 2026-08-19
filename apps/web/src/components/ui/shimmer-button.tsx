@@ -18,11 +18,11 @@ export const ShimmerButton = React.forwardRef<
 >(
   (
     {
-      shimmerColor = "#ffffff",
+      shimmerColor = "color-mix(in srgb, var(--color-primary-fg) 55%, transparent)",
       shimmerSize = "0.05em",
       shimmerDuration = "3s",
       borderRadius = "100px",
-      background = "rgba(0, 0, 0, 1)",
+      background = "var(--color-primary)",
       className,
       children,
       ...props
@@ -42,7 +42,7 @@ export const ShimmerButton = React.forwardRef<
           } as CSSProperties
         }
         className={cn(
-          "group relative z-0 flex cursor-pointer items-center justify-center overflow-hidden [border-radius:var(--radius)] border border-white/10 px-6 py-3 whitespace-nowrap text-white [background:var(--bg)]",
+          "group relative z-0 flex cursor-pointer items-center justify-center overflow-hidden [border-radius:var(--radius)] border border-white/10 px-6 py-3 whitespace-nowrap text-[color:var(--color-primary-fg)]! [background:var(--bg)]",
           "transform-gpu transition-transform duration-300 ease-in-out active:translate-y-px",
           className
         )}
@@ -62,12 +62,12 @@ export const ShimmerButton = React.forwardRef<
             <div className="animate-spin-around absolute -inset-full w-auto [translate:0_0] rotate-0 [background:conic-gradient(from_calc(270deg-(var(--spread)*0.5)),transparent_0,var(--shimmer-color)_var(--spread),transparent_var(--spread))]" />
           </div>
         </div>
-        {children}
+        <span className="relative z-10">{children}</span>
 
         {/* Highlight */}
         <div
           className={cn(
-            "absolute inset-0 size-full",
+            "pointer-events-none absolute inset-0 -z-10 size-full",
 
             "rounded-2xl px-4 py-1.5 text-sm font-medium shadow-[inset_0_-8px_10px_#ffffff1f]",
 
@@ -106,11 +106,11 @@ export interface ShimmerAnchorProps extends ComponentPropsWithoutRef<"a"> {
 export const ShimmerAnchor = React.forwardRef<HTMLAnchorElement, ShimmerAnchorProps>(
   (
     {
-      shimmerColor = "#ffffff",
+      shimmerColor = "color-mix(in srgb, var(--color-primary-fg) 55%, transparent)",
       shimmerSize = "0.05em",
       shimmerDuration = "3s",
       borderRadius = "0.75rem",
-      background = "var(--primary)",
+      background = "var(--color-primary)",
       className,
       children,
       ...props
@@ -130,7 +130,7 @@ export const ShimmerAnchor = React.forwardRef<HTMLAnchorElement, ShimmerAnchorPr
           } as CSSProperties
         }
         className={cn(
-          "group relative z-0 inline-flex cursor-pointer items-center justify-center overflow-hidden [border-radius:var(--radius)] border border-white/10 px-4 py-2 text-sm font-semibold whitespace-nowrap text-primary-foreground [background:var(--bg)]",
+          "group relative z-0 inline-flex cursor-pointer items-center justify-center overflow-hidden [border-radius:var(--radius)] border border-white/10 px-4 py-2 text-sm font-semibold whitespace-nowrap text-[color:var(--color-primary-fg)]! [background:var(--bg)]",
           "transform-gpu transition-transform duration-300 ease-in-out active:translate-y-px",
           "motion-reduce:transition-none",
           className
@@ -148,10 +148,12 @@ export const ShimmerAnchor = React.forwardRef<HTMLAnchorElement, ShimmerAnchorPr
             <div className="animate-spin-around absolute -inset-full w-auto [translate:0_0] rotate-0 [background:conic-gradient(from_calc(270deg-(var(--spread)*0.5)),transparent_0,var(--shimmer-color)_var(--spread),transparent_var(--spread))]" />
           </div>
         </div>
-        {children}
+        <span className="relative z-10 inline-flex items-center gap-1">
+          {children}
+        </span>
         <div
           className={cn(
-            "absolute inset-0 size-full",
+            "pointer-events-none absolute inset-0 -z-10 size-full",
             "rounded-2xl px-4 py-1.5 text-sm font-medium shadow-[inset_0_-8px_10px_#ffffff1f]",
             "transform-gpu transition-all duration-300 ease-in-out",
             "group-hover:shadow-[inset_0_-6px_10px_#ffffff3f]",

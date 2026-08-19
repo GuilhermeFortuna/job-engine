@@ -61,9 +61,6 @@ describe("JobSearchForm component", () => {
       />,
     );
 
-    // 1. Keywords
-    expect(screen.getByLabelText("Keywords")).toBeInTheDocument();
-    // 2. Role Family
     expect(screen.getByText("Role Family")).toBeInTheDocument();
     // 3. Technologies
     expect(screen.getByText("Technologies")).toBeInTheDocument();
@@ -81,23 +78,6 @@ describe("JobSearchForm component", () => {
     expect(screen.getByLabelText("Posted Within")).toBeInTheDocument();
     // 10. Sort
     expect(screen.getByLabelText("Sort Order")).toBeInTheDocument();
-  });
-
-  it("submits keyword on form submission and resets page to 1", () => {
-    renderWithProviders(
-      <JobSearchForm
-        params={{ ...DEFAULT_SEARCH_PARAMS, page: 3 }}
-        catalogFilters={mockCatalogFilters}
-      />,
-    );
-
-    const input = screen.getByLabelText("Keywords");
-    fireEvent.change(input, { target: { value: "Full Stack" } });
-
-    const submitBtn = screen.getByRole("button", { name: "Search" });
-    fireEvent.click(submitBtn);
-
-    expect(mockPush).toHaveBeenCalledWith("/jobs?q=Full+Stack");
   });
 
   it("toggles filter checkbox and navigates with repeated keys and page=1", () => {

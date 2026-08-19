@@ -12,6 +12,7 @@ import {
 import { ActiveFilters } from "@/features/jobs/components/ActiveFilters";
 import { CatalogHealthNotice } from "@/features/jobs/components/CatalogHealthNotice";
 import { JobResults } from "@/features/jobs/components/JobResults";
+import { JobKeywordSearch } from "@/features/jobs/components/JobKeywordSearch";
 import { JobSearchForm } from "@/features/jobs/components/JobSearchForm";
 import { Pagination } from "@/features/jobs/components/Pagination";
 import { SearchStatus } from "@/features/jobs/components/SearchStatus";
@@ -52,10 +53,14 @@ export default async function JobsPage(props: JobsPageProps) {
 
       <CatalogHealthNotice health={catalogHealth} />
 
+      <div className="jobs-keyword-search rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-elevated)]">
+        <JobKeywordSearch params={validatedParams} />
+      </div>
+
       <div className="jobs-page-layout">
         <aside
-          className="jobs-sidebar rounded-xl bg-card p-4 ring-1 ring-foreground/10"
-          aria-label="Search and Filter Controls"
+          className="jobs-sidebar rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-elevated)]"
+          aria-label="Filter Controls"
         >
           <JobSearchForm
             params={validatedParams}

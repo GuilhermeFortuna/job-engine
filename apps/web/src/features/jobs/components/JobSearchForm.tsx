@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { SearchIcon } from "lucide-react";
 
 import {
   Accordion,
@@ -10,12 +9,10 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Button } from "@/components/ui/button";
 import { FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useLiveSync } from "../hooks/useLiveSync";
 import { buildSearchUrl, updateSearchParams } from "../search-params";
 import type {
   CatalogFilters,
@@ -27,8 +24,6 @@ import type {
   Seniority,
   SortValue,
 } from "../types";
-import { LiveSearchButton } from "./LiveSearchButton";
-import { LiveSyncProgressModal } from "./LiveSyncProgressModal";
 
 function FilterCheckbox({
   name,
@@ -66,14 +61,6 @@ export function JobSearchForm({
   catalogFilters: CatalogFilters;
 }) {
   const router = useRouter();
-  const liveSync = useLiveSync();
-  const [keywordInput, setKeywordInput] = useState(params.q ?? "");
-  const [prevQ, setPrevQ] = useState(params.q);
-  if (params.q !== prevQ) {
-    setPrevQ(params.q);
-    setKeywordInput(params.q ?? "");
-  }
-
   const [minCompInput, setMinCompInput] = useState(
     params.minimum_annual_usd !== undefined
       ? String(params.minimum_annual_usd)
@@ -88,19 +75,6 @@ export function JobSearchForm({
         : "",
     );
   }
-
-  const handleKeywordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = keywordInput.trim();
-    const next = updateSearchParams(
-      params,
-      {
-        q: trimmed.length > 0 ? trimmed : undefined,
-      },
-      true,
-    );
-    router.push(buildSearchUrl(next));
-  };
 
   const handleMinCompSubmit = () => {
     const trimmed = minCompInput.trim();
@@ -145,37 +119,10 @@ export function JobSearchForm({
 
   return (
     <form
-      role="search"
-      aria-label="Job Search and Filters"
+      aria-label="Job filters"
       className="flex flex-col gap-4"
-      onSubmit={handleKeywordSubmit}
+      onSubmit={(e) => e.preventDefault()}
     >
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="search-keywords" className="font-bold">
-          Keywords
-        </Label>
-        <div className="flex flex-wrap gap-2">
-          <Input
-            id="search-keywords"
-            type="search"
-            name="q"
-            value={keywordInput}
-            onChange={(e) => setKeywordInput(e.target.value)}
-            placeholder="Title, company, tech, or keywords..."
-            className="min-w-40 flex-1"
-          />
-          <Button type="submit">
-            <SearchIcon data-icon="inline-start" />
-            Search
-          </Button>
-          <LiveSearchButton
-            onStartSync={liveSync.startSync}
-            status={liveSync.state.status}
-            cooldownSeconds={liveSync.state.cooldown_remaining_seconds}
-          />
-        </div>
-      </div>
-
       <Accordion defaultValue={["filters"]} keepMounted>
         <AccordionItem value="filters" className="border-border">
           <AccordionTrigger className="px-0 text-sm font-semibold hover:no-underline">
@@ -431,15 +378,6 @@ export function JobSearchForm({
           </AccordionContent>
         </AccordionItem>
       </Accordion>
-
-      <LiveSyncProgressModal
-        isOpen={liveSync.isOpen}
-        state={liveSync.state}
-        onClose={liveSync.closeModal}
-        onCancel={liveSync.cancelSync}
-        onRetry={liveSync.startSync}
-        liveAnnouncement={liveSync.liveAnnouncement}
-      />
     </form>
   );
 }
