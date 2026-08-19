@@ -110,7 +110,9 @@ job-engine/
 │   ├── v1-product-spec.md       # Product specifications and constraints
 │   ├── sources/                 # Source feasibility and API evaluations
 │   └── work-orders/             # Work Order registry, status, and task files
-├── compose.yaml                 # PostgreSQL container service definition
+├── compose.yaml                 # Development PostgreSQL container
+├── compose.ci.yml               # Ephemeral PostgreSQL 17.11 for local CI
+├── scripts/                     # Shared local and GitHub Actions CI scripts
 ├── package.json                 # Monorepo root scripts (pnpm workspaces)
 ├── pnpm-workspace.yaml          # Monorepo package workspace configuration
 ├── .node-version                # Pinned Node.js version (24.18.0)
@@ -214,11 +216,35 @@ corepack pnpm run test
 # Build all packages
 corepack pnpm run build
 
-# Run the complete full-stack CI pipeline locally (mirrors remote GitHub Actions)
+# Run the complete full-stack CI pipeline locally (same scripts as GitHub Actions)
 corepack pnpm run ci
-# or directly:
-./ci.sh
+# or:
+corepack pnpm run ci:local
+./scripts/ci.sh
 ```
+
+### Local CI (pre-push)
+
+GitHub Actions jobs in `.github/workflows/ci.yml` call the same scripts under `scripts/`. Run them locally before pushing:
+
+```bash
+# Normal pre-push validation (preferred)
+./scripts/ci.sh
+
+# Optional full GitHub Actions emulation (requires act + Docker)
+act workflow_dispatch -W .github/workflows/ci.yml
+```
+
+Prerequisites for `./scripts/ci.sh`:
+
+- Docker with Compose v2+
+- `uv` and CPython 3.13.14
+- Node.js from `.node-version` and pnpm 10.34.5
+- Playwright Chromium (installed by the E2E script without `--with-deps` on non-GitHub hosts)
+
+The local pipeline starts an ephemeral PostgreSQL 17.11 from `compose.ci.yml` on `127.0.0.1:5432` (`job_engine` / `job_engine` / `job_engine`) and removes it afterward. Port `5432` must be free: stop this repo's development database with `docker compose down` first. Set `CI_KEEP_POSTGRES=1` only when debugging the CI database.
+
+`act` is optional. It does not change hosted-runner behavior. Known limitations: nested Postgres service containers, `actions/upload-artifact`, and action caches often differ from GitHub-hosted runners.
 
 ### Backend (`apps/api`) Commands
 

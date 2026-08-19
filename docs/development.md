@@ -212,3 +212,53 @@ the acceptance evidence for the assisted-apply runtime. No external model
 provider, employer site, or personal data is involved: answers come from the
 deterministic provider and every form is synthetic and served from loopback.
 - `build` compiles the main and preload TypeScript sources into `dist/`.
+
+## Local CI
+
+The GitHub Actions workflow (`.github/workflows/ci.yml`) runs the same check
+scripts as local pre-push validation. Those scripts live under `scripts/`.
+
+```bash
+# Normal pre-push validation (preferred)
+./scripts/ci.sh
+# equivalent:
+corepack pnpm run ci
+corepack pnpm run ci:local
+
+# Optional full GitHub Actions emulation
+act workflow_dispatch -W .github/workflows/ci.yml
+```
+
+### Prerequisites
+
+- Docker with Compose v2+ (local CI starts PostgreSQL from `compose.ci.yml`)
+- `uv` and CPython 3.13.14 (`.python-version`)
+- Node.js 24.18.0 (`.node-version`) and pnpm 10.34.5
+- Playwright Chromium: local runs execute `playwright install chromium` only.
+  GitHub Actions additionally uses `--with-deps` because `GITHUB_ACTIONS=true`.
+- `act` only if you emulate the workflow in Docker
+
+`./scripts/ci.sh` fails if `127.0.0.1:5432` is already bound so it does not
+mutate the persistent development volume from `compose.yaml`. Stop the
+development database first (`docker compose down`). The CI database uses
+`postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine` and is removed
+with `docker compose -f compose.ci.yml -p job-engine-ci down -v` unless
+`CI_KEEP_POSTGRES=1` is set.
+
+Individual stages can be run the same way GitHub Actions does, after the
+matching tools (and, for backend tests, PostgreSQL) are available:
+
+```bash
+./scripts/ci-backend-check.sh
+./scripts/ci-backend-test.sh
+./scripts/ci-frontend-check.sh
+./scripts/ci-frontend-test.sh
+./scripts/ci-frontend-e2e.sh
+```
+
+### `act` limitations
+
+`.actrc` maps `ubuntu-latest` to `catthehacker/ubuntu:act-latest`. Emulation is
+a secondary check. Nested PostgreSQL service containers, `actions/upload-artifact`,
+and GitHub action caches often fail or behave differently than hosted runners.
+Do not weaken `.github/workflows/ci.yml` to paper over those emulator gaps.

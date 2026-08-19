@@ -31,21 +31,8 @@ jobs:
       - name: Set up Python
         run: uv python install
 
-      - name: Install backend dependencies
-        working-directory: apps/api
-        run: uv sync --frozen
-
-      - name: Check code formatting (Ruff)
-        working-directory: apps/api
-        run: uv run ruff format --check .
-
-      - name: Lint source code (Ruff)
-        working-directory: apps/api
-        run: uv run ruff check .
-
-      - name: Strict type check (Mypy)
-        working-directory: apps/api
-        run: uv run mypy src tests
+      - name: Backend lint and typecheck
+        run: ./scripts/ci-backend-check.sh
 
   backend-test:
     name: Backend Test Suite (PostgreSQL)
@@ -76,21 +63,10 @@ jobs:
       - name: Set up Python
         run: uv python install
 
-      - name: Install backend dependencies
-        working-directory: apps/api
-        run: uv sync --frozen
-
-      - name: Run Alembic database migrations
-        working-directory: apps/api
+      - name: Backend migrations and pytest
         env:
           DATABASE_URL: postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine
-        run: uv run alembic upgrade head
-
-      - name: Run Pytest test suite
-        working-directory: apps/api
-        env:
-          DATABASE_URL: postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine
-        run: uv run pytest
+        run: ./scripts/ci-backend-test.sh
 
   frontend-check:
     name: Frontend Lint & Typecheck
@@ -108,11 +84,8 @@ jobs:
           node-version-file: ".node-version"
           cache: "pnpm"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Type check and ESLint
-        run: pnpm --filter @job-engine/web run check
+      - name: Frontend type check and ESLint
+        run: ./scripts/ci-frontend-check.sh
 
   frontend-unit-test:
     name: Frontend Unit Tests (Vitest)
@@ -130,11 +103,8 @@ jobs:
           node-version-file: ".node-version"
           cache: "pnpm"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run Vitest suite
-        run: pnpm --filter @job-engine/web run test
+      - name: Frontend Vitest suite
+        run: ./scripts/ci-frontend-test.sh
 
   frontend-e2e:
     name: Frontend E2E Tests (Playwright)
@@ -152,20 +122,8 @@ jobs:
           node-version-file: ".node-version"
           cache: "pnpm"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Next.js web application
-        env:
-          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:8088
-        run: pnpm --filter @job-engine/web run build
-
-      - name: Install Playwright browsers and system dependencies
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run Playwright E2E tests
-        run: pnpm --filter @job-engine/web run test:e2e
+      - name: Frontend Playwright E2E suite
+        run: ./scripts/ci-frontend-e2e.sh
 
       - name: Upload Playwright test results on failure
         uses: actions/upload-artifact@v4
@@ -195,7 +153,7 @@ jobs:
              [ "${{ needs.frontend-check.result }}" != "success" ] || \
              [ "${{ needs.frontend-unit-test.result }}" != "success" ] || \
              [ "${{ needs.frontend-e2e.result }}" != "success" ]; then
-            echo "❌ CI pipeline failed."
+            echo "CI pipeline failed."
             exit 1
           fi
-          echo "✅ All CI checks passed successfully."
+          echo "All CI checks passed successfully."
