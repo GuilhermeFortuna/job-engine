@@ -49,10 +49,10 @@ Do not edit Electron main/preload code, backend domain/API behavior, form observ
 - `Apply in Job Engine` appears only for a job with a validated **HTTPS** application URL and when `getCapabilities().embeddedBrowser === true`. HTTP remains eligible only for the ordinary external link; Electron permits HTTP solely for loopback test fixtures.
 - Ordinary web-browser use retains the existing safe external application link and does not attempt iframe embedding.
 - Launch is one job at a time. The owner selects one registered resume and confirms the exact job, company, application origin, resume label/checksum summary, and assisted/manual-release behavior.
-- Create the run with `POST /api/v1/application-runs` using one `job_group_id` and `automation_mode: "semi_auto_pause_before_submit"`.
+- Create the run with `POST /api/v1/application-runs` using live BACK-010 fields `job_group_ids: [<one job_group_id>]`, `resume_id`, and `automation_mode: "semi_auto_pause_before_submit"`. Do not send singular `job_group_id`.
 - Do not display or send `FULL_AUTO`; do not offer multi-job application queues.
 - After creation, the launcher only navigates to `/applications/{runId}/workspace`. The workspace exclusively owns native-view lifecycle: subscribe, report valid bounds, then invoke `openApplication({ runId })`. The UI never passes the application URL to Electron.
-- Duplicate conflicts are displayed with the existing run link. Explicit override uses the backend contract and cannot be hidden behind an ordinary retry.
+- Duplicate `409` bodies expose `conflicts[].existing_run_id`. The UI links that run and requires a two-step override: `POST /api/v1/application-runs/{existing_run_id}/duplicate-override`, then retry create. Ordinary retry must not hide the override.
 
 ## Fixed workspace layout
 
@@ -137,15 +137,24 @@ git diff --check
 - `POST .../resolve-answers` accepts field fingerprints rather than client-supplied intents or policy categories, rejects cross-field and replay attempts, validates control constraints, and requeues only after every exception field is answered.
 - Reusable answers added after run creation no longer invalidate the run's frozen answer-bank snapshot and are not silently added to that run's baseline.
 - Remediation validation on 2026-08-19: API Ruff/format/mypy passed; 41 focused API service/integration tests passed against PostgreSQL; all 282 desktop unit/runtime/form tests passed; `git diff --check` passed.
+- FRONT-005 launch binding (2026-08-19): Next.js create uses `job_group_ids: [id]` only; duplicate UI consumes `existing_run_id` and the two-step `duplicate-override` then retry-create flow.
 
 ## Dispatch record
 
-- Worker: Unassigned
-- Branch/worktree: `development`
-- Dispatched at: Not dispatched
+- Worker: Cursor agent (FRONT-005)
+- Branch/worktree: `development` (shared with other workers; no dedicated branch)
+- Dispatched at: 2026-08-19
 
 ## Completion record
 
-- Commit: Pending
-- Evidence: Pending
+- Commit: Uncommitted on `development` (owner did not request a commit)
+- Evidence:
+  - `corepack pnpm --filter @job-engine/web run check` passed
+  - `corepack pnpm --filter @job-engine/web run test`: 137 unit tests passed
+  - `corepack pnpm --filter @job-engine/web run build` passed, including `/applications/[runId]/workspace`
+  - Playwright `e2e/embedded-application-workspace.spec.ts`: 10 passed (mocked `window.jobEngineDesktop`)
+  - `git diff --check` passed
+  - Launch dialog is portaled to `document.body` so JobCard MagicCard `isolate` cannot intercept it
+  - Real Electron WebContentsView walkthrough remains an owner/desktop-shell gate. A mocked bridge does not satisfy it. The local `./dev.sh` desktop process was running, but this worker did not drive that window.
+  - `STATUS.md` was not changed. Shared files from other workers (`layout.tsx`, shadcn/ui, JobCardShell, jobs restyle) were left in place.
 - Independent reviewer: Pending
