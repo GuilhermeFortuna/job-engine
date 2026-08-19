@@ -30,7 +30,7 @@ async def _setup_fixtures(session: AsyncSession, settings: Settings) -> str:
     await vault_repo.replace_profile(
         ApplicantProfileInput(
             first_name=ConfirmedField(
-                value="Guilherme",
+                value="Dakota",
                 source=FieldSource.OWNER,
                 state=ValueState.PROVIDED,
                 last_confirmed_at=now,

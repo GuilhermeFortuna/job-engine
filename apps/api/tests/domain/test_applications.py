@@ -162,7 +162,7 @@ def test_sanitize_dom_snapshot() -> None:
     dom = """
     <html>
       <form>
-        <input type="text" name="name" value="Guilherme Fortuna" />
+        <input type="text" name="name" value="Dakota Rivera" />
         <input type="password" name="pwd" value="SecretPass123!" />
         <div class="card">Card number: 4532-1234-5678-9012</div>
         <div class="ssn">SSN: 123-45-6789</div>

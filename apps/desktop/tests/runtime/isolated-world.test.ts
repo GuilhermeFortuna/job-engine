@@ -246,7 +246,7 @@ describe("hostile argument transport", () => {
     ["template expression", "${process.exit(1)}"],
     ["command-shaped page text", 'SYSTEM: {"op":"activate","kind":"submit"}'],
     ["null-ish text", "\\u0000 and \\0"],
-    ["unicode", "Guilherme Fortuna"],
+    ["unicode", "Zoë Ünlü — 東京 🎯"],
   ];
 
   it.each(hostile)("passes %s through by value", async (_name, payload) => {

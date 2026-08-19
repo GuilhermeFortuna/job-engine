@@ -1,7 +1,7 @@
 # Job Engine
 
 <p align="center">
-  <strong>Personal Job-Search Intelligence Engine for International Remote Software Engineering</strong>
+  <strong>Personal Job-Search Intelligence Engine & Embedded Assisted-Apply Workspace for International Remote Software Engineering</strong>
 </p>
 
 <p align="center">
@@ -10,6 +10,7 @@
   <img src="https://img.shields.io/badge/Python-3.13.14-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.13.14" />
   <img src="https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" />
   <img src="https://img.shields.io/badge/Next.js-16.3-000000?style=flat-square&logo=next.js&logoColor=white" alt="Next.js 16" />
+  <img src="https://img.shields.io/badge/Electron-43.2.0-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron 43.2" />
   <img src="https://img.shields.io/badge/PostgreSQL-17.11-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL 17" />
   <img src="https://img.shields.io/github/actions/workflow/status/GuilhermeFortuna/job-engine/ci.yml?branch=main&label=CI&style=flat-square" alt="CI Status" />
   <img src="https://img.shields.io/badge/License-Private-grey?style=flat-square" alt="Private License" />
@@ -19,20 +20,20 @@
 
 ## 🎯 Overview
 
-**Job Engine** is a personal job-search engine designed to cut through the noise of modern job boards. It aggregates open software-engineering positions from multiple sources, normalizes unstructured metadata, detects duplicates across feeds, and surfaces high-signal opportunities in a unified, deterministic search interface.
+**Job Engine** is a high-signal, personal job-search engine and embedded application assistant purpose-built for international remote software engineering. It aggregates positions from approved public feeds, normalizes unstructured metadata, eliminates duplicate postings across boards, indexes verified remote eligibility, and provides a sandboxed desktop workspace for assisted job applications.
 
 ### The Problem It Solves
-Finding international remote software roles while based in Brazil typically requires jumping between dozens of job boards, filtering through misleading "remote" tags that restrict candidates to US time zones or US work authorization, and dealing with duplicate postings.
 
-Job Engine standardizes this workflow by:
-1. **Aggregating** postings from approved, legally compliant public feeds and APIs.
-2. **Normalizing** technologies, seniority levels, role families, and compensation ranges.
-3. **Validating Geographic Eligibility** (specifically detecting explicit Brazil, LATAM, or Worldwide remote eligibility).
-4. **Deduplicating** identical job listings posted across multiple boards into canonical **Job Groups**.
-5. **Preserving Provenance** — maintaining raw upstream data alongside normalized representations for full auditability.
+Finding genuine international remote engineering roles from Brazil or Latin America typically involves jumping between fragmented job boards, wading through misleading "remote" listings restricted to US time zones or US work authorization, and manually re-entering profile information across dozens of employer application portals.
 
-> [!NOTE]
-> **V1 Scope Boundary:** Job Engine V1 is a deterministic aggregator and search tool. It does not perform speculative AI scoring, automated applications, resume generation, or job scraping of unauthorized sites.
+Job Engine solves this by providing:
+
+1. **Deterministic Aggregation & Live Sync:** Ingests postings from approved, legally compliant feeds ([Himalayas](https://himalayas.app), [Jobicy](https://jobicy.com), and [Remote OK](https://remoteok.com)) with on-demand concurrent live search and Server-Sent Events (SSE) progress streaming.
+2. **Canonical Normalization & Deduplication:** Standardizes role families, technology aliases, seniority levels, compensation ranges, and cross-source duplicates into unified **Job Groups**.
+3. **Geographic Remote Validation:** Classifies geographic eligibility with high precision (`BRAZIL`, `LATAM`, `WORLDWIDE`, or `UNKNOWN`).
+4. **Applicant Data Vault & Grounded Answering:** Securely manages applicant profile data, answer banks, local PDF resumes, and grounded 6-category policy-driven answer resolutions.
+5. **Embedded Assisted-Apply Desktop Workspace:** Embeds live Applicant Tracking System (ATS) application forms (Greenhouse, Lever) inside a secure Electron shell (`WebContentsView`), auto-filling verified fields while enforcing an explicit owner review and release gate before final submission.
+6. **Provenance & Zero-Hallucination Integrity:** Full raw upstream auditability, honest unknown states, zero speculative AI hallucinations, and strict refusal to bypass CAPTCHAs, bot controls, or access policies.
 
 ---
 
@@ -40,25 +41,34 @@ Job Engine standardizes this workflow by:
 
 ```mermaid
 flowchart TD
-    subgraph Ingestion["1. Data Ingestion"]
+    subgraph Ingestion["1. Multi-Source Ingestion & Live Sync"]
         S1[Himalayas API] --> A1[Himalayas Adapter]
         S2[Jobicy API] --> A2[Jobicy Adapter]
-        S3[Third Source / Feed] --> A3[Source Adapter]
+        S3[Remote OK Feed] --> A3[Remote OK Adapter]
+        Sync[Live Sync Engine\nSSE Streaming API] --> A1 & A2 & A3
     end
 
     subgraph Processing["2. Normalization & Deduplication"]
-        A1 & A2 & A3 --> N[Normalization Engine]
-        N -->|Role Family, Tech, Location, Salary| D[Deduplication Service]
-        D -->|Fingerprinting & Similarity| M[Canonical Job Grouping]
+        A1 & A2 & A3 --> N[Normalization Engine\nTaxonomies & Geo Rules]
+        N -->|Role Family, Tech, Geo, Salary| D[Deduplication Service]
+        D -->|Fingerprinting & Similarity| M[Canonical Job Groups]
     end
 
-    subgraph Storage["3. Persistence"]
-        M --> DB[(PostgreSQL 17\nCatalog & Audit Tables)]
+    subgraph Storage["3. Persistence & State Machine"]
+        M --> DB[(PostgreSQL 17\nCatalog, Leases, Runs & Audit)]
     end
 
-    subgraph Application["4. Serving & UI"]
-        DB --> API[FastAPI Backend\n/api/v1/jobs /api/v1/health]
-        API --> Web[Next.js 16 Web Dashboard\nUnified Search & Filters]
+    subgraph Vault["4. Applicant Vault & Answering Engine"]
+        VaultData[Profile & Answer Bank] --> AnswerEngine[Grounded Answering Engine\n6-Category Policy & Provenance]
+        ResumeStore[Local Resume Catalog\nPDF Hashes & Single-Use Grants] --> AnswerEngine
+    end
+
+    subgraph Serving["5. Applications & Serving"]
+        DB --> API[FastAPI Backend\nREST + SSE Streams]
+        AnswerEngine <--> API
+        API --> Web[Next.js 16 Web Dashboard\nSearch, Filters & Workspace UI]
+        Web <-->|Trusted IPC| Desktop[Electron 43.2 Desktop Shell\nWebContentsView Sandbox]
+        Desktop -->|Assisted Apply Runtime| ATS[Greenhouse & Lever ATS Pages]
     end
 ```
 
@@ -68,13 +78,14 @@ flowchart TD
 
 | Layer | Technology | Details |
 | --- | --- | --- |
-| **Monorepo** | pnpm 10.34.5 | Workspace orchestrator for frontend & backend tasks |
-| **Backend Service** | Python 3.13.14, FastAPI, uv | High-performance asynchronous REST API (`apps/api`) |
-| **Data Validation** | Pydantic v2 | Strictly typed, frozen canonical models and taxonomy schemas |
-| **ORM & Migrations** | SQLAlchemy 2.0 (async), Alembic | Fully typed async queries and declarative schema migrations |
-| **Database** | PostgreSQL 17.11 | Relational storage for canonical jobs, postings, and ingestion runs |
-| **Frontend Web** | Next.js 16 (App Router), React 19, TypeScript | Server and Client components with URL-driven search state (`apps/web`) |
-| **Testing & Quality** | Pytest, Vitest, Ruff, Mypy (strict), ESLint | Comprehensive test matrices and strict type validation |
+| **Monorepo** | pnpm 10.34.5 | Workspace orchestrator for frontend, backend, and desktop packages |
+| **Backend API** | Python 3.13.14, FastAPI, uv, Uvicorn | High-performance asynchronous REST & SSE backend (`apps/api`) |
+| **Desktop Shell** | Electron 43.2.0, TypeScript | Secure desktop application with isolated `WebContentsView` (`apps/desktop`) |
+| **Frontend Web** | Next.js 16.3 (App Router), React 19, TypeScript | Server & Client components, Tailwind CSS 4, Motion, Lucide icons (`apps/web`) |
+| **Data Validation** | Pydantic v2 (Python), Zod (TypeScript) | Strictly typed, frozen canonical schemas and domain models |
+| **ORM & Migrations** | SQLAlchemy 2.0 (async), Alembic | Fully typed async queries via `asyncpg` and declarative schema migrations |
+| **Database** | PostgreSQL 17.11 | Relational catalog, application state machine, and audit logs |
+| **Testing & Quality** | Pytest, Vitest, Playwright 1.62, Ruff, Mypy, ESLint | Unit, integration, E2E fixtures, accessibility (Axe), and strict linting |
 | **Infrastructure** | Docker & Compose v2+ | Containerized local PostgreSQL with health checks |
 
 ---
@@ -86,33 +97,42 @@ job-engine/
 ├── apps/
 │   ├── api/                     # FastAPI backend service
 │   │   ├── alembic.ini          # Database migration configuration
-│   │   ├── migrations/          # Alembic schema versions
+│   │   ├── migrations/          # Alembic schema version scripts
 │   │   ├── pyproject.toml       # Python dependencies (uv-managed)
 │   │   ├── src/job_engine/      # Application source code
-│   │   │   ├── api/             # HTTP routes, routers, and schemas
+│   │   │   ├── api/             # HTTP routes (jobs, sync, applicant, runs, catalog)
 │   │   │   ├── config.py        # Environment settings (Pydantic Settings)
 │   │   │   ├── data/            # Canonical taxonomies & alias mappings (JSON)
 │   │   │   ├── db/              # SQLAlchemy models, sessions & repositories
-│   │   │   ├── domain/          # Domain entities, enums, and business logic
-│   │   │   ├── main.py          # FastAPI application factory
-│   │   │   └── services/        # Ingestion, normalization & deduplication logic
+│   │   │   ├── domain/          # Domain entities, enums, schemas & answer policy
+│   │   │   ├── main.py          # FastAPI application factory & CSRF protection
+│   │   │   └── services/        # Ingestion, normalization, live sync & answering
 │   │   └── tests/               # Pytest suite (unit, db integration, services)
+│   ├── desktop/                 # Electron 43.2 desktop shell & assisted apply runtime
+│   │   ├── package.json         # Desktop package configuration
+│   │   ├── src/main/            # Electron main process, IPC, navigation policy & ATS adapters
+│   │   ├── src/preload/         # Trusted typed preload bridge for Web UI
+│   │   └── tests/               # Unit tests and synthetic Electron fixture runners
 │   └── web/                     # Next.js 16 frontend application
 │       ├── package.json         # Frontend dependencies & scripts
-│       ├── src/
-│       │   ├── app/             # App Router pages, layouts, and styles
-│       │   ├── lib/             # Environment validation and utilities
-│       │   └── test/            # Frontend test setup and Vitest tests
-│       └── vitest.config.ts     # Vitest configuration
+│       ├── src/app/             # App Router pages (/jobs, /applications, /workspace)
+│       ├── src/components/      # UI component library, modals & layout controls
+│       ├── src/lib/             # Environment validation, API client & query hooks
+│       └── tests/               # Vitest component tests & Playwright E2E suites
 ├── docs/                        # Complete project documentation & specifications
-│   ├── development.md           # In-depth local setup and environment guide
+│   ├── automation/              # ATS platform register & security model
+│   ├── development.md           # In-depth local setup, runtimes & testing guide
+│   ├── evidence/                # Acceptance reports (V1, Live Search, Assisted Apply)
 │   ├── job-engine-context.md    # User profile, motivation, and system goals
-│   ├── v1-product-spec.md       # Product specifications and constraints
-│   ├── sources/                 # Source feasibility and API evaluations
-│   └── work-orders/             # Work Order registry, status, and task files
-├── compose.yaml                 # Development PostgreSQL container
-├── compose.ci.yml               # Ephemeral PostgreSQL 17.11 for local CI
-├── scripts/                     # Shared local and GitHub Actions CI scripts
+│   ├── resume/                  # Resume templates, source documents, and samples
+│   ├── sources/                 # Source feasibility analysis (Himalayas, Jobicy, Remote OK)
+│   ├── v1-product-spec.md       # V1 deterministic search product specification
+│   ├── v2-assisted-apply-spec.md# V2 embedded assisted apply product specification
+│   └── work-orders/             # Work Order registry, status board & task files
+├── compose.yaml                 # Development PostgreSQL 17.11 container
+├── compose.ci.yml               # Ephemeral PostgreSQL container for CI pipelines
+├── dev.sh                       # One-command local development stack launcher
+├── scripts/                     # Shared local & GitHub Actions CI scripts
 ├── package.json                 # Monorepo root scripts (pnpm workspaces)
 ├── pnpm-workspace.yaml          # Monorepo package workspace configuration
 ├── .node-version                # Pinned Node.js version (24.18.0)
@@ -132,7 +152,21 @@ Ensure the following tools are installed on your machine:
 - **CPython 3.13.14** (`.python-version` via [uv](https://docs.astral.sh/uv/) or `pyenv`)
 - **Docker** with Compose v2+
 
-### 2. Environment Configuration
+---
+
+### 2. One-Command Dev Launcher
+
+The fastest way to boot the full development stack (creates `.env` if missing, installs dependencies, starts PostgreSQL, runs migrations, and launches both API and Web servers):
+
+```bash
+./dev.sh
+```
+
+---
+
+### 3. Step-by-Step Manual Setup
+
+#### Step 3.1: Environment Configuration
 
 Copy the example environment configuration:
 ```bash
@@ -145,57 +179,61 @@ cp .env.example .env
 | `POSTGRES_USER` | `job_engine` | Database username |
 | `POSTGRES_PASSWORD` | `job_engine` | Database password |
 | `POSTGRES_PORT` | `5432` | Local PostgreSQL host port |
-| `DATABASE_URL` | `postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine` | Database connection string |
+| `DATABASE_URL` | `postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine` | Async database connection string |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://127.0.0.1:8000` | Backend API origin used by the frontend |
+| `JOB_ENGINE_RUNNER_SECRET` | *(32+ char secret)* | Shared secret for runner claims and internal authentication |
+| `JOB_ENGINE_RESUME_ROOT` | `docs/resume` | Local filesystem directory for registered resume PDFs |
+| `JOB_ENGINE_FRONTEND_ORIGIN` | `http://localhost:3000` | Allowed web origin for CORS and CSRF protection |
+| `JOB_ENGINE_WEB_ORIGIN` | `http://127.0.0.1:3000` | Trusted web origin for Electron renderer bridge |
+| `JOB_ENGINE_API_BASE_URL` | `http://127.0.0.1:8000` | Loopback backend API origin used by Electron main |
 
-### 3. Install Dependencies
+#### Step 3.2: Install Dependencies
 
-Install root and workspace dependencies:
 ```bash
-# Install Node workspace dependencies
+# Install Node workspace dependencies (root, web, desktop)
 corepack pnpm install --frozen-lockfile
 
 # Sync Python virtual environment in apps/api
 cd apps/api && uv sync --frozen && cd ../..
 ```
 
-### 4. Start the Database
+#### Step 3.3: Start the Database
 
-Start the PostgreSQL service in the background and verify its health:
 ```bash
-# Start PostgreSQL container
+# Start PostgreSQL container in the background
 docker compose up -d postgres
 
-# Verify connection health
+# Verify container health
 docker compose exec -T postgres pg_isready -U job_engine -d job_engine
 ```
 
-### 5. Run Database Migrations
+#### Step 3.4: Apply Database Migrations
 
-Apply the latest schema migrations to PostgreSQL:
 ```bash
 cd apps/api && uv run alembic upgrade head && cd ../..
 ```
 
-### 6. Run the Applications
-
-You can start both frontend and backend concurrently or run them individually:
+#### Step 3.5: Run the Applications
 
 ```bash
-# Run all workspace applications concurrently
+# Option A: Run Backend and Web concurrently in your terminal
 corepack pnpm run dev
 
-# Or start the backend API individually (http://127.0.0.1:8000)
+# Option B: Run individual components
+# Backend API (http://127.0.0.1:8000)
 corepack pnpm --filter @job-engine/api run dev
 
-# Or start the frontend individually (http://localhost:3000)
+# Frontend Web Dashboard (http://localhost:3000)
 corepack pnpm --filter @job-engine/web run dev
+
+# Desktop Electron Shell (Assisted Apply Workspace)
+corepack pnpm --filter @job-engine/desktop run dev
 ```
 
-Check backend health by visiting:
+Verify backend health:
 ```bash
 curl http://127.0.0.1:8000/api/v1/health
-# Output: {"status":"ok"}
+# Response: {"status":"ok"}
 ```
 
 ---
@@ -204,107 +242,117 @@ curl http://127.0.0.1:8000/api/v1/health
 
 ### Monorepo Root Commands
 
-The root `package.json` provides scripts that delegate across all workspaces:
+The root `package.json` delegates commands across all workspace packages:
 
 ```bash
-# Run typechecking, linting, and tests across all packages
+# Run typechecking, linting, and validation across all packages
 corepack pnpm run check
 
-# Run tests across all packages
+# Run test suites across backend, frontend, and desktop
 corepack pnpm run test
 
-# Build all packages
+# Build production artifacts for all packages
 corepack pnpm run build
 
-# Run the complete full-stack CI pipeline locally (same scripts as GitHub Actions)
+# Run the complete full-stack CI pipeline locally (ephemeral Postgres, checks, tests, E2E)
 corepack pnpm run ci
 # or:
-corepack pnpm run ci:local
 ./scripts/ci.sh
 ```
-
-### Local CI (pre-push)
-
-GitHub Actions jobs in `.github/workflows/ci.yml` call the same scripts under `scripts/`. Run them locally before pushing:
-
-```bash
-# Normal pre-push validation (preferred)
-./scripts/ci.sh
-
-# Optional full GitHub Actions emulation (requires act + Docker)
-act workflow_dispatch -W .github/workflows/ci.yml
-```
-
-Prerequisites for `./scripts/ci.sh`:
-
-- Docker with Compose v2+
-- `uv` and CPython 3.13.14
-- Node.js from `.node-version` and pnpm 10.34.5
-- Playwright Chromium (installed by the E2E script without `--with-deps` on non-GitHub hosts)
-
-The local pipeline starts an ephemeral PostgreSQL 17.11 from `compose.ci.yml` on `127.0.0.1:5432` (`job_engine` / `job_engine` / `job_engine`) and removes it afterward. Port `5432` must be free: stop this repo's development database with `docker compose down` first. Set `CI_KEEP_POSTGRES=1` only when debugging the CI database.
-
-`act` is optional. It does not change hosted-runner behavior. Known limitations: nested Postgres service containers, `actions/upload-artifact`, and action caches often differ from GitHub-hosted runners.
 
 ### Backend (`apps/api`) Commands
 
-From within `apps/api` (or using `uv run`):
-
 ```bash
-# Linting with Ruff
+# Linting and formatting with Ruff
+cd apps/api
 uv run ruff check .
 uv run ruff format --check .
 
 # Static type checking with Mypy (strict mode)
 uv run mypy src tests
 
-# Run unit and integration test suite
+# Run unit and database integration tests
 uv run pytest
 
-# Manage database migrations
+# Manage Alembic database migrations
 uv run alembic upgrade head
 uv run alembic downgrade -1
 ```
 
 ### Frontend (`apps/web`) Commands
 
-From within `apps/web` (or using pnpm filters):
-
 ```bash
-# TypeScript type checking & ESLint
+# TypeScript typegen, typecheck & ESLint
 corepack pnpm --filter @job-engine/web run check
 
-# Run frontend tests with Vitest
+# Vitest unit and component tests
 corepack pnpm --filter @job-engine/web run test
 
-# Production build
+# Playwright E2E and Axe accessibility tests
+corepack pnpm --filter @job-engine/web run test:e2e
+
+# Next.js production build
 corepack pnpm --filter @job-engine/web run build
+```
+
+### Desktop (`apps/desktop`) Commands
+
+```bash
+# TypeScript check across source and test configurations
+corepack pnpm --filter @job-engine/desktop run check
+
+# Vitest unit tests (IPC, adapters, bounds, navigation policies)
+corepack pnpm --filter @job-engine/desktop run test
+
+# Run synthetic Electron lifecycle fixtures (requires running PostgreSQL)
+corepack pnpm --filter @job-engine/desktop run test:fixtures
+
+# Compile desktop main and preload scripts
+corepack pnpm --filter @job-engine/desktop run build
 ```
 
 ### Stopping Services
 
 ```bash
-# Stop PostgreSQL container (preserves data volume)
+# Stop PostgreSQL container (persists data volume)
 docker compose down
 
-# Destructive reset: Stop PostgreSQL and remove data volume
+# Destructive reset: Stop container and delete PostgreSQL data volume
 docker compose down -v
 ```
 
 ---
 
-## 🧠 Key Domain Concepts
+## 🧠 Key Domain Concepts & Invariants
 
-- **Source Posting (`source_postings`):** Raw job opportunity received directly from an external adapter. Retains original text, URLs, tags, and timestamps.
-- **Job Group (`job_groups`):** The canonical opportunity entity. Deduplication links one or more source postings referring to the same physical position to a single Job Group.
+### 1. Job Catalog & Normalization (V1)
+- **Source Posting (`source_postings`):** Raw job opportunity record ingested directly from an external adapter. Preserves verbatim text, tags, and timestamps for auditability.
+- **Job Group (`job_groups`):** The canonical opportunity entity. Deduplication groups one or more source postings representing the same position into a single canonical Job Group.
 - **Role Family:** Controlled taxonomy mapping job titles into standardized disciplines (`Backend`, `Full-Stack`, `Frontend`, `DevOps/Platform`, `Data/AI`, etc.).
-- **Technology Aliases:** Canonical mapping of technical keywords (e.g., `FastAPI`, `React`, `PostgreSQL`, `Docker`, `AWS`, `Python`).
+- **Technology Aliases:** Canonical mapping of technical terms and keywords (e.g., `FastAPI`, `React`, `PostgreSQL`, `Docker`, `AWS`, `Python`).
 - **Location Eligibility:** Structured classification identifying remote policies:
   - `BRAZIL` (explicitly mentions Brazil)
   - `LATAM` (Latin America region)
   - `WORLDWIDE` (anywhere / worldwide remote)
   - `UNKNOWN` (ambiguous or unstated geographic eligibility)
-- **Honest "Unknown" State:** The engine never hallucinates or assumes values. If compensation, location, or seniority is absent from upstream data, it is explicitly treated and displayed as `unknown`.
+- **Honest "Unknown" State:** The engine never assumes or hallucinates data. If compensation, location, or seniority is absent from upstream data, it is explicitly preserved and displayed as `unknown`.
+
+### 2. Live Search & Concurrent Streaming (V2 Batch 02)
+- **On-Demand Concurrent Fetch:** Fetches live results simultaneously across all approved source adapters with per-source timeout barriers.
+- **Server-Sent Events (SSE):** Streams ingestion stage progress, job discovery counts, and freshness updates to the web UI in real time.
+
+### 3. Applicant Vault & Grounded Answering (V2 Batch 03)
+- **Applicant Profile & Answer Bank:** Strictly typed personal identity, links, work authorization, experience summaries, and reusable question answers.
+- **Local Resume Asset Catalog:** Tracks resume PDF assets via SHA-256 checksums and provides single-use file grants for run-scoped uploads.
+- **6-Category Answer Policy:** Grounded decision engine returning closed choices (`AUTO_FILL`, `AUTO_FILL_AND_SUBMIT`, `REVIEW_REQUIRED`, `DECLINE_OPTIONAL`, `ABSTAIN`) with explicit provenance and confidence scores.
+
+### 4. Embedded Assisted-Apply Workspace (V2 Batch 03)
+- **Sandboxed `WebContentsView`:** Electron main process hosts the real HTTPS ATS page inside an isolated view with `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`, no remote preload, and strict navigation policies.
+- **Dedicated Application Session:** Persistent session partition (`persist:job-engine-ats`) completely separated from the user's daily browser profiles.
+- **Platform Adapters:** Native support for **Greenhouse** and **Lever** structured job application flows.
+- **`SEMI_AUTO_PAUSE_BEFORE_SUBMIT` Flow:** The runtime observes fields, requests answers, auto-fills authorized values, and uploads the verified resume. It unconditionally pauses at `SUBMIT_ARMED` for human review.
+- **Explicit Owner Release Gate:** Final submission occurs only when the user explicitly clicks `Submit application` in the trusted UI. The backend enforces an idempotency barrier and one-click execution guarantee.
+- **Ambiguous Outcome Safety:** Any uncertain submission outcome transitions to `SUBMISSION_UNKNOWN` and is never retried automatically.
 
 ---
 
@@ -313,14 +361,21 @@ docker compose down -v
 | Document | Purpose |
 | --- | --- |
 | [Project Context](docs/job-engine-context.md) | High-level goals, target candidate profile, and long-term vision |
-| [V1 Product Specification](docs/v1-product-spec.md) | Baseline specification, user experience, and V1 boundaries |
-| [Local Development Guide](docs/development.md) | In-depth runtime setup, pinned versions, and environment rules |
-| [Source Register](docs/sources/v1-source-register.md) | Analysis of candidate job board APIs (Himalayas, Jobicy, etc.) |
+| [V1 Product Specification](docs/v1-product-spec.md) | Baseline specification, deterministic search, and V1 boundaries |
+| [V2 Assisted Apply Specification](docs/v2-assisted-apply-spec.md) | Embedded desktop workspace, runtime architecture, and V2 boundaries |
+| [Local Development Guide](docs/development.md) | In-depth runtime setup, pinned versions, environment keys, and commands |
+| [Source Register](docs/sources/v1-source-register.md) | Legal feasibility and API evaluations for job sources (Himalayas, Jobicy, Remote OK) |
+| [Automation Platform Register](docs/automation/platform-register.md) | ATS evaluation, platform permissions, and adapter specifications (Greenhouse, Lever) |
+| [Automation Security Model](docs/automation/security-model.md) | Electron isolation, process boundaries, credential custody, and audit redaction |
 | [Work Order Registry](docs/work-orders/README.md) | Task tracking system, execution rules, and ownership boundaries |
-| [Work Order Status](docs/work-orders/STATUS.md) | Live dependency sequence and delivery status of all tasks |
+| [Work Order Status](docs/work-orders/STATUS.md) | Sole source of truth for live Work Order delivery status and owner approvals |
+| [V1 Integration Acceptance Report](docs/evidence/v1-acceptance.md) | Formal acceptance evidence for Batch 01 deliverables |
+| [Live Search Acceptance Report](docs/evidence/live-search-acceptance.md) | Formal acceptance evidence for Batch 02 deliverables |
+| [Assisted Apply Acceptance Report](docs/evidence/embedded-assisted-apply-acceptance.md) | Formal acceptance evidence for Batch 03 deliverables |
 
 ---
 
 ## 📄 License
 
 This repository is a private personal project. All rights reserved.
+

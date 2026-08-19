@@ -5,6 +5,7 @@ from uuid import UUID
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from job_engine.api.schemas import ApplicationRunCreateRequest
@@ -44,7 +45,7 @@ async def _setup_fixtures(
     await vault_repo.replace_profile(
         ApplicantProfileInput(
             first_name=ConfirmedField(
-                value="Guilherme",
+                value="Dakota",
                 source=FieldSource.OWNER,
                 state=ValueState.PROVIDED,
                 last_confirmed_at=now,
@@ -155,6 +156,34 @@ async def _setup_fixtures(
 
     await session.commit()
     return group.id, resume.id, pdf_sha256
+
+
+async def test_create_run_requires_explicit_automation_mode(
+    client: AsyncClient, session: AsyncSession, app: FastAPI
+) -> None:
+    """Omitting automation_mode must fail, never silently mean FULL_AUTO.
+
+    CROSS-009 advisory A-1: the field used to default to FULL_AUTO, so any
+    caller that forgot it created an unattended run.
+    """
+    settings: Settings = app.state.settings
+    group_id, _resume_id, _sha256 = await _setup_fixtures(session, settings)
+
+    resp = await client.post(
+        "/api/v1/application-runs",
+        json={"job_group_ids": [str(group_id)]},
+    )
+
+    assert resp.status_code == 422
+    missing = [
+        err
+        for err in resp.json()["detail"]
+        if err["type"] == "missing" and err["loc"][-1] == "automation_mode"
+    ]
+    assert missing, resp.json()
+
+    with pytest.raises(ValidationError):
+        ApplicationRunCreateRequest(job_group_ids=[group_id])  # type: ignore[call-arg]
 
 
 async def test_create_application_runs_and_duplicate_handling(

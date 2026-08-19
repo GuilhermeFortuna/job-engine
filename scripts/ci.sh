@@ -27,6 +27,7 @@ trap cleanup_ci_postgres EXIT
 docker compose -f "${CI_COMPOSE_FILE}" -p "${CI_COMPOSE_PROJECT}" up -d --wait
 
 "${SCRIPT_DIR}/ci-backend-check.sh"
+"${SCRIPT_DIR}/ci-backend-build.sh"
 "${SCRIPT_DIR}/ci-backend-test.sh"
 "${SCRIPT_DIR}/ci-frontend-check.sh"
 "${SCRIPT_DIR}/ci-frontend-test.sh"

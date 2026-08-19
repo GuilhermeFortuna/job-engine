@@ -257,6 +257,50 @@ async function startHarness(): Promise<void> {
     assert(audit.hasIpcRenderer === false, "Remote page must NOT access window.ipcRenderer");
   });
 
+  // Test 9: Remote Renderer Crash Recovery
+  await runTest("Crashing the remote renderer disposes the view and allows a clean reopen", async () => {
+    await viewManager.openApplication(runId, `${ats.baseUrl}/apply/step1`);
+    await new Promise((r) => setTimeout(r, 800));
+
+    const viewWc = (viewManager as any).view?.webContents;
+    assert(viewWc, "View webContents must exist before crashing");
+
+    // Kill the untrusted renderer process out from under the trusted UI.
+    viewWc.forcefullyCrashRenderer();
+    await new Promise((r) => setTimeout(r, 1200));
+
+    const crashed = viewManager.getState();
+    assert(
+      crashed.blockedNavigationReason === "CRASHED",
+      `Expected CRASHED after renderer kill, got "${crashed.blockedNavigationReason}"`
+    );
+    // The state is deliberately NOT reset: the trusted UI keeps the run so it can
+    // surface the crash reason. What must be gone is the WebContentsView itself.
+    assert(
+      (viewManager as any).view === null,
+      "Crash must dispose the WebContentsView rather than leave a dead view attached"
+    );
+    assert(
+      viewWc.isDestroyed(),
+      "The crashed renderer's webContents must be destroyed"
+    );
+
+    // The trusted UI survived, and the dedicated session still recovers.
+    const reopenRes = await viewManager.openApplication(runId, `${ats.baseUrl}/apply/step2`);
+    assert(reopenRes.success === true, "Reopening after a renderer crash should succeed");
+    await new Promise((r) => setTimeout(r, 800));
+
+    const recovered = viewManager.getState();
+    assert(
+      recovered.title.includes("Synthetic ATS Step 2 (Authenticated)"),
+      `Session must survive a renderer crash, got title: "${recovered.title}"`
+    );
+    assert(
+      recovered.blockedNavigationReason === null,
+      `Reopen must clear the crash reason, got "${recovered.blockedNavigationReason}"`
+    );
+  });
+
   // Clean up
   viewManager.closeApplication();
   if (mainWindow && !mainWindow.isDestroyed()) {

@@ -210,7 +210,7 @@ async def test_runner_claim_lease_heartbeat_and_events(
         attempt=1,
         sequence_num=5,  # 1: RUN_CREATED, 2: LEASE_CLAIMED, 3: LEASE_EXTENDED...
         event_type="field_filled",
-        payload={"field": "first_name", "value": "Guilherme"},
+        payload={"field": "first_name", "value": "Dakota"},
         idempotency_key="field_first_name",
     )
     assert ev1.sequence_num == 5
@@ -222,7 +222,7 @@ async def test_runner_claim_lease_heartbeat_and_events(
         attempt=1,
         sequence_num=5,
         event_type="field_filled",
-        payload={"field": "first_name", "value": "Guilherme"},
+        payload={"field": "first_name", "value": "Dakota"},
         idempotency_key="field_first_name",
     )
     assert ev1_dup.id == ev1.id

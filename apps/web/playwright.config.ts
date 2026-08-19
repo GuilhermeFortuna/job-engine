@@ -1,5 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Reusing a leftover :3005 / :8088 listener silently serves a STALE bundle and
+// produces misleading "element not found" failures (CROSS-009 defect D-5). Default
+// to starting fresh servers everywhere; opt back in with E2E_REUSE_SERVER=1 only
+// when you know the running server matches your working tree.
+const reuseExistingServer = process.env.E2E_REUSE_SERVER === "1";
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -24,7 +30,7 @@ export default defineConfig({
     {
       command: "node e2e/mock-server.mjs",
       url: "http://127.0.0.1:8088/api/v1/catalog/filters",
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer,
       env: {
         MOCK_PORT: "8088",
       },
@@ -32,7 +38,7 @@ export default defineConfig({
     {
       command: "npx next start -p 3005",
       url: "http://127.0.0.1:3005/jobs",
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer,
       env: {
         PORT: "3005",
         NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:8088",

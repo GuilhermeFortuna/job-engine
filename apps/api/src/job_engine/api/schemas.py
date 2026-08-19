@@ -647,7 +647,10 @@ class ApplicationRunCreateRequest(BaseModel):
 
     job_group_ids: list[UUID] = Field(min_length=1, max_length=25)
     resume_id: str | None = None
-    automation_mode: AutomationMode = AutomationMode.FULL_AUTO
+    # Deliberately required and un-defaulted. A default of FULL_AUTO meant any
+    # caller that simply omitted the field silently created an unattended run
+    # (CROSS-009 advisory A-1). Callers must now state the mode they intend.
+    automation_mode: AutomationMode
 
 
 class ApplicationRunConflictItem(ApiModel):

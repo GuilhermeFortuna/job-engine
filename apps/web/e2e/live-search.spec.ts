@@ -146,6 +146,11 @@ test.describe("Interactive Live Search & SSE Streaming", () => {
     page,
   }) => {
     await page.goto("/jobs");
+    // Axe asserts document-title. Wait for the document to settle before
+    // scanning, otherwise a scan racing the navigation reports a spurious
+    // "Document does not have a non-empty <title>" violation.
+    await expect(page).toHaveTitle(/job engine/i);
+
     const liveSearchBtn = page.getByRole("button", {
       name: /trigger live search/i,
     });

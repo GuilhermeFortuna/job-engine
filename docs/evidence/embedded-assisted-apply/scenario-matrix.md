@@ -334,3 +334,80 @@ corepack pnpm run check
   apps/web      FAILED — react-hooks/set-state-in-effect
                 catalog-backdrop.tsx:22  → defect D-1
 ```
+
+---
+
+## 8. Post-remediation additions (2026-08-19)
+
+Added after the `CONDITIONAL_GO`, under owner instruction. See section 12 of the
+acceptance report for authority and rationale.
+
+### A9 — Remote renderer crash recovery (closes gap G-1)
+
+`electron-test-runner.ts` case 9, real Electron:
+
+| Assertion | Result |
+| --- | --- |
+| `forcefullyCrashRenderer()` on the live remote view sets `blockedNavigationReason === "CRASHED"` | PASS |
+| The `WebContentsView` is disposed (`view === null`) | PASS |
+| The crashed `webContents` is destroyed | PASS |
+| Reopening after the crash succeeds | PASS |
+| The dedicated session survives (authenticated step 2 still renders) | PASS |
+| Reopen clears the crash reason | PASS |
+
+The run state is deliberately **not** reset on crash: the trusted UI keeps the run
+so it can display the reason. A first draft asserting `runId === null` was wrong
+about the product and was corrected, not worked around.
+
+### C4 — Greenhouse real-backend lifecycle (closes gap G-2)
+
+`greenhouse/greenhouse-lifecycle-runner.ts` against the **real FastAPI backend and
+real PostgreSQL**, 12/12 PASS — Greenhouse now at parity with Lever:
+
+1. claims the owner-selected Greenhouse run
+2. fetches and verifies the granted resume
+3. detects the synthetic Greenhouse application form
+4. observes an unresolved required legal attestation
+5. fills authorized visible values
+6. uploads resume and reaches `READY_FOR_REVIEW` **without replaying earlier fills**
+7. arms `submit_armed` and pauses for the owner
+8. **refuses to submit before the owner releases**
+9. detects owner release and reclaims the same run
+10. **submits once and reconciles a confirmed receipt**
+11. **never submits a second time**
+12. **ambiguous receipt is null and is not activated again**
+
+Case 6 additionally asserts the previously verified email and last name are still
+the values on the page after the resume, proving completed fills are not re-driven.
+
+### D6 — `FULL_AUTO` can no longer be reached by omission (closes advisory A-1)
+
+`ApplicationRunCreateRequest.automation_mode` is required and un-defaulted.
+
+| Assertion | Result |
+| --- | --- |
+| `POST /api/v1/application-runs` without `automation_mode` returns 422 with a `missing` error on that field | PASS |
+| Direct `ApplicationRunCreateRequest(job_group_ids=[...])` raises `ValidationError` | PASS |
+
+### Repository hygiene re-scan (closes advisories A-2, A-3)
+
+```
+scan for "-----BEGIN … PRIVATE KEY" across tracked files   → none
+scan for owner personal data in fixtures                   → none
+   (only config.py GitHub repo-URL attribution remains)
+```
+
+`tests/fixtures/certs.ts` now generates a 2048-bit self-signed loopback
+certificate in-process with `node-forge` at import time; all six fixture drivers
+still pass over real HTTPS.
+
+### Post-remediation full validation
+
+```
+corepack pnpm run check                              exit 0
+corepack pnpm run test                               api 320 / desktop 282 / web 137
+pnpm run build   (no environment set at all)         exit 0
+pnpm --filter @job-engine/desktop run test:fixtures  7 files / 7 passed
+pnpm --filter @job-engine/web run test:e2e           26 passed
+git diff --check                                     clean
+```

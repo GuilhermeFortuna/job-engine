@@ -53,6 +53,16 @@ Copy the example file to a local, untracked `.env`:
 cp .env.example .env
 ```
 
+Then replace the `JOB_ENGINE_RUNNER_SECRET` placeholder with a real value. The
+API refuses to start with fewer than 32 characters:
+
+```bash
+openssl rand -hex 32
+```
+
+`./dev.sh` does this for you when it creates `.env` on first run. The shipped
+placeholder is deliberately not a usable secret — never deploy it.
+
 Do not commit `.env`. The example contains only local development placeholders:
 
 | Key | Example value |
@@ -170,7 +180,13 @@ corepack pnpm --filter @job-engine/web run build
 - `dev` serves the App Router application.
 - `check` runs `next typegen`, strict `tsc --noEmit`, and ESLint. No separate formatter is installed.
 - `test` runs Vitest unit and component tests (`vitest run`).
-- `test:e2e` runs Playwright end-to-end and Axe accessibility tests (`playwright test`).
+- `test:e2e` runs Playwright end-to-end and Axe accessibility tests. Scope it to
+  one spec by passing the file name, e.g.
+  `corepack pnpm --filter @job-engine/web run test:e2e -- jobs.spec.ts`.
+  Playwright always starts fresh `:3005` / `:8088` servers; a leftover listener
+  from an earlier run would otherwise serve a stale bundle and produce
+  misleading "element not found" failures. Set `E2E_REUSE_SERVER=1` to reuse a
+  running server only when you know it matches your working tree.
 - `build` produces the production Next.js build.
 
 ## Desktop (`apps/desktop`)

@@ -229,7 +229,7 @@ describe("GenericFormAdapter", () => {
   it("captures a confirmed receipt without copying page text", async () => {
     document.body.innerHTML = `
       <h1>Thank you for applying</h1>
-      <p>We emailed guilherme@example.com about role 12345.</p>
+      <p>We emailed dakota@example.com about role 12345.</p>
     `;
     const receipt = await adapter.captureReceipt(
       makeContext("https://jobs.example.com/apply/done?token=secret"),
@@ -238,7 +238,7 @@ describe("GenericFormAdapter", () => {
     expect(receipt!.confirmationSignal).toBe("confirmation_text");
     // The query string and any page text stay out of the receipt.
     expect(JSON.stringify(receipt)).not.toContain("secret");
-    expect(JSON.stringify(receipt)).not.toContain("guilherme@example.com");
+    expect(JSON.stringify(receipt)).not.toContain("dakota@example.com");
     expect(receipt!.finalUrl).toBe("https://jobs.example.com/apply/done");
   });
 

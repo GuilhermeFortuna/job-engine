@@ -346,3 +346,82 @@ produce this result. The only non-source action taken was supplying
 `JOB_ENGINE_RUNNER_SECRET` as an environment variable (§6) and terminating stale local test
 servers (D-5). No live form was loaded, mutated, or submitted. No approval status was
 changed. All defects are reported to their owning orders rather than repaired here.
+
+---
+
+## 12. Post-acceptance remediation addendum (2026-08-19)
+
+Recorded after the `CONDITIONAL_GO` above. The original decision stands on its
+own evidence; this section records what changed afterwards and who authorised it.
+
+**Round 1 — commits `6053a25`, `779ea45` (implementation side).** Re-verified
+against HEAD `779ea45`:
+
+| Defect | Status | Verification |
+| --- | --- | --- |
+| D-1 `set-state-in-effect` | **FIXED** | `CatalogBackdrop` rewritten with `useSyncExternalStore`; `pnpm run check` exit 0 |
+| D-3 contrast 3.65:1 | **FIXED** | `text-emerald-600` → `emerald-700`; full Playwright suite green including the axe audit |
+| D-4 inert `--` filter | **FIXED** | `apps/web/scripts/run-e2e.mjs` strips the separator; scoped run reports 10 tests, not 26 |
+| D-5 stale server reuse | **FIXED (CI path)** | `export CI=true` in `scripts/ci-lib.sh` plus `assert_listen_port_free` |
+| D-6 `next-env.d.ts` drift | **FIXED** | `next typegen` no longer dirties the tree |
+| D-2 build on clean checkout | **NOT FIXED** | still failed; CI never built the API |
+
+That round also fixed an unrelated defect not in this report: `resolved_evidence_root`
+lacked `.expanduser()`, so the documented `~/.job-engine/evidence` default would
+have created a literal `~` directory inside the repository.
+
+**Round 2 — owner-instructed remediation.** The owner directed the acceptance
+agent to repair the outstanding items. This is a deliberate, recorded departure
+from the CROSS-009 forbidden decision "do not repair product code": it happened
+**after** the decision was issued, on explicit owner instruction, and no
+assertion was weakened to manufacture a pass. One assertion was *corrected* —
+see G-1 below.
+
+| Item | Resolution |
+| --- | --- |
+| **D-2** | `apps/api` build target is now `scripts/build_smoke.py`, which injects explicit throwaway `Settings` instead of demanding an operator secret to smoke-test the import graph. The 32-character runner-secret rule is a *server startup* guard and remains enforced by `create_app()` and covered by `tests/test_health.py`. `pnpm run build` now passes on a clean checkout with no environment at all. New `scripts/ci-backend-build.sh` and a `backend-build` GitHub Actions job run it with `JOB_ENGINE_RUNNER_SECRET` explicitly unset so the regression cannot return. `.env.example` now carries a generation command; `dev.sh` mints a real secret when it creates `.env`; `docs/development.md` documents both. |
+| **D-5 residual** | `reuseExistingServer` no longer keys off `CI`. It is now opt-in via `E2E_REUSE_SERVER=1`, so a direct `pnpm run test:e2e` also starts fresh servers. Documented in `docs/development.md`. |
+| **A-1** | `ApplicationRunCreateRequest.automation_mode` is now **required and un-defaulted**. Every existing caller already passed it explicitly, so no client broke. New regression test asserts a POST omitting the field returns 422 and that direct model construction raises `ValidationError`. |
+| **A-2** | The committed PEM private key is gone. `tests/fixtures/certs.ts` now generates a 2048-bit self-signed loopback certificate in-process via `node-forge` at import time. Generation is synchronous, so the fixture servers still build their `https.Server` in a constructor. A repository-wide scan for `BEGIN … PRIVATE KEY` now returns nothing. |
+| **A-3** | The owner's real name is gone from fixture data, replaced by the fictional "Dakota Rivera" / `dakota@example.com`. The `config.py` occurrences are the GitHub repository URL (legitimate attribution) and were left. The isolated-world "unicode" hostile-transport case previously carried a pure-ASCII name; it now carries genuinely non-ASCII text (`Zoë Ünlü — 東京 🎯`), which strengthens that assertion. |
+| **G-1** | `electron-test-runner.ts` gained case 9, which calls `forcefullyCrashRenderer()` on the live remote view, then asserts the crash reason is `CRASHED`, the `WebContentsView` is disposed, its `webContents` is destroyed, and a subsequent reopen recovers the dedicated session with the reason cleared. The first draft asserted `runId === null`; that was **the test being wrong, not the product**. `closeApplication(false)` deliberately preserves the run so the trusted UI can display the crash reason — a full reset would wipe `blockedNavigationReason` too. The assertion was corrected to the property that actually matters (view disposal). |
+| **G-2** | New `greenhouse/greenhouse-lifecycle-runner.ts` + `greenhouse-lifecycle.test.ts` drive Greenhouse against the **real FastAPI backend and PostgreSQL**, 12 cases mirroring the Lever lifecycle: claim, resume fetch/verify, detect, unresolved legal attestation, authorised fill, upload to `READY_FOR_REVIEW` without replaying earlier fills, arm, refusal before release, release + same-run reclaim, one confirmed submit, no second submit, ambiguous receipt not re-activated. Greenhouse evidence is now at parity with Lever. |
+
+**A note on what G-2 revealed.** An intermediate draft asserted the run would
+pause with `NEEDS_ANSWERS` on the required sponsorship question. It did not: the
+backend answer policy resolves that question from the seeded vault, and the only
+genuine blocker was an unfilled last name. The assertion was removed rather than
+engineered into passing — pause behaviour is already covered by the attestation
+case here and by the Greenhouse runtime runner's eight exception cases.
+
+### Remaining open after remediation
+
+- `LEGAL-GATE-ATS-001` and `PROVIDER-PRIVACY-001` are **still OPEN**. Nothing in
+  this round touched them.
+- Scenario **C.4** (owner-authorised live non-submitting inspection) is still
+  **not performed**, and still requires the owner to name a target.
+- **G-3** and **G-4** stand unchanged: generated-answer coverage is conditional,
+  and there is still no live evidence of any kind.
+- Therefore the decision remains **`CONDITIONAL_GO`**. Remediation closed the
+  repository-hygiene and coverage items; it did not and could not close the
+  legal, provider, or live-evidence gates.
+
+### Post-remediation validation
+
+```
+corepack pnpm run check                              exit 0
+corepack pnpm run test                               api 320 passed / 3 skipped
+                                                     desktop 282 passed
+                                                     web 137 passed
+pnpm run build (with NO env at all)                  exit 0
+pnpm --filter @job-engine/desktop run test:fixtures  7 files / 7 passed
+pnpm --filter @job-engine/web run test:e2e           26 passed
+git diff --check                                     clean
+scan for committed PEM private keys                  none
+scan for owner personal data in fixtures             none
+```
+
+One flake was observed and hardened during this round: the Live Search axe audit
+failed once with `document-title` when a scan raced the navigation. Titles are
+defined server-side in `layout.tsx` and `jobs/page.tsx`, three consecutive full
+suites passed 26/26, and the test now awaits `toHaveTitle` before scanning.
