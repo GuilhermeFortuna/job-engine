@@ -34,9 +34,12 @@ from job_engine.domain.application_answers import (
     ReasonCode,
 )
 from job_engine.domain.applications import (
+    ApplicationException,
     ApplicationRun,
     ApplicationRunStatus,
     AutomationMode,
+    ExceptionStatus,
+    ExceptionType,
     calculate_answer_bank_hash,
     calculate_token_hash,
 )
@@ -193,6 +196,7 @@ def make_run(
     lease_expires_at: datetime | None = None,
     automation_mode: AutomationMode = AutomationMode.FULL_AUTO,
     platform_adapter_id: str = "greenhouse",
+    exceptions: tuple[ApplicationException, ...] = (),
 ) -> ApplicationRun:
     snapshot = answer_bank_snapshot if answer_bank_snapshot is not None else {}
     return ApplicationRun(
@@ -218,6 +222,7 @@ def make_run(
         ),
         created_at=_NOW,
         updated_at=_NOW,
+        exceptions=exceptions,
     )
 
 
@@ -416,6 +421,25 @@ def test_authorize_run_for_answers_stale_answer_bank_snapshot() -> None:
         )
 
 
+def test_authorize_run_ignores_answers_added_after_frozen_snapshot() -> None:
+    resume = make_resume()
+    later_answer = make_approved_answer(
+        answer_id="ans_later",
+        intent=QuestionIntent.LOCATION_PREFERENCE,
+        text="Remote only",
+    )
+    run = make_run(resume_asset_id=resume.id, answer_bank_snapshot={})
+    context = authorize_run_for_answers(
+        run,
+        _RAW_LEASE_TOKEN,
+        profile=make_profile(),
+        resume=resume,
+        answer_bank=(later_answer,),
+        job_evidence=make_job_evidence(job_id=run.job_group_id),
+    )
+    assert context.answer_bank == ()
+
+
 # --- Deterministic resolution never calls a provider -------------------------
 
 
@@ -438,6 +462,70 @@ async def test_verified_profile_match_never_calls_provider() -> None:
     assert decision.answer == "30"
     assert decision.reason_code == ReasonCode.EXACT_VERIFIED_PROFILE
     assert decision.confidence == 1.0
+
+
+@pytest.mark.asyncio
+async def test_exact_owner_resolution_is_bound_to_run_field_and_identity() -> None:
+    settings = make_settings()
+    service = ApplicationAnswerService(settings, provider=ExplodingProvider())
+    resume = make_resume()
+    run_id = uuid4()
+    exception = ApplicationException(
+        id=uuid4(),
+        run_id=run_id,
+        exception_type=ExceptionType.UNRESOLVED_QUESTION,
+        status=ExceptionStatus.RESOLVED,
+        context_payload={},
+        resolution_payload={
+            "owner_answers": [
+                {
+                    "field_fingerprint": "fp_owner",
+                    "label": "Preferred work arrangement",
+                    "control_type": "text",
+                    "question_intent": "location_preference",
+                    "answer_text": "Remote only",
+                    "saved_to_answer_bank": False,
+                }
+            ]
+        },
+        created_at=_NOW,
+        resolved_at=_NOW,
+    )
+    run = make_run(
+        resume_asset_id=resume.id,
+        automation_mode=AutomationMode.SEMI_AUTO_PAUSE_BEFORE_SUBMIT,
+        exceptions=(exception,),
+    ).model_copy(update={"id": run_id})
+    context = make_context(run=run, resume=resume)
+
+    exact = make_observation(
+        run_id=run.id,
+        field_fingerprint="fp_owner",
+        label="Preferred work arrangement",
+    )
+    (decision,) = await service.decide(context, (exact,))
+    assert decision.decision == AnswerDecisionType.AUTO_FILL
+    assert decision.answer == "Remote only"
+    assert decision.reason_code == ReasonCode.OWNER_CONFIRMED
+    assert decision.evidence == (
+        EvidenceReference(source="owner_resolution", reference=str(exception.id)),
+    )
+
+    wrong_field = make_observation(
+        run_id=run.id,
+        field_fingerprint="fp_other",
+        label="Preferred work arrangement",
+    )
+    (wrong_field_decision,) = await service.decide(context, (wrong_field,))
+    assert wrong_field_decision.reason_code != ReasonCode.OWNER_CONFIRMED
+
+    changed_label = make_observation(
+        run_id=run.id,
+        field_fingerprint="fp_owner",
+        label="Legally attest that all information is true",
+    )
+    (changed_decision,) = await service.decide(context, (changed_label,))
+    assert changed_decision.reason_code != ReasonCode.OWNER_CONFIRMED
 
 
 @pytest.mark.asyncio

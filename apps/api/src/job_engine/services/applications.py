@@ -29,8 +29,16 @@ from job_engine.db.repositories import (
     ResourceNotFoundError,
 )
 from job_engine.domain.applicant import (
+    LEGAL_CONSENT_INTENTS,
+    PolicyCategory,
     QuestionIntent,
     ReusableAnswerInput,
+)
+from job_engine.domain.application_answers import (
+    ControlType,
+    ObservationValidationConstraints,
+    QuestionObservation,
+    validate_control_compatibility,
 )
 from job_engine.domain.applications import (
     ApplicationException,
@@ -40,6 +48,7 @@ from job_engine.domain.applications import (
     AuditEventType,
     EvidenceArtifact,
     EvidenceType,
+    ExceptionStatus,
     ExceptionType,
     ReceiptSummary,
     RunnerReleaseReason,
@@ -428,14 +437,131 @@ class ApplicationService:
             vault_repo = ApplicantVaultRepository(session)
             app_repo = ApplicationRepository(session)
 
-            for ans_item in request.answers:
-                if ans_item.save_to_answer_bank:
-                    answer_id = f"ans_{uuid4().hex[:12]}"
-                    intent = (
-                        ans_item.question_intent
-                        if isinstance(ans_item.question_intent, QuestionIntent)
-                        else QuestionIntent(ans_item.question_intent)
+            run = await app_repo.get_run(run_id)
+            if run is None:
+                raise ApplicationRunNotFoundError(f"Run {run_id} not found")
+            exception = next(
+                (item for item in run.exceptions if item.id == request.exception_id),
+                None,
+            )
+            if exception is None:
+                raise ResourceNotFoundError(
+                    f"Exception {request.exception_id} not found for run {run_id}"
+                )
+            if exception.status != ExceptionStatus.PENDING:
+                raise ValueError(f"Exception {request.exception_id} is not pending")
+            if exception.exception_type not in {
+                ExceptionType.MISSING_PROFILE_FIELD,
+                ExceptionType.UNRESOLVED_QUESTION,
+                ExceptionType.REVIEW_REQUIRED,
+            }:
+                raise ValueError(
+                    f"Exception type '{exception.exception_type.value}' does not "
+                    "accept owner field answers"
+                )
+
+            raw_fields = exception.context_payload.get("fields")
+            if not isinstance(raw_fields, list) or not raw_fields:
+                raise ValueError("Exception has no resolvable field reports")
+            fields_by_fingerprint: dict[str, dict[str, Any]] = {}
+            for raw in raw_fields:
+                if not isinstance(raw, dict):
+                    continue
+                fingerprint = raw.get("field_fingerprint")
+                if not isinstance(fingerprint, str) or not fingerprint.strip():
+                    continue
+                if fingerprint in fields_by_fingerprint:
+                    raise ValueError(
+                        f"Exception contains duplicate field_fingerprint: {fingerprint}"
                     )
+                fields_by_fingerprint[fingerprint] = raw
+
+            requested_fingerprints = [
+                item.field_fingerprint for item in request.answers
+            ]
+            if len(set(requested_fingerprints)) != len(requested_fingerprints):
+                raise ValueError("Each field_fingerprint may be resolved only once")
+            if set(requested_fingerprints) != set(fields_by_fingerprint):
+                raise ValueError(
+                    "Resolution must provide exactly one answer for every "
+                    "exception field"
+                )
+
+            owner_answers: list[dict[str, Any]] = []
+
+            for ans_item in request.answers:
+                field = fields_by_fingerprint[ans_item.field_fingerprint]
+                try:
+                    control_type = ControlType(str(field["control_type"]))
+                    intent_raw = field.get("question_intent")
+                    intent = (
+                        QuestionIntent(intent_raw)
+                        if isinstance(intent_raw, str)
+                        else None
+                    )
+                    constraints = ObservationValidationConstraints(
+                        min_length=(
+                            field.get("min_length")
+                            if isinstance(field.get("min_length"), int)
+                            else None
+                        ),
+                        max_length=(
+                            field.get("max_length")
+                            if isinstance(field.get("max_length"), int)
+                            else None
+                        ),
+                        pattern=(
+                            field.get("pattern")
+                            if isinstance(field.get("pattern"), str)
+                            else None
+                        ),
+                    )
+                    observation = QuestionObservation(
+                        run_id=run.id,
+                        adapter_id=run.platform_adapter_id,
+                        page_id=str(
+                            exception.context_payload.get("page_id", "owner_review")
+                        ),
+                        field_fingerprint=ans_item.field_fingerprint,
+                        label=str(field["label"]),
+                        required=bool(field["required"]),
+                        control_type=control_type,
+                        options=tuple(
+                            option
+                            for option in field.get("options", ())
+                            if isinstance(option, str)
+                        ),
+                        validation_constraints=constraints,
+                    )
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"Invalid field report for {ans_item.field_fingerprint}"
+                    ) from exc
+
+                mismatch = validate_control_compatibility(
+                    observation, ans_item.answer_text
+                )
+                if mismatch is not None:
+                    raise ValueError(
+                        f"Answer for {ans_item.field_fingerprint} is incompatible: "
+                        f"{mismatch.value}"
+                    )
+
+                saved_to_answer_bank = False
+                if ans_item.save_to_answer_bank:
+                    if intent is None or intent in LEGAL_CONSENT_INTENTS:
+                        raise ValueError(
+                            f"Field {ans_item.field_fingerprint} cannot be saved "
+                            "to the reusable answer bank"
+                        )
+                    if ans_item.platform_scope not in {
+                        None,
+                        run.platform_adapter_id,
+                    }:
+                        raise ValueError(
+                            "platform_scope must be omitted or match the run adapter"
+                        )
+                    answer_id = f"ans_{uuid4().hex[:12]}"
                     await vault_repo.create_answer(
                         ReusableAnswerInput(
                             answer_id=answer_id,
@@ -443,18 +569,28 @@ class ApplicationService:
                             jurisdiction=ans_item.jurisdiction,
                             platform_scope=ans_item.platform_scope,
                             answer_text=ans_item.answer_text,
-                            policy_category=ans_item.policy_category,
+                            policy_category=PolicyCategory.APPROVED_REUSABLE,
                             provenance="owner_authored",
                             last_confirmed_at=datetime.now(UTC),
                         )
                     )
+                    saved_to_answer_bank = True
+
+                owner_answers.append(
+                    {
+                        "field_fingerprint": ans_item.field_fingerprint,
+                        "label": observation.label,
+                        "control_type": observation.control_type.value,
+                        "question_intent": intent.value if intent is not None else None,
+                        "answer_text": ans_item.answer_text,
+                        "saved_to_answer_bank": saved_to_answer_bank,
+                    }
+                )
 
             updated = await app_repo.resolve_exception(
                 run_id=run_id,
                 exception_id=request.exception_id,
-                resolution_payload={
-                    "answers": [a.model_dump(mode="json") for a in request.answers]
-                },
+                resolution_payload={"owner_answers": owner_answers},
             )
             await session.commit()
 

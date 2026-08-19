@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from job_engine.api.dependencies import get_settings
 from job_engine.api.schemas import (
+    ApplicationExceptionFieldRead,
     ApplicationExceptionRead,
     ApplicationRunCreateRequest,
     ApplicationRunCreateResponse,
@@ -59,6 +60,8 @@ from job_engine.db.repositories import (
     ResourceNotFoundError,
     SubmitArmedRequirementError,
 )
+from job_engine.domain.applicant import LEGAL_CONSENT_INTENTS, QuestionIntent
+from job_engine.domain.application_answers import ControlType
 from job_engine.domain.applications import (
     ApplicationException,
     ApplicationRun,
@@ -157,6 +160,114 @@ def _map_event_read(event: ApplicationRunEvent) -> ApplicationRunEventRead:
     )
 
 
+def _extract_exception_field_reports(
+    context_payload: dict[str, Any],
+) -> tuple[ApplicationExceptionFieldRead, ...]:
+    raw_fields = context_payload.get("fields")
+    if not isinstance(raw_fields, list):
+        return ()
+
+    reports: list[ApplicationExceptionFieldRead] = []
+    for raw in raw_fields:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            intent_raw = raw.get("question_intent")
+            intent = QuestionIntent(intent_raw) if isinstance(intent_raw, str) else None
+            reports.append(
+                ApplicationExceptionFieldRead(
+                    field_fingerprint=str(raw["field_fingerprint"]),
+                    label=str(raw["label"]),
+                    control_type=ControlType(str(raw["control_type"])),
+                    required=bool(raw["required"]),
+                    status=str(raw["status"]),
+                    reason_code=(
+                        str(raw["reason_code"])
+                        if raw.get("reason_code") is not None
+                        else None
+                    ),
+                    question_intent=intent,
+                    options=tuple(
+                        str(option)
+                        for option in raw.get("options", ())
+                        if isinstance(option, str)
+                    ),
+                    min_length=(
+                        int(raw["min_length"])
+                        if isinstance(raw.get("min_length"), int)
+                        else None
+                    ),
+                    max_length=(
+                        int(raw["max_length"])
+                        if isinstance(raw.get("max_length"), int)
+                        else None
+                    ),
+                    pattern=(
+                        str(raw["pattern"])
+                        if isinstance(raw.get("pattern"), str)
+                        else None
+                    ),
+                    allow_save_to_answer_bank=(
+                        intent is not None and intent not in LEGAL_CONSENT_INTENTS
+                    ),
+                )
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return tuple(reports)
+
+
+def _safe_resolution_payload(
+    payload: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if payload is None:
+        return None
+    raw_answers = payload.get("owner_answers")
+    if not isinstance(raw_answers, list):
+        return _redact_resolution_mapping(payload)
+    return {
+        "owner_answers": [
+            {
+                "field_fingerprint": str(item.get("field_fingerprint", "")),
+                "answer_text": "[REDACTED]",
+                "saved_to_answer_bank": bool(item.get("saved_to_answer_bank", False)),
+            }
+            for item in raw_answers
+            if isinstance(item, dict)
+        ]
+    }
+
+
+def _redact_resolution_mapping(payload: dict[str, Any]) -> dict[str, Any]:
+    redacted: dict[str, Any] = {}
+    for key, value in payload.items():
+        normalized_key = key.casefold()
+        if any(
+            sensitive in normalized_key
+            for sensitive in (
+                "answer",
+                "value",
+                "token",
+                "secret",
+                "password",
+                "cookie",
+                "authorization",
+                "credential",
+            )
+        ):
+            redacted[key] = "[REDACTED]"
+        elif isinstance(value, dict):
+            redacted[key] = _redact_resolution_mapping(value)
+        elif isinstance(value, list):
+            redacted[key] = [
+                _redact_resolution_mapping(item) if isinstance(item, dict) else item
+                for item in value
+            ]
+        else:
+            redacted[key] = value
+    return redacted
+
+
 def _map_exception_read(exc: ApplicationException) -> ApplicationExceptionRead:
     return ApplicationExceptionRead(
         id=exc.id,
@@ -164,7 +275,8 @@ def _map_exception_read(exc: ApplicationException) -> ApplicationExceptionRead:
         exception_type=exc.exception_type,
         status=exc.status,
         context_payload=exc.context_payload,
-        resolution_payload=exc.resolution_payload,
+        field_reports=_extract_exception_field_reports(exc.context_payload),
+        resolution_payload=_safe_resolution_payload(exc.resolution_payload),
         created_at=exc.created_at,
         resolved_at=exc.resolved_at,
     )

@@ -679,12 +679,28 @@ class ApplicationRunEventRead(ApiModel):
     created_at: datetime
 
 
+class ApplicationExceptionFieldRead(ApiModel):
+    field_fingerprint: str
+    label: str
+    control_type: ControlType
+    required: bool
+    status: str
+    reason_code: str | None = None
+    question_intent: QuestionIntent | None = None
+    options: tuple[str, ...] = ()
+    min_length: int | None = None
+    max_length: int | None = None
+    pattern: str | None = None
+    allow_save_to_answer_bank: bool = False
+
+
 class ApplicationExceptionRead(ApiModel):
     id: UUID
     run_id: UUID
     exception_type: ExceptionType
     status: ExceptionStatus
     context_payload: dict[str, Any]
+    field_reports: tuple[ApplicationExceptionFieldRead, ...] = ()
     resolution_payload: dict[str, Any] | None = None
     created_at: datetime
     resolved_at: datetime | None = None
@@ -756,12 +772,11 @@ class ApplicationRunListResponse(ApiModel):
 class ResolveAnswerItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    question_intent: QuestionIntent | str
-    answer_text: str
+    field_fingerprint: str = Field(min_length=1, max_length=256)
+    answer_text: str = Field(min_length=1, max_length=10_000)
     save_to_answer_bank: bool = False
     jurisdiction: str | None = None
     platform_scope: str | None = None
-    policy_category: PolicyCategory = PolicyCategory.APPROVED_REUSABLE
 
 
 class ResolveAnswersRequest(BaseModel):
@@ -889,7 +904,7 @@ class AnswerDecisionRequest(BaseModel):
 
 
 class EvidenceReferenceSchema(ApiModel):
-    source: Literal["profile", "resume", "answer_bank", "job"]
+    source: Literal["profile", "resume", "answer_bank", "job", "owner_resolution"]
     reference: str
 
 
@@ -901,6 +916,7 @@ class AnswerDecisionSchema(ApiModel):
     confidence: float
     evidence: tuple[EvidenceReferenceSchema, ...] = ()
     reason_code: ReasonCode
+    question_intent: QuestionIntent | None = None
 
 
 class AnswerDecisionResponse(ApiModel):

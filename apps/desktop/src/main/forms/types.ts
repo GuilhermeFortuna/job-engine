@@ -177,6 +177,7 @@ export const answerDecisionSchema = z.object({
     .array(z.object({ source: z.string(), reference: z.string() }))
     .default([]),
   reason_code: z.string(),
+  question_intent: z.string().nullable().optional(),
 });
 export type AnswerDecision = z.infer<typeof answerDecisionSchema>;
 

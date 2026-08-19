@@ -44,6 +44,7 @@ from job_engine.domain.applications import (
     ApplicationRun,
     ApplicationRunStatus,
     AutomationMode,
+    ExceptionStatus,
     calculate_answer_bank_hash,
     calculate_token_hash,
 )
@@ -90,6 +91,16 @@ class AuthorizedRunAnswerContext:
     job_evidence: JobEvidence
 
 
+@dataclass(frozen=True)
+class OwnerResolvedAnswer:
+    exception_id: UUID
+    field_fingerprint: str
+    label: str
+    control_type: str
+    answer_text: str
+    question_intent: QuestionIntent | None
+
+
 def authorize_run_for_answers(
     run: ApplicationRun | None,
     raw_lease_token: str,
@@ -124,19 +135,73 @@ def authorize_run_for_answers(
     if resume is None or resume.sha256 != run.resume_sha256:
         raise StaleRunContextError(f"Resume asset checksum mismatch for run {run.id}")
 
-    snapshot_versions = {a.answer_id: a.version for a in answer_bank}
-    if snapshot_versions != run.answer_bank_snapshot:
-        raise StaleRunContextError(f"Answer bank snapshot mismatch for run {run.id}")
-    if calculate_answer_bank_hash(snapshot_versions) != run.answer_bank_hash:
+    answers_by_id = {answer.answer_id: answer for answer in answer_bank}
+    snapshot_answers: list[ReusableAnswer] = []
+    for answer_id, expected_version in run.answer_bank_snapshot.items():
+        answer = answers_by_id.get(answer_id)
+        if answer is None or answer.version != expected_version:
+            raise StaleRunContextError(
+                f"Answer bank snapshot mismatch for run {run.id}"
+            )
+        snapshot_answers.append(answer)
+    if calculate_answer_bank_hash(run.answer_bank_snapshot) != run.answer_bank_hash:
         raise StaleRunContextError(f"Answer bank hash mismatch for run {run.id}")
 
     return AuthorizedRunAnswerContext(
         run=run,
         profile=profile,
         resume=resume,
-        answer_bank=answer_bank,
+        answer_bank=tuple(snapshot_answers),
         job_evidence=job_evidence,
     )
+
+
+def _owner_resolved_answer(
+    run: ApplicationRun, observation: QuestionObservation
+) -> OwnerResolvedAnswer | None:
+    """Return the latest exact per-run owner answer for this observed field.
+
+    Matching includes the fingerprint and stable visible identity. A resolution
+    from another run, another field, or a materially changed observation is not
+    eligible for reuse.
+    """
+    for exception in reversed(run.exceptions):
+        if (
+            exception.status != ExceptionStatus.RESOLVED
+            or exception.resolution_payload is None
+        ):
+            continue
+        raw_answers = exception.resolution_payload.get("owner_answers")
+        if not isinstance(raw_answers, list):
+            continue
+        for raw in raw_answers:
+            if not isinstance(raw, dict):
+                continue
+            if raw.get("field_fingerprint") != observation.field_fingerprint:
+                continue
+            if raw.get("label") != observation.label:
+                continue
+            if raw.get("control_type") != observation.control_type.value:
+                continue
+            answer_text = raw.get("answer_text")
+            if not isinstance(answer_text, str) or not answer_text.strip():
+                continue
+            intent_raw = raw.get("question_intent")
+            intent = None
+            try:
+                if isinstance(intent_raw, str):
+                    intent = QuestionIntent(intent_raw)
+            except ValueError:
+                intent = None
+            return OwnerResolvedAnswer(
+                exception_id=exception.id,
+                field_fingerprint=observation.field_fingerprint,
+                label=observation.label,
+                control_type=observation.control_type.value,
+                answer_text=answer_text,
+                question_intent=intent,
+            )
+    return None
 
 
 def build_job_evidence(job_group: JobGroup) -> JobEvidence:
@@ -336,6 +401,14 @@ class ApplicationAnswerService:
         decisions: list[AnswerDecision] = []
         for observation in observations:
             decision = await self._decide_one(context, observation)
+            if (
+                decision.question_intent is None
+                and observation.run_id == context.run.id
+                and observation.adapter_id == context.run.platform_adapter_id
+            ):
+                decision = decision.model_copy(
+                    update={"question_intent": classify_question(observation).intent}
+                )
             self._log_decision(decision)
             decisions.append(decision)
         return tuple(decisions)
@@ -355,6 +428,29 @@ class ApplicationAnswerService:
                 policy_category=PolicyCategory.REVIEW_REQUIRED,
                 confidence=0.0,
                 reason_code=ReasonCode.STALE_RUN_CONTEXT,
+            )
+
+        owner_answer = _owner_resolved_answer(context.run, observation)
+        if owner_answer is not None:
+            mismatch = validate_control_compatibility(
+                observation, owner_answer.answer_text
+            )
+            if mismatch is not None:
+                return self._abstain(observation, mismatch)
+            return AnswerDecision(
+                field_fingerprint=observation.field_fingerprint,
+                decision=AnswerDecisionType.AUTO_FILL,
+                answer=owner_answer.answer_text,
+                policy_category=PolicyCategory.REVIEW_REQUIRED,
+                confidence=1.0,
+                evidence=(
+                    EvidenceReference(
+                        source="owner_resolution",
+                        reference=str(owner_answer.exception_id),
+                    ),
+                ),
+                reason_code=ReasonCode.OWNER_CONFIRMED,
+                question_intent=owner_answer.question_intent,
             )
 
         classification = classify_question(observation)

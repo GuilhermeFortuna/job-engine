@@ -2282,11 +2282,17 @@ class ApplicationRepository:
         self, run_id: UUID, exception_id: UUID, resolution_payload: dict[str, Any]
     ) -> ApplicationRun:
         now = _utcnow()
-        exc = await self._session.get(orm.ApplicationRunException, exception_id)
+        exc = await self._session.scalar(
+            select(orm.ApplicationRunException)
+            .where(orm.ApplicationRunException.id == exception_id)
+            .with_for_update()
+        )
         if exc is None or exc.run_id != run_id:
             raise ResourceNotFoundError(
                 f"Exception {exception_id} not found for run {run_id}"
             )
+        if exc.status != ExceptionStatus.PENDING.value:
+            raise ValueError(f"Exception {exception_id} is not pending")
 
         exc.status = ExceptionStatus.RESOLVED.value
         exc.resolution_payload = redact_audit_payload(resolution_payload)

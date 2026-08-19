@@ -6,6 +6,7 @@ import {
   REDACTED,
   safeText,
   safeUrl,
+  toExceptionFieldReports,
 } from "../../src/main/runtime/redaction";
 
 describe("safeText", () => {
@@ -78,9 +79,44 @@ describe("buildFieldReport", () => {
       "controlType",
       "fieldFingerprint",
       "label",
+      "maxLength",
+      "minLength",
+      "options",
+      "pattern",
+      "questionIntent",
       "reasonCode",
       "required",
       "status",
+    ]);
+  });
+
+  it("projects the exact snake_case backend exception contract", () => {
+    const report = buildFieldReport({
+      fieldFingerprint: "fp_salary",
+      label: "Salary expectation",
+      controlType: "text",
+      required: true,
+      status: "REVIEW_REQUIRED",
+      reasonCode: "no_applicable_answer",
+      questionIntent: "compensation_expectation",
+      minLength: 1,
+      maxLength: 120,
+    });
+
+    expect(toExceptionFieldReports([report])).toEqual([
+      {
+        field_fingerprint: "fp_salary",
+        label: "Salary expectation",
+        control_type: "text",
+        required: true,
+        status: "REVIEW_REQUIRED",
+        reason_code: "no_applicable_answer",
+        question_intent: "compensation_expectation",
+        options: [],
+        min_length: 1,
+        max_length: 120,
+        pattern: null,
+      },
     ]);
   });
 });

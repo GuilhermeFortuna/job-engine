@@ -193,6 +193,7 @@ async def submit_answer_decisions(
                     for e in d.evidence
                 ),
                 reason_code=d.reason_code,
+                question_intent=d.question_intent,
             )
             for d in decisions
         )

@@ -327,13 +327,36 @@ describe("StepRunner", () => {
   });
 
   it("pauses when a required field has no authorized answer", async () => {
-    const { runner } = makeDeps(`
+    const page = makePage(`
       <label for="a">Salary expectation</label><input id="a" required />
       <button type="button">Continue</button>
     `);
+    const observation = await new GenericFormAdapter().observeStep(page.context);
+    const fingerprint = fingerprintFromSemanticKey(
+      ADAPTER_ID,
+      observation.fields[0].semanticKey,
+    );
+    const { runner } = makeDeps(
+      `<label for="a">Salary expectation</label><input id="a" required />
+       <button type="button">Continue</button>`,
+      [
+        decision({
+          field_fingerprint: fingerprint,
+          decision: "REVIEW_REQUIRED",
+          answer: null,
+          evidence: [],
+          policy_category: "review_required",
+          reason_code: "no_applicable_answer",
+          question_intent: "compensation_expectation",
+        }),
+      ],
+    );
     const result = await runner.runStep();
     expect(result.outcome).toBe("NEEDS_ANSWERS");
     expect(result.fields[0].label).toBe("Salary expectation");
+    expect(result.fields[0].fieldFingerprint).toBe(fingerprint);
+    expect(result.fields[0].questionIntent).toBe("compensation_expectation");
+    expect(result.fields[0].reasonCode).toBe("no_applicable_answer");
   });
 
   it("pauses when the form reports validation errors", async () => {

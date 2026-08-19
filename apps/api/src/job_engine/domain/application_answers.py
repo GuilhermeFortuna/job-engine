@@ -77,6 +77,7 @@ class ReasonCode(StrEnum):
     UNSUPPORTED_CLAIM_REJECTED = "unsupported_claim_rejected"
     CHARACTER_LIMIT_EXCEEDED = "character_limit_exceeded"
     PRIVACY_GATE_CLOSED = "privacy_gate_closed"
+    OWNER_CONFIRMED = "owner_confirmed"
 
 
 # Control types that permit omission when a question is optional and the
@@ -127,7 +128,7 @@ class QuestionObservation(FrozenModel):
 
 
 class EvidenceReference(FrozenModel):
-    source: Literal["profile", "resume", "answer_bank", "job"]
+    source: Literal["profile", "resume", "answer_bank", "job", "owner_resolution"]
     reference: str
 
     @field_validator("reference")
@@ -147,6 +148,7 @@ class AnswerDecision(FrozenModel):
     confidence: float
     evidence: tuple[EvidenceReference, ...] = ()
     reason_code: ReasonCode
+    question_intent: QuestionIntent | None = None
 
     @field_validator("confidence")
     @classmethod

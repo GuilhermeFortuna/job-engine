@@ -75,6 +75,11 @@ export interface SafeFieldReport {
   required: boolean;
   status: string;
   reasonCode: string | null;
+  questionIntent: string | null;
+  options: string[];
+  minLength: number | null;
+  maxLength: number | null;
+  pattern: string | null;
 }
 
 export function buildFieldReport(input: {
@@ -84,6 +89,11 @@ export function buildFieldReport(input: {
   required: boolean;
   status: string;
   reasonCode?: string | null;
+  questionIntent?: string | null;
+  options?: readonly string[];
+  minLength?: number | null;
+  maxLength?: number | null;
+  pattern?: string | null;
 }): SafeFieldReport {
   return {
     fieldFingerprint: input.fieldFingerprint,
@@ -92,7 +102,31 @@ export function buildFieldReport(input: {
     required: input.required,
     status: input.status,
     reasonCode: input.reasonCode ?? null,
+    questionIntent: input.questionIntent ?? null,
+    options: (input.options ?? []).map((option) => safeText(option, 200)),
+    minLength: input.minLength ?? null,
+    maxLength: input.maxLength ?? null,
+    pattern: input.pattern ? safeText(input.pattern, 500) : null,
   };
+}
+
+/** Exact snake_case payload accepted by the backend exception contract. */
+export function toExceptionFieldReports(
+  reports: readonly SafeFieldReport[],
+): Record<string, SafeJson>[] {
+  return reports.map((report) => ({
+    field_fingerprint: report.fieldFingerprint,
+    label: report.label,
+    control_type: report.controlType,
+    required: report.required,
+    status: report.status,
+    reason_code: report.reasonCode,
+    question_intent: report.questionIntent,
+    options: report.options,
+    min_length: report.minLength,
+    max_length: report.maxLength,
+    pattern: report.pattern,
+  }));
 }
 
 /**

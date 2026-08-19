@@ -493,8 +493,22 @@ async def test_exception_resolve_answers_and_requeue(
         json={
             "exception_type": "unresolved_question",
             "context_payload": {
-                "question_text": "Are you willing to work in hybrid mode?",
-                "field_name": "hybrid_work",
+                "page_id": "application-step-2",
+                "fields": [
+                    {
+                        "field_fingerprint": "fp_hybrid_work",
+                        "label": "Are you willing to work in hybrid mode?",
+                        "control_type": "text",
+                        "required": True,
+                        "status": "REVIEW_REQUIRED",
+                        "reason_code": "no_applicable_answer",
+                        "question_intent": "location_preference",
+                        "options": [],
+                        "min_length": 1,
+                        "max_length": 200,
+                        "pattern": None,
+                    }
+                ],
             },
         },
     )
@@ -507,24 +521,70 @@ async def test_exception_resolve_answers_and_requeue(
     assert run_detail.status_code == 200
     assert run_detail.json()["status"] == "needs_input"
     assert len(run_detail.json()["exceptions"]) == 1
+    assert run_detail.json()["exceptions"][0]["field_reports"] == [
+        {
+            "field_fingerprint": "fp_hybrid_work",
+            "label": "Are you willing to work in hybrid mode?",
+            "control_type": "text",
+            "required": True,
+            "status": "REVIEW_REQUIRED",
+            "reason_code": "no_applicable_answer",
+            "question_intent": "location_preference",
+            "options": [],
+            "min_length": 1,
+            "max_length": 200,
+            "pattern": None,
+            "allow_save_to_answer_bank": True,
+        }
+    ]
 
-    # User resolves answer and saves to bank
+    wrong_field_resp = await client.post(
+        f"/api/v1/application-runs/{run_id}/resolve-answers",
+        json={
+            "exception_id": exception_id,
+            "answers": [
+                {
+                    "field_fingerprint": "fp_other_run_or_field",
+                    "answer_text": "Must not be accepted",
+                }
+            ],
+        },
+    )
+    assert wrong_field_resp.status_code == 400
+
+    # User resolves the exact field and saves it for future runs.
     res_resp = await client.post(
         f"/api/v1/application-runs/{run_id}/resolve-answers",
         json={
             "exception_id": exception_id,
             "answers": [
                 {
-                    "question_intent": "location_preference",
+                    "field_fingerprint": "fp_hybrid_work",
                     "answer_text": "Yes, hybrid 2 days/week in office is fine",
                     "save_to_answer_bank": True,
-                    "policy_category": "approved_reusable",
                 }
             ],
         },
     )
     assert res_resp.status_code == 200
     assert res_resp.json()["status"] == "queued"
+    resolved_payload = res_resp.json()["exceptions"][0]["resolution_payload"]
+    assert resolved_payload["owner_answers"][0]["answer_text"] == "[REDACTED]"
+    assert "hybrid 2 days/week" not in res_resp.text
+
+    replay_resp = await client.post(
+        f"/api/v1/application-runs/{run_id}/resolve-answers",
+        json={
+            "exception_id": exception_id,
+            "answers": [
+                {
+                    "field_fingerprint": "fp_hybrid_work",
+                    "answer_text": "A replay must not replace the first answer",
+                }
+            ],
+        },
+    )
+    assert replay_resp.status_code == 400
 
     # Verify answer was persisted in vault
     vault = ApplicantVaultRepository(session)
@@ -532,6 +592,49 @@ async def test_exception_resolve_answers_and_requeue(
     saved = next((a for a in answers if "hybrid 2 days/week" in a.answer_text), None)
     assert saved is not None
     assert saved.question_intent == QuestionIntent.LOCATION_PREFERENCE
+
+    # The newly saved reusable answer does not invalidate this run's frozen
+    # snapshot. The exact per-run owner resolution is consumed instead.
+    reclaim_resp = await client.post(
+        "/api/v1/runner/claims",
+        headers={
+            "Authorization": f"Bearer {settings.runner_secret}",
+            "X-Runner-Id": "runner_exc_reclaimed",
+        },
+        json={"run_id": run_id},
+    )
+    assert reclaim_resp.status_code == 200
+    reclaimed_lease = reclaim_resp.json()["lease_token"]
+    decision_resp = await client.post(
+        f"/api/v1/runner/runs/{run_id}/answer-decisions",
+        headers={
+            "Authorization": f"Bearer {settings.runner_secret}",
+            "X-Runner-Lease-Token": reclaimed_lease,
+        },
+        json={
+            "observations": [
+                {
+                    "adapter_id": "greenhouse",
+                    "page_id": "application-step-2",
+                    "field_fingerprint": "fp_hybrid_work",
+                    "label": "Are you willing to work in hybrid mode?",
+                    "required": True,
+                    "control_type": "text",
+                    "options": [],
+                    "validation_constraints": {
+                        "min_length": 1,
+                        "max_length": 200,
+                        "pattern": None,
+                    },
+                }
+            ]
+        },
+    )
+    assert decision_resp.status_code == 200
+    decision = decision_resp.json()["decisions"][0]
+    assert decision["answer"] == "Yes, hybrid 2 days/week in office is fine"
+    assert decision["reason_code"] == "owner_confirmed"
+    assert decision["evidence"][0]["source"] == "owner_resolution"
 
 
 async def test_cancel_run_flow(

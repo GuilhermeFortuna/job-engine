@@ -38,12 +38,14 @@ export function toObservations(
     adapter_id: adapterId,
     page_id: observation.pageId,
     field_fingerprint: fingerprintFromSemanticKey(adapterId, field.semanticKey),
-    label: field.label,
-    accessible_name: field.accessibleName,
-    help_text: field.helpText,
+    label: safeText(field.label, 120),
+    accessible_name: field.accessibleName
+      ? safeText(field.accessibleName, 120)
+      : null,
+    help_text: field.helpText ? safeText(field.helpText, 200) : null,
     required: field.required,
     control_type: field.controlType,
-    options: field.options,
+    options: field.options.map((option) => safeText(option, 200)),
     validation_constraints: {
       min_length: field.validation.minLength,
       max_length: field.validation.maxLength,
@@ -136,8 +138,12 @@ export function blockingFields(
   adapterId: string,
   observation: ObserveResult,
   confirmed: ReadonlySet<string>,
+  decisions: readonly AnswerDecision[] = [],
 ): SafeFieldReport[] {
   const blocking: SafeFieldReport[] = [];
+  const decisionsByFingerprint = new Map(
+    decisions.map((decision) => [decision.field_fingerprint, decision]),
+  );
 
   for (const field of observation.fields) {
     if (!field.required) {
@@ -159,13 +165,20 @@ export function blockingFields(
     if (alreadySatisfied) {
       continue;
     }
+    const decision = decisionsByFingerprint.get(fingerprint);
     blocking.push(
       buildFieldReport({
         fieldFingerprint: fingerprint,
         label: field.label,
         controlType: field.controlType,
         required: true,
-        status: "UNRESOLVED",
+        status: decision?.decision ?? "UNRESOLVED",
+        reasonCode: decision?.reason_code ?? null,
+        questionIntent: decision?.question_intent ?? null,
+        options: field.options,
+        minLength: field.validation.minLength,
+        maxLength: field.validation.maxLength,
+        pattern: field.validation.pattern,
       }),
     );
   }
@@ -273,6 +286,7 @@ export class StepRunner {
       };
     }
 
+    let unresolved: AnswerDecision[] = [];
     if (observation.fields.length > 0) {
       const observations = toObservations(adapter.adapterId, observation);
       const decisions = await client.answerDecisions(
@@ -281,11 +295,13 @@ export class StepRunner {
         observations,
       );
 
-      const { fills, unresolved } = planFills(
+      const fillPlan = planFills(
         adapter.adapterId,
         observation,
         decisions,
       );
+      const { fills } = fillPlan;
+      unresolved = fillPlan.unresolved;
 
       if (fills.length > 0) {
         const fillResult = await adapter.fillStep(context, observation, fills);
@@ -343,7 +359,12 @@ export class StepRunner {
     if (observation.signals.validationErrors.length > 0) {
       return {
         outcome: "NEEDS_ANSWERS",
-        fields: blockingFields(adapter.adapterId, observation, this.confirmed),
+        fields: blockingFields(
+          adapter.adapterId,
+          observation,
+          this.confirmed,
+          unresolved,
+        ),
         detail: safeText(
           `The form reported ${observation.signals.validationErrors.length} validation error(s)`,
         ),
@@ -354,6 +375,7 @@ export class StepRunner {
       adapter.adapterId,
       observation,
       this.confirmed,
+      unresolved,
     );
     if (blocking.length > 0) {
       return {
