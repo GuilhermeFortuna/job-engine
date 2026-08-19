@@ -6,15 +6,18 @@
   "scripts": {
     "dev": "tsc && electron dist/main/index.js",
     "check": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
-    "test": "vitest run tests/unit",
-    "test:fixtures": "tsc -p tsconfig.test.json && vitest run tests/fixtures",
+    "test": "vitest run --project unit --project runtime --project forms",
+    "test:fixtures": "tsc -p tsconfig.test.json && vitest run --project fixtures",
     "build": "tsc"
   },
   "dependencies": {
-    "electron": "43.2.0"
+    "electron": "43.2.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/jsdom": "^30.0.0",
     "@types/node": "24.10.0",
+    "jsdom": "30.0.1",
     "typescript": "5.9.3",
     "vitest": "4.1.10"
   }
