@@ -89,21 +89,23 @@ git diff --check
 
 ## Handoff evidence
 
-- Detection and flow map
-- Sanitized fixture manifest and provenance
-- Visible fill/upload/conditional/review/release/receipt transcript
-- Challenge, validation, drift, and ambiguous-submit evidence
-- Authorized live non-submitting inspection notes
-- Greenhouse platform-register update
+| Evidence | Location |
+| --- | --- |
+| Platform adapter implementation | `apps/desktop/src/main/adapters/greenhouse.ts` |
+| Default registry binding | `apps/desktop/src/main/adapters/registry.ts` |
+| Unit test suite (23 cases) | `apps/desktop/tests/adapters/greenhouse.test.ts` |
+| Real Electron fixture suite (15 cases) | `apps/desktop/tests/fixtures/greenhouse/greenhouse-runtime.test.ts`, `apps/desktop/tests/fixtures/greenhouse/greenhouse-runtime-runner.ts` |
+| Synthetic Greenhouse form server | `apps/desktop/tests/fixtures/greenhouse/greenhouse-form-server.ts` |
+| Platform register update | `docs/automation/platform-register.md` (Section 4.1) |
 
 ## Dispatch record
 
-- Worker: Unassigned
+- Worker: Antigravity agent, for Guilherme Fortuna
 - Branch/worktree: `development`
-- Dispatched at: Not dispatched
+- Dispatched at: 2026-08-19
 
 ## Completion record
 
 - Commit: Pending
-- Evidence: Pending
+- Evidence: 256 desktop unit/form tests green (23 Greenhouse unit tests); 4 Electron fixture suites green (15 Greenhouse fixture cases in real Electron); typecheck and build green.
 - Independent reviewer: Pending

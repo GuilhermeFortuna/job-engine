@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdapterRegistry, hostMatches } from "../../src/main/adapters/registry";
+import { AdapterRegistry, createDefaultAdapterRegistry, hostMatches } from "../../src/main/adapters/registry";
 import { GenericFormAdapter } from "../../src/main/adapters/generic";
 import type { AdapterContext, FormAdapter } from "../../src/main/adapters/contract";
 import { pageRuntimeScript } from "../../src/main/forms/page-script";
@@ -69,6 +69,16 @@ describe("AdapterRegistry", () => {
     );
   });
 
+  it("resolves default platform adapters via createDefaultAdapterRegistry", () => {
+    const registry = createDefaultAdapterRegistry();
+    expect(
+      registry.resolve("https://boards.greenhouse.io/acme/jobs/12345")?.adapterId,
+    ).toBe("greenhouse");
+    expect(
+      registry.resolve("https://jobs.other.com/apply")?.adapterId,
+    ).toBe("generic");
+  });
+
   it("never resolves a non-HTTPS or malformed URL", () => {
     const registry = new AdapterRegistry([], generic);
     for (const bad of [
@@ -111,7 +121,6 @@ describe("GenericFormAdapter", () => {
       ...walk("src/main/forms"),
       ...walk("src/main/runtime"),
       "src/main/adapters/contract.ts",
-      "src/main/adapters/registry.ts",
       "src/main/adapters/generic.ts",
     ].filter((f) => f.endsWith(".ts"));
 

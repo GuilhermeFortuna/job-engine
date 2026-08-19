@@ -24,7 +24,7 @@ export default defineConfig({
         test: {
           name: "forms",
           environment: "jsdom",
-          include: ["tests/forms/**/*.test.ts"],
+          include: ["tests/forms/**/*.test.ts", "tests/adapters/**/*.test.ts"],
         },
       },
       {

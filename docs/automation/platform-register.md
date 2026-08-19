@@ -108,21 +108,23 @@ Playwright spike results below remain useful proof of synthetic navigation, uplo
 - **Operator**: Greenhouse Software, Inc.
 - **Decision**: `APPROVED_PRIMARY` (Rank 1)
 - **Permission Classification**: `AMBIGUOUS_REQUIRES_OWNER_LEGAL_ACCEPTANCE` under `LEGAL-GATE-ATS-001`
+- **Implementation Status**: Implemented under [CROSS-007](../work-orders/cross-repo/CROSS-007-first-platform-automation.md) (`apps/desktop/src/main/adapters/greenhouse.ts`)
+- **Evaluation / Evidence Date**: 2026-08-19 (UTC)
 - **First-Party Documentation & Legal Sources**:
-  - [Greenhouse Legal Center](https://www.greenhouse.com/legal) (Retrieved 2026-08-17)
-  - [Greenhouse Privacy Policy](https://www.greenhouse.com/privacy-policy) (Retrieved 2026-08-17)
-  - [Greenhouse careers-page integration documentation](https://support.greenhouse.io/hc/en-us/articles/11913197669019-Getting-started-with-careers-page-integration) (Retrieved 2026-08-17)
+  - [Greenhouse Legal Center](https://www.greenhouse.com/legal) (Retrieved 2026-08-17, Reconfirmed 2026-08-19)
+  - [Greenhouse Privacy Policy](https://www.greenhouse.com/privacy-policy) (Retrieved 2026-08-17, Reconfirmed 2026-08-19)
+  - [Greenhouse careers-page integration documentation](https://support.greenhouse.io/hc/en-us/articles/11913197669019-Getting-started-with-careers-page-integration) (Retrieved 2026-08-17, Reconfirmed 2026-08-19)
 - **First-Party Policy Analysis**:
   - The legal and support materials establish candidate-facing forms and Greenhouse's role as a processor/service provider to employers.
-  - The reviewed materials do not expressly authorize a candidate to perform unattended automated submission and do not support the previously asserted section-level permission claim.
-  - Treat technical accessibility as insufficient permission; keep the legal gate open.
+  - The reviewed materials do not expressly authorize a candidate to perform unattended automated submission.
+  - Treat technical accessibility as insufficient permission; keep `LEGAL-GATE-ATS-001` open. Live submission requires separate owner authorization for an exact target job.
 - **Host Patterns**:
   - `https://boards.greenhouse.io/{company}/jobs/{job_id}` with optional `#app`
   - `https://job-boards.greenhouse.io/{company}/jobs/{job_id}` with optional `#app`
   - `https://boards.eu.greenhouse.io/{company}/jobs/{job_id}` with optional `#app`
-  - Reject every other scheme, host, and path; redirects must re-match one of these patterns.
+  - Reject every other scheme, host, port, credentials, and path; subdomains and lookalikes fail closed.
 - **Authentication / Login**: None required for candidate application submissions.
-- **Navigation Flow**:
+- **Navigation Flow & Form Structure**:
   - Single-page application form located directly on the job posting URL (e.g. `https://boards.greenhouse.io/{company}/jobs/{job_id}#app`).
   - Container element: `#application_form` or `form[action*="greenhouse.io"]`.
 - **Form Controls & Question Types**:
@@ -130,20 +132,27 @@ Playwright spike results below remain useful proof of synthetic navigation, uplo
   - **Social Links**: LinkedIn Profile, Website/Portfolio, GitHub Profile.
   - **Custom Questions**: Custom employer questions structured as fieldsets or labeled wrapper `<div>`s containing text inputs, textareas, single-select dropdowns, multi-select checkboxes, and radio buttons.
   - **Demographic / EEO Survey**: Voluntary US EEO sections (Gender, Race/Ethnicity, Veteran Status, Disability Status) located in distinct fieldsets with explicit "Decline to self-identify" / "I choose not to disclose" options.
+  - **Legal Attestation & Signature**: Any fields containing consent, attestation, certification, or signature semantics are excluded from auto-fill in `fillStep` and pause for explicit owner review.
 - **File Upload Mechanics**:
   - Standard `<input type="file" name="resume">` element.
-  - Supports non-interactive attachment via Playwright `setInputFiles`.
-  - DOM feedback: `.filename` pill element rendered upon attachment.
+  - Non-interactive attachment via Electron debugger CDP `DOM.setFileInputFiles`.
+  - Verified by inspection of the active attachment DOM element / file name display; temporary file securely deleted immediately upon verification.
 - **Anti-Automation & Bot Controls**:
-  - Conditional Cloudflare Turnstile / Google reCAPTCHA triggered on anomalous IP velocity.
+  - Conditional Cloudflare Turnstile / Google reCAPTCHA / auth wall pauses execution with `CAPTCHA` / `NEEDS_AUTH`.
   - Standard rate limiting on form submission POST endpoints.
-- **Submission Confirmation / Receipt Signals**:
-  - **Success Route / URL**: Redirection to `.../applications/thanks` or `.../confirmation`.
-  - **Success DOM Signals**: Presence of `#application_confirmation`, `.application-completed`, or text content matching `Thank you for applying`, `Application submitted`, or `Your application has been received`.
-  - **Receipt Identifier**: Application confirmation ID or timestamped confirmation message.
+- **Submission Confirmation & Receipt Signals**:
+  - **Success Route / Confirmation Signals**: Presence of `#application_confirmation`, `.application-completed`, or confirmation text (`Application received`, `Thank you for applying`, `Application submitted`).
+  - **Receipt Identifier**: Kept `null` under frozen observation contracts until safely exposed by an approved upstream contract.
+  - **Ambiguous Response**: Form cleared with unrecognized response or timeout returns `null` receipt and becomes `SUBMISSION_UNKNOWN` without retrying.
 - **Testing & Fixture Strategy**:
-  - Sanitized synthetic HTML fixture matching Greenhouse form semantics (`apps/desktop/tests/fixtures/greenhouse/application_form.html`).
-  - Unit tests for step observation, field fingerprinting, file upload verification, pre-submit arming, and receipt capture.
+  - Unit test suite: `apps/desktop/tests/adapters/greenhouse.test.ts` (23 unit tests covering hosts, dual-signal detection, controls, legal filters, submit, receipt, and error cases).
+  - Real Electron fixture suite: `apps/desktop/tests/fixtures/greenhouse/greenhouse-runtime.test.ts` (15 fixture cases covering end-to-end lifecycle, upload, conditional reveal, drift tolerance, hostile text isolation, one-time submit, and ambiguous submit).
+- **Authorized Live Inspection & Submission Gates**:
+  - Live non-submitting inspection gate remains pending owner-authorized exact target.
+  - Live submission remains gated under `LEGAL-GATE-ATS-001`.
+- **Known Gaps & Maintenance Triggers**:
+  - Custom React comboboxes, rich text / contenteditable fields, shadow DOM widgets, or multi-page wizards trigger `UNSUPPORTED` / `NEEDS_ANSWERS` pauses.
+  - Platform DOM redesign modifying required identity fields or submit button text triggers detection review.
 
 ---
 
