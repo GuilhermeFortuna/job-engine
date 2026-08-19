@@ -75,6 +75,9 @@ describe("AdapterRegistry", () => {
       registry.resolve("https://boards.greenhouse.io/acme/jobs/12345")?.adapterId,
     ).toBe("greenhouse");
     expect(
+      registry.resolve("https://jobs.lever.co/acme/abc-123/apply")?.adapterId,
+    ).toBe("lever");
+    expect(
       registry.resolve("https://jobs.other.com/apply")?.adapterId,
     ).toBe("generic");
   });

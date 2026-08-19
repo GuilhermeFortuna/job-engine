@@ -169,10 +169,12 @@ Playwright spike results below remain useful proof of synthetic navigation, uplo
   - Lever's Terms of Service govern customer acquisition and use of Lever software; they are not candidate terms and do not grant the asserted candidate-automation permission.
   - The public posting documentation establishes the candidate-facing flow but does not expressly authorize unattended submission automation.
   - Treat the intended use as ambiguous and keep the legal gate open.
-- **Host Patterns**:
-  - `https://jobs.lever.co/{company}/{job_id}`
-  - `https://jobs.lever.co/{company}/{job_id}/apply`
-  - Reject every other scheme, host, and path; redirects must re-match one of these patterns.
+- **Host Patterns** (reconfirmed 2026-08-19):
+  - `https://jobs.lever.co/{company}/{job_id}` — URL-family match only; **unsupported execution** (plain-anchor posting page; do not click Apply)
+  - `https://jobs.lever.co/{company}/{job_id}/apply` — **supported** assisted-apply surface
+  - `https://jobs.lever.co/{company}/{job_id}/thanks` — receipt path only
+  - Reject every other scheme, host, port, credentialed URL, extra path segment, and redirect that does not re-match one of these patterns
+  - `jobs.eu.lever.co` is first-party and **unbound**; do not match it
 - **Authentication / Login**: None required for candidate submissions.
 - **Navigation Flow**:
   - Dedicated apply page at `/apply` (e.g. `https://jobs.lever.co/{company}/{job_id}/apply`).
@@ -184,17 +186,43 @@ Playwright spike results below remain useful proof of synthetic navigation, uplo
   - **Custom Questions**: Custom employer questions rendered in `.application-question` containers with explicit labels, text inputs, radio groups, and checkboxes.
   - **EEO / Demographic Survey**: Standardized US EEO / diversity survey rendered in `.eeo-section` with explicit opt-out options ("I prefer not to say").
 - **File Upload Mechanics**:
-  - Standard `<input type="file" name="resume">`.
-  - Supports Playwright `setInputFiles` cleanly.
-  - Verified by inspection of the active attachment DOM element `.resume-upload-success` / file name display.
+  - Standard `<input type="file" name="resume">` plus visible filename / success copy.
+  - Synthetic fixtures attach via CROSS-010 CDP `DOM.setFileInputFiles` and verify the displayed filename.
+  - Live 100MB-reject copy was observed as static help text only; it was not triggered.
 - **Anti-Automation & Bot Controls**:
-  - Rate limiting on submission endpoints; occasional Cloudflare challenge on suspicious connections.
+  - hCaptcha / Turnstile iframes pause as `CAPTCHA` via frozen `ObserveResult.signals.captcha`.
+  - Location typeahead can present hCaptcha for suspicious clients (Lever help, 2026-08-19). Do not click location suggestions on live pages.
+  - Unlabeled HTTP 429 copy has no dedicated frozen signal; post-submit uncleared/unconfirmed pages are `SUBMISSION_UNKNOWN`.
 - **Submission Confirmation / Receipt Signals**:
-  - **Success Route**: Navigation / redirect to `https://jobs.lever.co/{company}/{job_id}/thanks`.
-  - **Success DOM Signals**: `.application-confirmation`, heading containing `Application Submitted!`, or text `Thank you for your interest`.
-- **Testing & Fixture Strategy**:
-  - Sanitized synthetic HTML fixture matching Lever apply-page semantics (`apps/desktop/tests/fixtures/lever/application_form.html`).
-  - Tests covering resume attachment, custom field matching, EEO decline selection, and `/thanks` receipt detection.
+  - **Success:** approved `/thanks` path with a cleared form, **or** a cleared form plus the generic confirmation boolean (`confirmationText`).
+  - **Ambiguous:** `/thanks` with the form still present, or a cleared page with neither thanks path nor confirmation boolean → `captureReceipt() === null` → `SUBMISSION_UNKNOWN` without retry.
+- **Fixture support**
+  - Synthetic `/apply` matrix: [`apps/desktop/tests/fixtures/lever/`](../apps/desktop/tests/fixtures/lever/) (invented HTML; provenance in `PROVENANCE.md`).
+  - jsdom: [`apps/desktop/tests/adapters/lever.test.ts`](../apps/desktop/tests/adapters/lever.test.ts), [`apps/desktop/tests/adapters/adapter-detection-collisions.test.ts`](../apps/desktop/tests/adapters/adapter-detection-collisions.test.ts).
+  - Electron mock-API matrix: `lever-runtime-runner.ts` (detect, posting non-advance, collisions, fill, conditional, unresolved `NEEDS_ANSWERS`, upload accept/reject, validation, CAPTCHA, required combobox `UNSUPPORTED`, optional combobox non-blocking, review, confirmed receipt, ambiguous receipt with no second activation, thanks-with-form ambiguous, drift, hostile text).
+  - Electron real-backend lifecycle: `lever-lifecycle-runner.ts` (visible fill, verified upload, unresolved required custom field, `READY_FOR_REVIEW`, `submit_armed`, owner `release-submit`, same-run reclaim, exactly one activation, confirmed receipt, ambiguous receipt with no second activation).
+- **Authorized read-only inspection**
+  - Date: 2026-08-19. `LEGAL-GATE-ATS-001` confirmed OPEN. Load/observe only.
+  - Disposable desktop profile via `JOB_ENGINE_DESKTOP_USER_DATA_DIR` outside Git. Two disposable `SEMI_AUTO_PAUSE_BEFORE_SUBMIT` runs were created with backend `application_url` values exactly equal to the posting URL and the `/apply` URL. Each was opened through `fetchApplicationRun` then `ApplicationViewManager.openApplication(runId, applicationUrl)` in the product shell against a trusted loopback web origin. Lever CTAs were not clicked.
+  - URLs:
+    - `https://jobs.lever.co/Osmind/49c5fbef-757c-40bb-9f60-ae09bc1f5f29` (posting)
+    - `https://jobs.lever.co/Osmind/49c5fbef-757c-40bb-9f60-ae09bc1f5f29/apply` (apply)
+  - Posting: title “Osmind - Senior Software Engineer, Brazil”; plain “APPLY FOR THIS JOB” anchors to `/apply`; no application form. Unsupported execution.
+  - Apply: Resume/CV file input `name=resume` with an ATTACH RESUME/CV control; required Full name (`name=name`) and Email; Phone; Current location as a native text input `name=location` (typeahead suggestions were not opened); Current company; LinkedIn/Twitter/GitHub/Portfolio URL; two required custom card textareas; voluntary EEO selects (Gender/Race/Veteran) including “Decline to self-identify”; optional extra demographic survey; hidden `h-captcha-response` with no visible challenge iframe; submit control “SUBMIT APPLICATION”.
+  - The embedded view was closed after each load. No `submitting` checkpoint and no completed-as-submitted status. The throwaway inspection database was dropped. No Osmind HTML, screenshots, or personal data were copied into Git.
+  - FRONT-005 still must wire trusted-UI `openApplication({ runId })` and call `detect()` before `StepRunner`. This inspection used the existing main-process `openApplication` method, not that UI.
+- **Live mutation evidence**
+  - none
+- **Live submission evidence**
+  - none
+- **Production readiness**
+  - not claimed. `LEGAL-GATE-ATS-001` remains OPEN. FRONT-005 must resolve `createDefaultAdapterRegistry()` and call `detect()` before `StepRunner`; CROSS-009 accepts that wiring. EU host unbound. Posting pages unsupported. Optional composites do not pause.
+- **Known Gaps & Maintenance Triggers**:
+  - `jobs.eu.lever.co` is first-party and unbound.
+  - Posting-page plain anchors are never auto-clicked.
+  - Optional location/university comboboxes are observed as unsupported hints and do not block `READY_FOR_REVIEW`.
+  - Required custom comboboxes / signature widgets pause as `UNSUPPORTED`.
+  - Production desktop does not yet call `detect()` or the default registry.
 
 ---
 

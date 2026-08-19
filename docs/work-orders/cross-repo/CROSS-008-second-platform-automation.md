@@ -19,6 +19,7 @@ Implement an independent Lever adapter for the visible embedded workspace: exact
 - `/apps/desktop/src/main/adapters/lever.ts` (new)
 - `/apps/desktop/src/main/adapters/registry.ts` (Lever registration only)
 - `/apps/desktop/tests/adapters/lever.test.ts` (new)
+- `/apps/desktop/tests/adapters/adapter-detection-collisions.test.ts` (new)
 - `/apps/desktop/tests/fixtures/lever/**` (new; sanitized/minimal)
 - `/docs/automation/platform-register.md` (Lever evidence/support update only)
 
@@ -99,12 +100,20 @@ git diff --check
 
 ## Dispatch record
 
-- Worker: Unassigned
+- Worker: Cursor agent
 - Branch/worktree: `development`
-- Dispatched at: Not dispatched
+- Dispatched at: 2026-08-19T00:28:00-03:00
 
 ## Completion record
 
 - Commit: Pending
-- Evidence: Pending
+- Evidence:
+  - Adapter: `apps/desktop/src/main/adapters/lever.ts` (`adapterId` `lever`; exact `jobs.lever.co`; `/apply`-only `detect()`; posting CTA never advanced)
+  - Registry: `new LeverFormAdapter()` added beside the existing Greenhouse registration in `createDefaultAdapterRegistry()`
+  - jsdom: `tests/adapters/lever.test.ts`, `tests/adapters/adapter-detection-collisions.test.ts`
+  - Fixtures: `tests/fixtures/lever/**` (Electron mock-API matrix + real-backend lifecycle)
+  - Authorized read-only inspection: 2026-08-19 Osmind posting and `/apply` loaded via `ApplicationViewManager.openApplication`; no mutation or submission
+  - Platform register §4.2 labeled fixture support / authorized read-only inspection / live mutation (none) / live submission (none) / production readiness (not claimed)
+  - Integration gate: FRONT-005 must resolve `createDefaultAdapterRegistry()` and call `detect()` before `StepRunner`; CROSS-009 accepts that wiring
+  - Stale header: this file still says `BLOCKED`; `docs/work-orders/STATUS.md` remains `READY` and was not changed
 - Independent reviewer: Pending

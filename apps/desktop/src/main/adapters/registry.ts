@@ -1,6 +1,7 @@
 import type { FormAdapter } from "./contract";
 import { GenericFormAdapter } from "./generic";
 import { GreenhouseFormAdapter } from "./greenhouse";
+import { LeverFormAdapter } from "./lever";
 
 /**
  * Resolves a page URL to the adapter that may drive it.
@@ -67,7 +68,7 @@ export function hostMatches(url: URL, expectedHost: string): boolean {
 /** Creates a registry populated with approved platform adapters and generic fallback. */
 export function createDefaultAdapterRegistry(): AdapterRegistry {
   return new AdapterRegistry(
-    [new GreenhouseFormAdapter()],
+    [new GreenhouseFormAdapter(), new LeverFormAdapter()],
     new GenericFormAdapter(),
   );
 }
