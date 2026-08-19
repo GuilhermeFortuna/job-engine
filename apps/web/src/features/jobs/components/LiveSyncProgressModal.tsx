@@ -1,6 +1,18 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import type { LiveSyncState, SourceLiveState } from "../types";
 
 export interface LiveSyncProgressModalProps {
@@ -26,10 +38,8 @@ export function LiveSyncProgressModal({
   onRetry,
   liveAnnouncement,
 }: LiveSyncProgressModalProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
 
@@ -44,7 +54,6 @@ export function LiveSyncProgressModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Focus management: focus close button when modal opens
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => {
@@ -52,8 +61,6 @@ export function LiveSyncProgressModal({
       }, 50);
     }
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const sourcesList = Object.values(state.sources);
   const totalSources = sourcesList.length;
@@ -66,88 +73,79 @@ export function LiveSyncProgressModal({
   const isError = state.status === "error";
   const isCooldown = state.status === "cooldown";
 
+  if (!isOpen) return null;
+
   return (
-    <div
-      className="live-sync-backdrop"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
+    <Dialog
+      open={isOpen}
+      modal={false}
+      disablePointerDismissal
+      onOpenChange={(open) => {
+        if (!open) {
           onClose();
         }
       }}
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
+      <DialogContent
+        showCloseButton={false}
+        className="sm:max-w-lg"
         aria-labelledby="live-sync-title"
-        className="live-sync-modal"
       >
-        {/* Header */}
-        <div className="live-sync-header">
-          <div className="live-sync-title-row">
-            <h2 id="live-sync-title" className="live-sync-title">
+        <DialogHeader>
+          <div className="flex items-start justify-between gap-3">
+            <DialogTitle id="live-sync-title">
               Live Catalog Synchronization
-            </h2>
-            <button
+            </DialogTitle>
+            <Button
               ref={closeButtonRef}
               type="button"
+              variant="ghost"
+              size="icon-sm"
               onClick={onClose}
-              className="live-sync-close-btn"
               aria-label="Close live sync dialog"
             >
               ✕
-            </button>
+            </Button>
           </div>
-          <p className="live-sync-description">
+          <DialogDescription>
             Fetching latest job postings directly from remote source APIs in parallel.
-          </p>
-        </div>
+          </DialogDescription>
+        </DialogHeader>
 
-        {/* Progress Bar */}
-        <div className="live-sync-progress-container">
-          <div className="live-sync-progress-bar-bg">
-            <div
-              className={`live-sync-progress-bar-fill ${
-                isCompleted ? "live-sync-progress-bar-fill--complete" : ""
-              }`}
-              style={{ width: `${isCompleted ? 100 : progressPercent}%` }}
-              role="progressbar"
-              aria-valuenow={isCompleted ? 100 : progressPercent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label="Live sync progress"
-            />
-          </div>
-          <div className="live-sync-progress-label">
+        <div className="flex flex-col gap-2">
+          <Progress
+            value={isCompleted ? 100 : progressPercent}
+            aria-label="Live sync progress"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground">
             {isSyncing && (
               <span>
                 {completedSources} of {totalSources || 3} sources completed ({progressPercent}%)
               </span>
             )}
             {isCompleted && (
-              <span className="text-emerald-500 font-medium">
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">
                 ✓ Synchronization complete ({state.total_inserted} new, {state.total_updated}{" "}
                 updated)
               </span>
             )}
             {isCooldown && (
-              <span className="text-amber-500 font-medium">
+              <span className="font-medium text-amber-600 dark:text-amber-400">
                 ⏳ Cooldown active ({state.cooldown_remaining_seconds}s remaining)
               </span>
             )}
             {isError && (
-              <span className="text-rose-500 font-medium">
+              <span className="font-medium text-destructive">
                 ⚠️ Sync failed: {state.error_message}
               </span>
             )}
           </div>
         </div>
 
-        {/* Sources List */}
-        <div className="live-sync-sources-list">
+        <div className="flex flex-col gap-2">
           {sourcesList.length === 0 && isSyncing && (
-            <div className="live-sync-source-card live-sync-source-card--connecting">
-              <span className="live-sync-spinner" aria-hidden="true" />
+            <div className="flex items-center justify-center gap-3 rounded-lg border border-border bg-background p-3 text-sm font-medium">
+              <span className="size-4 animate-spin rounded-full border-2 border-border border-t-primary" aria-hidden="true" />
               <span>Connecting to upstream sources...</span>
             </div>
           )}
@@ -157,66 +155,59 @@ export function LiveSyncProgressModal({
             return (
               <div
                 key={src.source_id}
-                className={`live-sync-source-card live-sync-source-card--${
-                  src.status || src.stage
-                }`}
+                className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3"
                 data-testid={`live-sync-source-${src.source_id}`}
               >
-                <div className="live-sync-source-info">
-                  <span className="live-sync-source-name">{displayName}</span>
-                  <span className="live-sync-source-metrics">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-semibold">{displayName}</span>
+                  <span className="text-xs">
                     {src.status === "success" && (
-                      <span className="live-sync-metric live-sync-metric--success">
+                      <span className="text-emerald-700 dark:text-emerald-400">
                         +{src.inserted_count} new · {src.updated_count} updated
                       </span>
                     )}
                     {src.status === "partial_success" && (
-                      <span className="live-sync-metric live-sync-metric--warning">
+                      <span className="text-amber-700 dark:text-amber-400">
                         +{src.inserted_count} new · {src.rejected_count} rejected
                       </span>
                     )}
                     {src.status === "failure" && (
-                      <span className="live-sync-metric live-sync-metric--failure">
+                      <span className="text-destructive">
                         {src.error_summaries[0]?.message || "Source unavailable"}
                       </span>
                     )}
                     {!src.status && src.stage === "fetching" && (
-                      <span className="live-sync-metric live-sync-metric--fetching">
-                        Fetching API feeds...
-                      </span>
+                      <span className="text-muted-foreground">Fetching API feeds...</span>
                     )}
                     {!src.status && src.stage === "normalizing" && (
-                      <span className="live-sync-metric live-sync-metric--normalizing">
+                      <span className="text-blue-700 dark:text-blue-400">
                         Normalizing ({src.accepted_count} valid)...
                       </span>
                     )}
                     {!src.status && src.stage === "persisting" && (
-                      <span className="live-sync-metric live-sync-metric--persisting">
+                      <span className="text-violet-700 dark:text-violet-400">
                         Saving to catalog...
                       </span>
                     )}
                   </span>
                 </div>
 
-                <div className="live-sync-source-badge">
-                  {src.status === "success" && (
-                    <span className="badge-sync-success">✓ Done</span>
-                  )}
+                <div>
+                  {src.status === "success" && <Badge variant="success">✓ Done</Badge>}
                   {src.status === "partial_success" && (
-                    <span className="badge-sync-warning">⚠️ Partial</span>
+                    <Badge variant="warning">⚠️ Partial</Badge>
                   )}
                   {src.status === "failure" && (
-                    <span className="badge-sync-failure">✕ Failed</span>
+                    <Badge variant="destructive">✕ Failed</Badge>
                   )}
                   {!src.status && (
-                    <span className="badge-sync-active">
-                      <span className="live-sync-spinner-small" aria-hidden="true" />
+                    <Badge variant="remote">
                       {src.stage === "fetching"
                         ? "Fetching"
                         : src.stage === "normalizing"
                           ? "Normalizing"
                           : "Persisting"}
-                    </span>
+                    </Badge>
                   )}
                 </div>
               </div>
@@ -224,7 +215,6 @@ export function LiveSyncProgressModal({
           })}
         </div>
 
-        {/* Live Region for Screen Readers */}
         <div
           role="status"
           aria-live="polite"
@@ -234,41 +224,29 @@ export function LiveSyncProgressModal({
           {liveAnnouncement}
         </div>
 
-        {/* Footer Actions */}
-        <div className="live-sync-footer">
-          <div className="live-sync-footer-left">
+        <DialogFooter className="sm:justify-between">
+          <div className="flex items-center gap-2">
             {isSyncing && (
-              <button
-                type="button"
-                onClick={onCancel}
-                className="btn-cancel-sync"
-              >
+              <Button type="button" variant="outline" onClick={onCancel}>
                 Cancel Sync
-              </button>
+              </Button>
             )}
             {(isError || isCooldown) && (
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={onRetry}
                 disabled={isCooldown}
-                className="btn-retry-sync"
               >
                 Retry
-              </button>
+              </Button>
             )}
           </div>
-
-          <div className="live-sync-footer-right">
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn-dismiss-sync"
-            >
-              {isSyncing ? "Run in Background" : "Close"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+          <Button type="button" onClick={onClose}>
+            {isSyncing ? "Run in Background" : "Close"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

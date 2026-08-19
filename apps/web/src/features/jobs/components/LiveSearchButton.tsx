@@ -1,5 +1,8 @@
 "use client";
 
+import { RefreshCwIcon } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import type { LiveSyncStatus } from "../types";
 
 export interface LiveSearchButtonProps {
@@ -26,13 +29,12 @@ export function LiveSearchButton({
   }
 
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      className="text-foreground disabled:opacity-100"
       onClick={onStartSync}
       disabled={disabled || isSyncing || isCooldown}
-      className={`btn-live-search ${isSyncing ? "btn-live-search--syncing" : ""} ${
-        isCooldown ? "btn-live-search--cooldown" : ""
-      }`}
       aria-haspopup="dialog"
       aria-busy={isSyncing}
       aria-label={
@@ -43,24 +45,11 @@ export function LiveSearchButton({
             : "Trigger live search and catalog synchronization"
       }
     >
-      <span
-        className={`live-search-icon ${isSyncing ? "live-search-icon--spin" : ""}`}
-        aria-hidden="true"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-4 h-4"
-        >
-          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3" />
-        </svg>
-      </span>
-      <span>{buttonText}</span>
-    </button>
+      <RefreshCwIcon
+        data-icon="inline-start"
+        className={isSyncing ? "animate-spin" : undefined}
+      />
+      {buttonText}
+    </Button>
   );
 }

@@ -1,3 +1,5 @@
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import type { CatalogHealth, LatestRunStatus, SourceHealth } from "../types";
 import { formatDate } from "./JobCard";
 
@@ -31,6 +33,27 @@ export function sourceDisplayName(sourceId: string): string {
   }
 }
 
+function statusVariant(
+  status: LatestRunStatus,
+): "destructive" | "warning" | "secondary" | "remote" | "success" {
+  switch (status) {
+    case "failure":
+      return "destructive";
+    case "partial_success":
+      return "warning";
+    case "running":
+      return "remote";
+    case "success":
+      return "success";
+    case "never_run":
+      return "secondary";
+    default: {
+      const _exhaustive: never = status;
+      return _exhaustive;
+    }
+  }
+}
+
 export function CatalogHealthNotice({
   health,
 }: {
@@ -42,21 +65,12 @@ export function CatalogHealthNotice({
 
   if (health === null) {
     return (
-      <aside
-        role="status"
-        aria-live="polite"
-        className="catalog-health-notice notice-info"
-      >
-        <div className="notice-icon" aria-hidden="true">
-          ℹ️
-        </div>
-        <div className="notice-content">
-          <p className="notice-title">Source Status Update Unavailable</p>
-          <p className="notice-message">
-            Unable to verify real-time ingestion status. Search results reflect current persisted catalog records.
-          </p>
-        </div>
-      </aside>
+      <Alert role="status" aria-live="polite" className="mb-6">
+        <AlertTitle>Source Status Update Unavailable</AlertTitle>
+        <AlertDescription>
+          Unable to verify real-time ingestion status. Search results reflect current persisted catalog records.
+        </AlertDescription>
+      </Alert>
     );
   }
 
@@ -76,46 +90,41 @@ export function CatalogHealthNotice({
     : "recently";
 
   return (
-    <aside
+    <Alert
       role="status"
       aria-live="polite"
-      className="catalog-health-notice notice-warning"
       aria-labelledby="health-notice-heading"
+      className="mb-6 border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
     >
-      <div className="notice-icon" aria-hidden="true">
-        ⚠️
-      </div>
-      <div className="notice-content">
-        <h2 id="health-notice-heading" className="notice-title">
-          Catalog Notice: Partial Source Degraded
-        </h2>
-        <p className="notice-message">
+      <AlertTitle id="health-notice-heading">
+        <h2 className="m-0 text-sm font-bold">Catalog Notice: Partial Source Degraded</h2>
+      </AlertTitle>
+      <AlertDescription className="text-inherit">
+        <p className="m-0 mb-2">
           One or more job sources encountered synchronization issues during their latest ingestion run.
           Persisted records from active sources remain fully searchable, but catalog completeness may be temporarily affected.
         </p>
-
-        <ul className="notice-sources-list" aria-label="Affected sources">
+        <ul className="m-0 mb-2 flex list-none flex-col gap-1 p-0" aria-label="Affected sources">
           {degradedSources.map((s) => (
-            <li key={s.source_id} className="notice-source-item">
+            <li key={s.source_id} className="flex flex-wrap items-center gap-1">
               <strong>{sourceDisplayName(s.source_id)}</strong>:{" "}
-              <span className={`status-tag status-${s.latest_run_status}`}>
+              <Badge variant={statusVariant(s.latest_run_status)}>
                 {formatRunStatus(s.latest_run_status)}
-              </span>
+              </Badge>
               {s.latest_run_completed_at && (
-                <span className="notice-source-date">
+                <span className="font-mono text-xs opacity-85">
                   {" "}(last run: {formatDate(s.latest_run_completed_at)})
                 </span>
               )}
             </li>
           ))}
         </ul>
-
         {health.catalog_last_seen_at && (
-          <p className="notice-freshness">
+          <p className="m-0 font-mono text-xs opacity-85">
             Latest catalog update: <time dateTime={health.catalog_last_seen_at}>{catalogFreshness}</time>
           </p>
         )}
-      </div>
-    </aside>
+      </AlertDescription>
+    </Alert>
   );
 }

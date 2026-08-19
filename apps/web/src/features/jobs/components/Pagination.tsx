@@ -55,12 +55,12 @@ export function Pagination({
   const hasNext = currentPage < totalPages;
 
   return (
-    <nav className="pagination" aria-label="Pagination Navigation">
-      <div className="pagination-list">
+    <nav className="mt-8 flex justify-center" aria-label="Pagination Navigation">
+      <div className="flex flex-wrap items-center justify-center gap-2">
         {hasPrevious ? (
           <Link
             href={buildSearchUrl({ ...params, page: currentPage - 1 })}
-            className="pagination-btn pagination-prev"
+            className="pagination-btn pagination-prev inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
             aria-label="Go to previous page"
           >
             ← Previous
@@ -68,19 +68,19 @@ export function Pagination({
         ) : (
           <span
             aria-disabled="true"
-            className="pagination-btn pagination-disabled"
+            className="pagination-btn pagination-disabled inline-flex h-9 items-center rounded-lg border border-border bg-muted px-3 text-sm text-muted-foreground opacity-50"
           >
             ← Previous
           </span>
         )}
 
-        <div className="pagination-numbers">
+        <div className="flex items-center gap-1">
           {pages.map((p, idx) => {
             if (p === "...") {
               return (
                 <span
                   key={`ellipsis-${idx}`}
-                  className="pagination-ellipsis"
+                  className="pagination-ellipsis px-1 text-muted-foreground"
                   aria-hidden="true"
                 >
                   …
@@ -94,7 +94,7 @@ export function Pagination({
                 <span
                   key={p}
                   aria-current="page"
-                  className="pagination-number pagination-current"
+                  className="pagination-number pagination-current inline-flex size-9 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground"
                 >
                   {p}
                 </span>
@@ -105,7 +105,7 @@ export function Pagination({
               <Link
                 key={p}
                 href={buildSearchUrl({ ...params, page: p })}
-                className="pagination-number"
+                className="pagination-number inline-flex size-9 items-center justify-center rounded-lg border border-border bg-card text-sm font-medium hover:bg-muted"
                 aria-label={`Go to page ${p}`}
               >
                 {p}
@@ -117,7 +117,7 @@ export function Pagination({
         {hasNext ? (
           <Link
             href={buildSearchUrl({ ...params, page: currentPage + 1 })}
-            className="pagination-btn pagination-next"
+            className="pagination-btn pagination-next inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
             aria-label="Go to next page"
           >
             Next →
@@ -125,7 +125,7 @@ export function Pagination({
         ) : (
           <span
             aria-disabled="true"
-            className="pagination-btn pagination-disabled"
+            className="pagination-btn pagination-disabled inline-flex h-9 items-center rounded-lg border border-border bg-muted px-3 text-sm text-muted-foreground opacity-50"
           >
             Next →
           </span>

@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { JobCard, formatCompensation } from "./JobCard";
 import { renderWithProviders, screen } from "@/test/render";
 import type { JobListItem } from "../types";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
+afterEach(() => {
+  delete window.jobEngineDesktop;
+});
 
 const baseJob: JobListItem = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -219,5 +227,37 @@ describe("JobCard component", () => {
 
     const timeElements = screen.getAllByText(/\d{4}-\d{2}-\d{2}/);
     expect(timeElements.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("offers Apply in Job Engine only for https jobs when the desktop bridge is present", async () => {
+    window.jobEngineDesktop = {
+      getCapabilities: async () => ({ embeddedBrowser: true, platform: "linux" }),
+      openApplication: async () => ({ success: true }),
+      setApplicationBounds: async () => ({ success: true }),
+      closeApplication: async () => ({ success: true }),
+      goBack: async () => ({ success: true }),
+      goForward: async () => ({ success: true }),
+      reload: async () => ({ success: true }),
+      subscribeBrowserState: () => () => {},
+    };
+
+    const httpsView = renderWithProviders(<JobCard job={baseJob} />);
+    expect(
+      await screen.findByRole("button", { name: /apply in job engine/i }),
+    ).toBeInTheDocument();
+    httpsView.unmount();
+
+    renderWithProviders(
+      <JobCard
+        job={{
+          ...baseJob,
+          primary_application_url: "http://example.com/apply",
+        }}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(
+      screen.queryByRole("button", { name: /apply in job engine/i }),
+    ).not.toBeInTheDocument();
   });
 });

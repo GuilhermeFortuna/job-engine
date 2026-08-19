@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { ApplicationLauncher } from "@/features/applications/components/ApplicationLauncher";
+import { Badge } from "@/components/ui/badge";
+import { ShimmerAnchor } from "@/components/ui/shimmer-button";
 import type {
   Compensation,
   JobListItem,
@@ -6,6 +9,7 @@ import type {
   RemoteStatus,
   Seniority,
 } from "../types";
+import { JobCardShell } from "./JobCardShell";
 
 export function formatRemoteStatus(status: RemoteStatus): string {
   switch (status) {
@@ -168,102 +172,110 @@ export function JobCard({ job }: { job: JobListItem }) {
   const lastSeenFormatted = formatDate(job.last_seen_at);
 
   return (
-    <article className="job-card" aria-labelledby={`job-title-${job.id}`}>
-      <header className="job-card-header">
-        <div className="job-card-main-info">
-          <h2 id={`job-title-${job.id}`} className="job-title">
-            <Link href={`/jobs/${job.id}`} className="job-title-link">
-              {job.title}
-            </Link>
-          </h2>
-          <p className="job-company">
-            <span className="company-name">{job.company}</span>
-            <span className="location-sep" aria-hidden="true">
+    <JobCardShell>
+      <article className="flex flex-col gap-4 p-5" aria-labelledby={`job-title-${job.id}`}>
+        <header className="flex flex-col gap-2">
+          <div>
+            <h2 id={`job-title-${job.id}`} className="m-0 text-xl font-semibold tracking-tight">
+              <Link href={`/jobs/${job.id}`} className="hover:text-ring hover:underline">
+                {job.title}
+              </Link>
+            </h2>
+            <p className="m-0 text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{job.company}</span>
+              <span className="location-sep" aria-hidden="true">
+                {" "}
+                •{" "}
+              </span>
+              <span className="location-text">{locationText}</span>
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="remote">{formatRemoteStatus(job.remote_status)}</Badge>
+            <Badge variant="secondary">{formatSeniority(job.seniority)}</Badge>
+            <Badge variant="eligibility">{eligibilityText}</Badge>
+          </div>
+        </header>
+
+        <div className="flex flex-col gap-3">
+          <p
+            className={
+              compensationText === "Compensation not provided"
+                ? "m-0 text-[0.9375rem] font-medium text-muted-foreground italic"
+                : "m-0 text-[0.9375rem] font-semibold text-emerald-700 dark:text-emerald-400"
+            }
+          >
+            <span className="comp-label sr-only">Compensation: </span>
+            {compensationText}
+          </p>
+
+          {excerptText && (
+            <p className="m-0 text-sm leading-relaxed text-foreground">{excerptText}</p>
+          )}
+
+          {job.technologies && job.technologies.length > 0 && (
+            <div className="flex flex-wrap gap-1" aria-label="Required technologies">
+              {job.technologies.map((t) => (
+                <Badge key={t.term} variant="tech">
+                  {t.term}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <footer className="flex flex-col gap-3 border-t border-border pt-3 text-[0.8125rem] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <div className="font-mono text-xs">
+            <span>
+              Posted:{" "}
+              <time dateTime={postedDateIso ?? undefined}>
+                {postedDateFormatted}
+              </time>
+            </span>
+            <span className="date-sep" aria-hidden="true">
               {" "}
               •{" "}
             </span>
-            <span className="location-text">{locationText}</span>
-          </p>
-        </div>
-
-        <div className="job-card-badges">
-          <span className="badge badge-remote">
-            {formatRemoteStatus(job.remote_status)}
-          </span>
-          <span className="badge badge-seniority">
-            {formatSeniority(job.seniority)}
-          </span>
-          <span className="badge badge-eligibility">{eligibilityText}</span>
-        </div>
-      </header>
-
-      <div className="job-card-body">
-        <p
-          className={`job-compensation ${
-            compensationText === "Compensation not provided"
-              ? "job-compensation-unknown"
-              : "job-compensation-provided"
-          }`}
-        >
-          <span className="comp-label sr-only">Compensation: </span>
-          {compensationText}
-        </p>
-
-        {excerptText && <p className="job-excerpt">{excerptText}</p>}
-
-        {job.technologies && job.technologies.length > 0 && (
-          <div className="job-technologies" aria-label="Required technologies">
-            {job.technologies.map((t) => (
-              <span key={t.term} className="badge badge-tech">
-                {t.term}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <footer className="job-card-footer">
-        <div className="job-dates">
-          <span>
-            Posted:{" "}
-            <time dateTime={postedDateIso ?? undefined}>
-              {postedDateFormatted}
-            </time>
-          </span>
-          <span className="date-sep" aria-hidden="true">
-            {" "}
-            •{" "}
-          </span>
-          <span>
-            Last seen:{" "}
-            <time dateTime={job.last_seen_at}>{lastSeenFormatted}</time>
-          </span>
-        </div>
-
-        <div className="job-provenance-and-apply">
-          <div className="job-sources" aria-label="Available on sources">
-            <span className="sources-label">Sources:</span>
-            {job.sources.map((s) => (
-              <span key={s.source_id} className="badge badge-source">
-                {s.source_name}
-              </span>
-            ))}
+            <span>
+              Last seen:{" "}
+              <time dateTime={job.last_seen_at}>{lastSeenFormatted}</time>
+            </span>
           </div>
 
-          {job.primary_application_url && (
-            <a
-              href={job.primary_application_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-apply"
-            >
-              Apply on {job.sources[0]?.source_name ?? "Source"}{" "}
-              <span aria-hidden="true">↗</span>
-              <span className="sr-only"> (opens in new tab)</span>
-            </a>
-          )}
-        </div>
-      </footer>
-    </article>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-1" aria-label="Available on sources">
+              <span className="text-xs text-muted-foreground">Sources:</span>
+              {job.sources.map((s) => (
+                <Badge key={s.source_id} variant="source">
+                  {s.source_name}
+                </Badge>
+              ))}
+            </div>
+
+            {job.primary_application_url && (
+              <div className="flex flex-wrap items-center gap-2">
+                <ShimmerAnchor
+                  href={job.primary_application_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Apply on {job.sources[0]?.source_name ?? "Source"}{" "}
+                  <span aria-hidden="true">↗</span>
+                  <span className="sr-only"> (opens in new tab)</span>
+                </ShimmerAnchor>
+                <ApplicationLauncher
+                  jobGroupId={job.id}
+                  title={job.title}
+                  company={job.company}
+                  applicationUrl={job.primary_application_url}
+                  sourceName={job.sources[0]?.source_name ?? "Source"}
+                />
+              </div>
+            )}
+          </div>
+        </footer>
+      </article>
+    </JobCardShell>
   );
 }

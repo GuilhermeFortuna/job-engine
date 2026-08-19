@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AnimatedShinyText } from "@/components/ui/animated-shiny-text";
 import {
   fetchCatalogFilters,
   fetchCatalogHealth,
@@ -42,15 +43,20 @@ export default async function JobsPage(props: JobsPageProps) {
       <header className="jobs-page-header">
         <h1 className="jobs-page-heading">Software Engineering Jobs</h1>
         <p className="jobs-page-subheading">
-          Aggregated and verified remote opportunities from multiple catalog
-          sources.
+          <AnimatedShinyText className="mx-0 max-w-none text-muted-foreground dark:text-muted-foreground">
+            Aggregated and verified remote opportunities from multiple catalog
+            sources.
+          </AnimatedShinyText>
         </p>
       </header>
 
       <CatalogHealthNotice health={catalogHealth} />
 
       <div className="jobs-page-layout">
-        <aside className="jobs-sidebar" aria-label="Search and Filter Controls">
+        <aside
+          className="jobs-sidebar rounded-xl bg-card p-4 ring-1 ring-foreground/10"
+          aria-label="Search and Filter Controls"
+        >
           <JobSearchForm
             params={validatedParams}
             catalogFilters={catalogFilters}

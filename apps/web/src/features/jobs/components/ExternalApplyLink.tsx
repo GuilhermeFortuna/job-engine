@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { ShimmerAnchor } from "@/components/ui/shimmer-button";
+
 export interface ExternalApplyLinkProps {
   url?: string | null;
   sourceName?: string;
@@ -27,7 +29,7 @@ export function isValidHttpUrl(urlStr: string | null | undefined): boolean {
 export function ExternalApplyLink({
   url,
   sourceName,
-  className = "btn btn-apply",
+  className,
   children,
   fallback,
 }: ExternalApplyLinkProps) {
@@ -36,7 +38,10 @@ export function ExternalApplyLink({
       return <>{fallback}</>;
     }
     return (
-      <span className="apply-link-unavailable" aria-disabled="true">
+      <span
+        className="inline-flex items-center rounded-lg border border-dashed border-border bg-muted px-4 py-2 text-sm font-medium text-muted-foreground"
+        aria-disabled="true"
+      >
         Application link unavailable
       </span>
     );
@@ -45,7 +50,7 @@ export function ExternalApplyLink({
   const defaultLabel = sourceName ? `Apply on ${sourceName}` : "Apply on external site";
 
   return (
-    <a
+    <ShimmerAnchor
       href={url.trim()}
       target="_blank"
       rel="noopener noreferrer"
@@ -54,6 +59,6 @@ export function ExternalApplyLink({
       {children || defaultLabel}{" "}
       <span aria-hidden="true">↗</span>
       <span className="sr-only"> (opens in new tab)</span>
-    </a>
+    </ShimmerAnchor>
   );
 }

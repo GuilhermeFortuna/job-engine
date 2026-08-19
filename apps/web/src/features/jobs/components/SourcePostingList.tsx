@@ -1,3 +1,5 @@
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { EmploymentType, JobStatus, SourcePostingDetail } from "../types";
 import {
   formatCompensation,
@@ -44,58 +46,62 @@ export function SourcePostingList({
 }) {
   if (!postings || postings.length === 0) {
     return (
-      <section
-        className="source-postings-section"
-        aria-labelledby="source-postings-heading"
-      >
-        <h2 id="source-postings-heading" className="section-heading">
-          Source Provenance
-        </h2>
-        <p className="no-postings-message">No source postings linked to this record.</p>
-      </section>
+      <Card aria-labelledby="source-postings-heading">
+        <CardHeader className="border-b">
+          <h2 id="source-postings-heading" className="text-xl font-semibold">
+            Source Provenance
+          </h2>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <p className="m-0 text-muted-foreground italic">
+            No source postings linked to this record.
+          </p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <section
-      className="source-postings-section"
-      aria-labelledby="source-postings-heading"
-    >
-      <header className="source-postings-header">
-        <h2 id="source-postings-heading" className="section-heading">
+    <Card aria-labelledby="source-postings-heading">
+      <CardHeader className="border-b">
+        <h2 id="source-postings-heading" className="text-xl font-semibold">
           Source Provenance & Postings ({postings.length})
         </h2>
-        <p className="section-subheading">
+        <p className="text-sm text-muted-foreground">
           Every original posting linked to this aggregated canonical role, preserving original values, source IDs, and ingestion audit metadata.
         </p>
-      </header>
-
-      <div className="source-postings-list">
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4 pt-4">
         {postings.map((posting) => {
           const compFormatted = formatCompensation(posting.compensation);
           const publishedIso = posting.published_at || posting.first_seen_at;
+          const statusVariant =
+            posting.status === "active"
+              ? "success"
+              : posting.status === "stale"
+                ? "warning"
+                : posting.status === "closed"
+                  ? "destructive"
+                  : "secondary";
 
           return (
             <article
               key={posting.id}
-              className="source-posting-card"
+              className="rounded-lg border border-border bg-background p-4"
               aria-labelledby={`source-posting-${posting.id}`}
             >
-              <header className="source-posting-header">
-                <div className="source-posting-meta">
-                  <span className="badge badge-source">{posting.source_name}</span>
-                  <span className={`badge badge-status status-${posting.status}`}>
-                    {formatJobStatus(posting.status)}
-                  </span>
-                  <span className="source-posting-id">
-                    ID: <code>{posting.source_posting_id}</code>
+              <header className="mb-3 flex flex-col gap-3 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="source">{posting.source_name}</Badge>
+                  <Badge variant={statusVariant}>{formatJobStatus(posting.status)}</Badge>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    ID: <code className="rounded border border-border bg-card px-1">{posting.source_posting_id}</code>
                   </span>
                 </div>
-                <div className="source-posting-actions">
+                <div>
                   <ExternalApplyLink
                     url={posting.application_url}
                     sourceName={posting.source_name}
-                    className="btn btn-primary btn-apply"
                   />
                 </div>
               </header>
@@ -184,7 +190,7 @@ export function SourcePostingList({
             </article>
           );
         })}
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }

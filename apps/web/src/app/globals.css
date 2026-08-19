@@ -6,26 +6,29 @@
 
 :root {
   color-scheme: light;
-  --color-bg: #f8fafc;
+  --color-bg: #f6f7f9;
   --color-card-bg: #ffffff;
-  --color-fg: #0f172a;
-  --color-muted: #64748b;
-  --color-border: #e2e8f0;
-  --color-border-hover: #cbd5e1;
-  --color-primary: #0f172a;
-  --color-primary-hover: #1e293b;
+  --color-fg: #12141a;
+  --color-muted: #5c6370;
+  --color-border: #e2e5ea;
+  --color-border-hover: #c9ced6;
+  --color-primary: #12141a;
+  --color-primary-hover: #2a2e38;
   --color-primary-fg: #ffffff;
-  --color-focus: #2563eb;
-  --color-badge-bg: #f1f5f9;
-  --color-badge-fg: #334155;
-  --color-badge-remote: #e0f2fe;
-  --color-badge-remote-fg: #0369a1;
-  --color-badge-eligibility: #fef3c7;
-  --color-badge-eligibility-fg: #92400e;
+  --color-focus: #3d8bff;
+  --color-badge-bg: #eef0f4;
+  --color-badge-fg: #2f3540;
+  --color-badge-remote: #e8f1ff;
+  --color-badge-remote-fg: #1e5bb8;
+  --color-badge-eligibility: #f8ead3;
+  --color-badge-eligibility-fg: #8a5a12;
+  --color-badge-source: #eee6fa;
+  --color-badge-source-fg: #5b3d99;
   --color-error-bg: #fef2f2;
   --color-error-border: #fecaca;
   --color-error-fg: #991b1b;
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -33,13 +36,14 @@
   --space-5: 1.25rem;
   --space-6: 1.5rem;
   --space-8: 2rem;
-  --page-max-width: 72rem;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
+  --page-max-width: 84rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
   --radius-full: 9999px;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 2px 0 rgba(18, 20, 26, 0.05);
+  --shadow-md: 0 8px 24px -12px rgba(18, 20, 26, 0.18);
+  --transition-fast: 150ms ease;
   --focus-ring: 0.125rem solid var(--color-focus);
   --background: var(--color-bg);
   --foreground: var(--color-fg);
@@ -64,7 +68,7 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.75rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -239,7 +243,7 @@ a {
   margin: 0 0 var(--space-2);
   font-size: 1.875rem;
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.04em;
 }
 
 .jobs-page-subheading {
@@ -260,6 +264,11 @@ a {
     grid-template-columns: 19rem 1fr;
     gap: var(--space-8);
     align-items: start;
+  }
+
+  .jobs-sidebar {
+    position: sticky;
+    top: 1rem;
   }
 }
 
@@ -1368,6 +1377,7 @@ a {
 
 @theme inline {
   --font-heading: var(--font-sans);
+  --font-mono: var(--font-mono);
   --font-sans: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -1407,38 +1417,70 @@ a {
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --animate-shimmer-slide: shimmer-slide var(--speed) ease-in-out infinite alternate;
+  --animate-spin-around: spin-around calc(var(--speed) * 2) infinite linear;
+  --animate-shiny-text: shiny-text 8s infinite;
+  @keyframes shimmer-slide {
+  to {
+    transform: translate(calc(100cqw - 100%), 0);
+    }
+  }
+  @keyframes spin-around {
+  0% {
+    transform: translateZ(0) rotate(0);
+    }
+  15%, 35% {
+    transform: translateZ(0) rotate(90deg);
+    }
+  65%, 85% {
+    transform: translateZ(0) rotate(270deg);
+    }
+  100% {
+    transform: translateZ(0) rotate(360deg);
+    }
+  }
+  @keyframes shiny-text {
+  0%, 90%, 100% {
+    background-position: calc(-100% - var(--shiny-width)) 0;
+    }
+  30%, 60% {
+    background-position: calc(100% + var(--shiny-width)) 0;
+    }
+  }
 }
 
 /* @theme remaps --color-muted / --color-border / --color-primary / radii for
    Tailwind utilities. Re-assert Job Engine surface tokens so existing job CSS
    keeps the original meanings of those variables. */
 :root {
-  --color-muted: #64748b;
-  --color-border: #e2e8f0;
-  --color-primary: #0f172a;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
+  --color-muted: #5c6370;
+  --color-border: #e2e5ea;
+  --color-primary: #12141a;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
 }
 
 .dark {
   color-scheme: dark;
-  --color-bg: #111111;
-  --color-card-bg: #1a1a1a;
+  --color-bg: #12141a;
+  --color-card-bg: #1b1e26;
   --color-fg: #f4f4f5;
-  --color-muted: #a3a3a3;
-  --color-border: #2a2a2a;
-  --color-border-hover: #3f3f3f;
+  --color-muted: #a3a8b3;
+  --color-border: #2a2e38;
+  --color-border-hover: #3d4350;
   --color-primary: #f5f5f5;
   --color-primary-hover: #ffffff;
-  --color-primary-fg: #111111;
-  --color-focus: #60a5fa;
-  --color-badge-bg: #262626;
-  --color-badge-fg: #e5e5e5;
-  --color-badge-remote: #0c4a6e;
-  --color-badge-remote-fg: #7dd3fc;
-  --color-badge-eligibility: #713f12;
-  --color-badge-eligibility-fg: #fde68a;
+  --color-primary-fg: #12141a;
+  --color-focus: #3d8bff;
+  --color-badge-bg: #262a33;
+  --color-badge-fg: #e5e7eb;
+  --color-badge-remote: #16345c;
+  --color-badge-remote-fg: #9ec5ff;
+  --color-badge-eligibility: #4a3414;
+  --color-badge-eligibility-fg: #f0c57a;
+  --color-badge-source: #3a2a55;
+  --color-badge-source-fg: #d4c2f5;
   --color-error-bg: #450a0a;
   --color-error-border: #7f1d1d;
   --color-error-fg: #fecaca;
@@ -1819,7 +1861,6 @@ html[data-magicui-theme-vt="active"]::view-transition-new(root) {
   color: #be123c;
 }
 
-
 .live-sync-spinner {
   width: 1rem;
   height: 1rem;
@@ -1890,4 +1931,277 @@ html[data-magicui-theme-vt="active"]::view-transition-new(root) {
 
 .btn-dismiss-sync:hover {
   opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   FRONT-005 embedded application workspace
+   ========================================================================== */
+
+main:has(.application-workspace) {
+  max-width: none;
+}
+
+.job-apply-actions,
+.job-details-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.application-launcher-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(18, 20, 26, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.application-launcher-dialog {
+  background: var(--color-card-bg);
+  color: var(--color-fg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  max-width: 36rem;
+  width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+  padding: var(--space-6);
+}
+
+.application-launcher-summary {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+.application-launcher-summary dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-muted);
+}
+
+.application-launcher-summary dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+.application-launcher-resumes,
+.application-launcher-resume,
+.application-launcher-override {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.application-launcher-actions,
+.application-launcher-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.application-launcher-error {
+  color: var(--color-error-fg);
+}
+
+.application-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: calc(100dvh - 6rem);
+}
+
+.application-workspace-layout {
+  display: grid;
+  grid-template-columns: 16rem minmax(32rem, 1fr) 18rem;
+  gap: var(--space-4);
+  align-items: stretch;
+  min-height: 28rem;
+}
+
+.job-context-panel,
+.application-workspace-assist,
+.application-workspace-browser {
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  min-width: 0;
+}
+
+.job-context-panel h2,
+.field-review-panel h2,
+.exception-resolver h2,
+.submission-receipt h2 {
+  margin: 0 0 var(--space-3);
+  font-size: 1rem;
+}
+
+.job-context-panel dl {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.job-context-panel dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.job-context-panel dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.application-workspace-browser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 24rem;
+}
+
+.browser-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.browser-toolbar-controls {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.browser-toolbar-url {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+  word-break: break-all;
+}
+
+.browser-toolbar-blocked {
+  margin: 0;
+  color: var(--color-error-fg);
+  font-weight: 600;
+}
+
+.browser-viewport {
+  flex: 1 1 auto;
+  min-height: 20rem;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+}
+
+.application-workspace-assist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.field-review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.exception-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.application-status-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.application-status-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.workspace-unsupported {
+  padding: var(--space-6);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error-fg);
+  border-radius: var(--radius-lg);
+}
+
+.submission-receipt-submitted {
+  border-left: 0.25rem solid #15803d;
+  padding-left: var(--space-3);
+}
+
+.submission-receipt-unknown {
+  border-left: 0.25rem solid #b45309;
+  padding-left: var(--space-3);
+}
+
+.submission-receipt-failed {
+  border-left: 0.25rem solid var(--color-error-fg);
+  padding-left: var(--space-3);
+}
+
+.submission-receipt-cancelled {
+  border-left: 0.25rem solid var(--color-muted);
+  padding-left: var(--space-3);
+}
+
+.application-workspace[data-status="submitted"] .application-status-bar {
+  border-color: #15803d;
+}
+
+.application-workspace[data-status="submission_unknown"] .application-status-bar {
+  border-color: #b45309;
+}
+
+.application-workspace[data-status="failed_final"] .application-status-bar,
+.application-workspace[data-status="failed_retryable"] .application-status-bar {
+  border-color: var(--color-error-fg);
+}
+
+.application-workspace[data-status="cancelled"] .application-status-bar {
+  border-color: var(--color-muted);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

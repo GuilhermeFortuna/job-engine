@@ -24,9 +24,9 @@ export function SearchStatus({
       role="status"
       aria-live="polite"
       aria-atomic="true"
-      className="search-status"
+      className="mb-3"
     >
-      <p className="search-status-text">{statusText}</p>
+      <p className="m-0 text-sm font-medium text-muted-foreground">{statusText}</p>
     </div>
   );
 }
