@@ -1,46 +1,37 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import { useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 
 import { Aurora } from "@/components/ui/aurora";
 import { Silk } from "@/components/ui/silk";
-
-function subscribeReducedMotion(onStoreChange: () => void) {
-  const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-  media.addEventListener("change", onStoreChange);
-  return () => media.removeEventListener("change", onStoreChange);
-}
-
-function getReducedMotionSnapshot() {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
-function getServerSnapshot() {
-  return false;
-}
 
 const DARK_AURORA = ["#3D8BFF", "#7C5CBF", "#1B4F8A"];
 const LIGHT_AURORA = ["#8BB6FF", "#C4B5E8", "#6EA8FF"];
 
 export function CatalogBackdrop() {
   const { resolvedTheme } = useTheme();
-  const prefersReducedMotion = useSyncExternalStore(
-    subscribeReducedMotion,
-    getReducedMotionSnapshot,
-    getServerSnapshot,
-  );
+  const [mounted, setMounted] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setPrefersReducedMotion(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    setMounted(true);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
   const isDark = resolvedTheme !== "light";
-  const showWebGl = Boolean(resolvedTheme) && !prefersReducedMotion;
+  const showWebGl = mounted && !prefersReducedMotion;
 
   return (
     <div
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 overflow-hidden"
     >
-      {!showWebGl ? (
-        <div className="absolute inset-0 bg-gradient-to-b from-ring/25 via-transparent to-background" />
-      ) : (
+      {showWebGl ? (
         <>
           <div className="absolute inset-0">
             <Silk
@@ -66,6 +57,8 @@ export function CatalogBackdrop() {
             />
           </div>
         </>
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-b from-ring/25 via-transparent to-background" />
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-background/10 via-background/25 to-background/75" />
     </div>

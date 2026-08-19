@@ -101,6 +101,9 @@ export function Silk({
       dpr: Math.min(window.devicePixelRatio, 2),
     });
     const gl = renderer.gl;
+    if (!gl) {
+      return;
+    }
     gl.canvas.style.width = "100%";
     gl.canvas.style.height = "100%";
     gl.canvas.style.display = "block";
@@ -150,9 +153,7 @@ export function Silk({
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", resize);
-      if (gl.canvas.parentNode === container) {
-        container.removeChild(gl.canvas);
-      }
+      gl.canvas.remove();
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
   }, []);

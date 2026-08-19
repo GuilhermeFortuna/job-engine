@@ -151,6 +151,9 @@ export function Aurora({
       dpr: Math.min(window.devicePixelRatio, 2),
     });
     const gl = renderer.gl;
+    if (!gl) {
+      return;
+    }
     gl.clearColor(0, 0, 0, 0);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -208,9 +211,7 @@ export function Aurora({
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", resize);
-      if (gl.canvas.parentNode === container) {
-        container.removeChild(gl.canvas);
-      }
+      gl.canvas.remove();
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
   }, []);
