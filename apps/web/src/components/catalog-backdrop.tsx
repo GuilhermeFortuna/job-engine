@@ -1,7 +1,7 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 import { Aurora } from "@/components/ui/aurora";
 import { Silk } from "@/components/ui/silk";
@@ -9,19 +9,40 @@ import { Silk } from "@/components/ui/silk";
 const DARK_AURORA = ["#3D8BFF", "#7C5CBF", "#1B4F8A"];
 const LIGHT_AURORA = ["#8BB6FF", "#C4B5E8", "#6EA8FF"];
 
+function subscribeReducedMotion(onStoreChange: () => void) {
+  const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+  media.addEventListener("change", onStoreChange);
+  return () => media.removeEventListener("change", onStoreChange);
+}
+
+function getReducedMotionSnapshot() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function subscribeHydrated() {
+  return () => {};
+}
+
+function getHydratedSnapshot() {
+  return true;
+}
+
+function getServerSnapshot() {
+  return false;
+}
+
 export function CatalogBackdrop() {
   const { resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => setPrefersReducedMotion(media.matches);
-    sync();
-    media.addEventListener("change", sync);
-    setMounted(true);
-    return () => media.removeEventListener("change", sync);
-  }, []);
+  const mounted = useSyncExternalStore(
+    subscribeHydrated,
+    getHydratedSnapshot,
+    getServerSnapshot,
+  );
+  const prefersReducedMotion = useSyncExternalStore(
+    subscribeReducedMotion,
+    getReducedMotionSnapshot,
+    getServerSnapshot,
+  );
 
   const isDark = resolvedTheme !== "light";
   const showWebGl = mounted && !prefersReducedMotion;
@@ -29,7 +50,7 @@ export function CatalogBackdrop() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 overflow-hidden"
+      className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
     >
       {showWebGl ? (
         <>

@@ -127,7 +127,7 @@ class Settings(BaseSettings):
 
     @property
     def resolved_evidence_root(self) -> Path:
-        raw = Path(self.evidence_root)
+        raw = Path(self.evidence_root).expanduser()
         if raw.is_absolute():
             resolved = raw.resolve()
         else:

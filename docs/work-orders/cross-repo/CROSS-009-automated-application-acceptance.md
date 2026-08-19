@@ -1,6 +1,6 @@
 # CROSS-009: Embedded Assisted Apply End-to-End Acceptance
 
-**Status:** `BLOCKED`
+**Status:** `READY` (acceptance executed; approval remains owner-controlled)
 
 **Owner:** Unassigned
 
@@ -126,12 +126,15 @@ git diff --check
 
 ## Dispatch record
 
-- Worker: Unassigned
+- Worker: CROSS-009 acceptance agent
 - Branch/worktree: `development`
-- Dispatched at: Not dispatched
+- Dispatched at: 2026-08-19
 
 ## Completion record
 
-- Commit: Pending
-- Evidence: Pending
-- Independent reviewer: Pending
+- Commit under test: `e43381015b888a56dad1cc9263bfa22d07ced2e8`
+- Decision: `CONDITIONAL_GO`
+- Evidence: `/docs/evidence/embedded-assisted-apply-acceptance.md`, `/docs/evidence/embedded-assisted-apply/scenario-matrix.md`
+- Not performed: scenario C.4 live non-submitting inspection (`LEGAL-GATE-ATS-001` OPEN, no owner-named target)
+- Defects reported to owning orders: D-1 through D-6 (see report section 7); none repaired in acceptance scope
+- Independent reviewer: Pending owner review

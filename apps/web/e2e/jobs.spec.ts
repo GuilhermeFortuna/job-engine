@@ -1,5 +1,5 @@
-import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { expect, test } from "./fixtures";
 
 const SAMPLE_JOB_ID = "11111111-1111-4111-8111-111111111111";
 const UNKNOWN_JOB_ID = "33333333-3333-4333-8333-333333333333";
@@ -17,13 +17,18 @@ test.describe("Job Search and Resilience", () => {
     await page.goto("/jobs?q=backend&role_family=backend");
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Software Engineering Jobs" }),
+      page.getByRole("heading", {
+        level: 1,
+        name: "Software Engineering Jobs",
+      }),
     ).toBeVisible();
 
     const keywordInput = page.getByLabel(/keywords/i);
     await expect(keywordInput).toHaveValue("backend");
 
-    const jobTitleLink = page.getByRole("link", { name: "Senior Backend Engineer" });
+    const jobTitleLink = page.getByRole("link", {
+      name: "Senior Backend Engineer",
+    });
     await expect(jobTitleLink).toBeVisible();
   });
 
@@ -36,26 +41,38 @@ test.describe("Job Search and Resilience", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Senior Backend Engineer" }),
     ).toBeVisible();
-    await expect(
-      page.getByText(/original title as posted/i),
-    ).toBeVisible();
+    await expect(page.getByText(/original title as posted/i)).toBeVisible();
     await expect(
       page.locator(".company-name").filter({ hasText: "Apex Global" }),
     ).toBeVisible();
 
     // Badges
-    await expect(page.getByText("Remote", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Senior", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Full-time", { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText("Remote", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Senior", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Full-time", { exact: true }).first(),
+    ).toBeVisible();
     await expect(page.getByText("Status: Active")).toBeVisible();
 
     // Key details
-    await expect(page.getByText("$110,000 - $140,000 USD per year").first()).toBeVisible();
     await expect(
-      page.getByText(/candidates residing in brazil are eligible to apply/i).first(),
+      page.getByText("$110,000 - $140,000 USD per year").first(),
     ).toBeVisible();
-    await expect(page.getByText("Python", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("FastAPI", { exact: true }).first()).toBeVisible();
+    await expect(
+      page
+        .getByText(/candidates residing in brazil are eligible to apply/i)
+        .first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Python", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("FastAPI", { exact: true }).first(),
+    ).toBeVisible();
 
     // Safe description text
     await expect(
@@ -75,7 +92,9 @@ test.describe("Job Search and Resilience", () => {
   }) => {
     await page.goto(`/jobs/${SAMPLE_JOB_ID}`);
 
-    const primaryApply = page.getByRole("link", { name: /apply on himalayas/i }).first();
+    const primaryApply = page
+      .getByRole("link", { name: /apply on himalayas/i })
+      .first();
     await expect(primaryApply).toBeVisible();
     await expect(primaryApply).toHaveAttribute(
       "href",
@@ -84,7 +103,9 @@ test.describe("Job Search and Resilience", () => {
     await expect(primaryApply).toHaveAttribute("target", "_blank");
     await expect(primaryApply).toHaveAttribute("rel", "noopener noreferrer");
 
-    const remoteOkApply = page.getByRole("link", { name: /apply on remote ok/i });
+    const remoteOkApply = page.getByRole("link", {
+      name: /apply on remote ok/i,
+    });
     await expect(remoteOkApply).toBeVisible();
     await expect(remoteOkApply).toHaveAttribute(
       "href",
@@ -96,7 +117,14 @@ test.describe("Job Search and Resilience", () => {
 
   test("4. Return navigation from details back to search", async ({ page }) => {
     await page.goto("/jobs?q=backend");
-    await page.getByRole("link", { name: "Senior Backend Engineer" }).click();
+    const jobTitleLink = page
+      .getByRole("article", { name: "Senior Backend Engineer" })
+      .getByRole("link", { name: "Senior Backend Engineer" });
+    await expect(jobTitleLink).toHaveAttribute(
+      "href",
+      `/jobs/${SAMPLE_JOB_ID}`,
+    );
+    await jobTitleLink.click();
 
     await expect(page).toHaveURL(`/jobs/${SAMPLE_JOB_ID}`);
 
@@ -106,17 +134,24 @@ test.describe("Job Search and Resilience", () => {
 
     await expect(page).toHaveURL(/\/jobs/);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Software Engineering Jobs" }),
+      page.getByRole("heading", {
+        level: 1,
+        name: "Software Engineering Jobs",
+      }),
     ).toBeVisible();
   });
 
-  test("5. Unknown/missing fields display truthful fallback copy", async ({ page }) => {
+  test("5. Unknown/missing fields display truthful fallback copy", async ({
+    page,
+  }) => {
     await page.goto(`/jobs/${UNKNOWN_JOB_ID}`);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Software Engineer" }),
     ).toBeVisible();
-    await expect(page.getByText(/compensation not provided/i).first()).toBeVisible();
+    await expect(
+      page.getByText(/compensation not provided/i).first(),
+    ).toBeVisible();
     await expect(
       page.getByText(/no full description was provided/i),
     ).toBeVisible();
@@ -155,7 +190,9 @@ test.describe("Job Search and Resilience", () => {
     await page.goto("/jobs");
 
     await expect(
-      page.getByRole("heading", { name: /catalog notice: partial source degraded/i }),
+      page.getByRole("heading", {
+        name: /catalog notice: partial source degraded/i,
+      }),
     ).toBeVisible();
     await expect(
       page.getByLabel("Affected sources").getByText("Jobicy"),
@@ -185,14 +222,20 @@ test.describe("Job Search and Resilience", () => {
       const searchOverflow = await page.evaluate(() => {
         return document.documentElement.scrollWidth > window.innerWidth;
       });
-      expect(searchOverflow, `Search page horizontal overflow at ${vp.width}px`).toBe(false);
+      expect(
+        searchOverflow,
+        `Search page horizontal overflow at ${vp.width}px`,
+      ).toBe(false);
 
       // Check details page
       await page.goto(`/jobs/${SAMPLE_JOB_ID}`);
       const detailsOverflow = await page.evaluate(() => {
         return document.documentElement.scrollWidth > window.innerWidth;
       });
-      expect(detailsOverflow, `Details page horizontal overflow at ${vp.width}px`).toBe(false);
+      expect(
+        detailsOverflow,
+        `Details page horizontal overflow at ${vp.width}px`,
+      ).toBe(false);
     }
   });
 
@@ -207,7 +250,9 @@ test.describe("Job Search and Resilience", () => {
     await expect(backBtn).toBeFocused();
 
     await page.keyboard.press("Tab");
-    const primaryApply = page.getByRole("link", { name: /apply on himalayas/i }).first();
+    const primaryApply = page
+      .getByRole("link", { name: /apply on himalayas/i })
+      .first();
     await expect(primaryApply).toBeFocused();
   });
 

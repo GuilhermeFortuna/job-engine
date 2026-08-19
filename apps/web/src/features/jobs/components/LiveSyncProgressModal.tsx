@@ -124,7 +124,7 @@ export function LiveSyncProgressModal({
               </span>
             )}
             {isCompleted && (
-              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+              <span className="font-medium text-emerald-700 dark:text-emerald-400">
                 ✓ Synchronization complete ({state.total_inserted} new, {state.total_updated}{" "}
                 updated)
               </span>

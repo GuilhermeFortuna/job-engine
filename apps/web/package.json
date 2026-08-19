@@ -4,9 +4,9 @@
   "scripts": {
     "dev": "next dev",
     "start": "next start",
-    "check": "next typegen && tsc --noEmit && eslint .",
+    "check": "next typegen && tsc --noEmit && eslint . --max-warnings 0 --no-cache",
     "test": "vitest run",
-    "test:e2e": "playwright test",
+    "test:e2e": "node ./scripts/run-e2e.mjs",
     "build": "next build"
   },
   "type": "module",

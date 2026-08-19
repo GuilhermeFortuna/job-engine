@@ -1,13 +1,16 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test.describe("Interactive Live Search & SSE Streaming", () => {
   test.beforeEach(async ({ page }) => {
     // Reset test flags on mock server
     try {
-      await page.request.post("http://127.0.0.1:8088/api/v1/test/set-live-sync-mode", {
-        data: { cooldown: false, degraded: false },
-      });
+      await page.request.post(
+        "http://127.0.0.1:8088/api/v1/test/set-live-sync-mode",
+        {
+          data: { cooldown: false, degraded: false },
+        },
+      );
       await page.request.post("http://127.0.0.1:8088/api/v1/test/set-health", {
         data: { degraded: false },
       });
@@ -19,13 +22,17 @@ test.describe("Interactive Live Search & SSE Streaming", () => {
   }) => {
     await page.goto("/jobs?q=engineer&role_family=backend");
 
-    const liveSearchBtn = page.getByRole("button", { name: /trigger live search/i });
+    const liveSearchBtn = page.getByRole("button", {
+      name: /trigger live search/i,
+    });
     await expect(liveSearchBtn).toBeVisible();
 
     await liveSearchBtn.click();
 
     // Dialog should open
-    const dialog = page.getByRole("dialog", { name: /live catalog synchronization/i });
+    const dialog = page.getByRole("dialog", {
+      name: /live catalog synchronization/i,
+    });
     await expect(dialog).toBeVisible();
 
     // Check all three sources rendered in progress modal
@@ -34,9 +41,9 @@ test.describe("Interactive Live Search & SSE Streaming", () => {
     await expect(page.getByTestId("live-sync-source-remoteok")).toBeVisible();
 
     // Wait for completion
-    await expect(
-      page.getByText(/synchronization complete/i),
-    ).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/synchronization complete/i)).toBeVisible({
+      timeout: 5000,
+    });
 
     // Verify active URL filters were preserved
     expect(page.url()).toContain("q=engineer");
@@ -52,20 +59,29 @@ test.describe("Interactive Live Search & SSE Streaming", () => {
     page,
   }) => {
     // Enable degraded mode
-    await page.request.post("http://127.0.0.1:8088/api/v1/test/set-live-sync-mode", {
-      data: { degraded: true, cooldown: false },
-    });
+    await page.request.post(
+      "http://127.0.0.1:8088/api/v1/test/set-live-sync-mode",
+      {
+        data: { degraded: true, cooldown: false },
+      },
+    );
 
     await page.goto("/jobs");
-    const liveSearchBtn = page.getByRole("button", { name: /trigger live search/i });
+    const liveSearchBtn = page.getByRole("button", {
+      name: /trigger live search/i,
+    });
     await liveSearchBtn.click();
 
-    const dialog = page.getByRole("dialog", { name: /live catalog synchronization/i });
+    const dialog = page.getByRole("dialog", {
+      name: /live catalog synchronization/i,
+    });
     await expect(dialog).toBeVisible();
 
     // Jobicy failure badge should appear
     const jobicyCard = page.getByTestId("live-sync-source-jobicy");
-    await expect(jobicyCard.getByText(/failed/i)).toBeVisible({ timeout: 5000 });
+    await expect(jobicyCard.getByText(/failed/i)).toBeVisible({
+      timeout: 5000,
+    });
 
     // Himalayas and Remote OK succeed
     const himalayasCard = page.getByTestId("live-sync-source-himalayas");
@@ -73,34 +89,52 @@ test.describe("Interactive Live Search & SSE Streaming", () => {
 
     // Search results area is still intact
     await expect(
-      page.getByRole("heading", { level: 1, name: "Software Engineering Jobs" }),
+      page.getByRole("heading", {
+        level: 1,
+        name: "Software Engineering Jobs",
+      }),
     ).toBeVisible();
   });
 
-  test("3. Cooldown guard displays polite retry-after message", async ({ page }) => {
+  test("3. Cooldown guard displays polite retry-after message", async ({
+    page,
+  }) => {
     // Enable cooldown mode
-    await page.request.post("http://127.0.0.1:8088/api/v1/test/set-live-sync-mode", {
-      data: { cooldown: true, degraded: false },
-    });
+    await page.request.post(
+      "http://127.0.0.1:8088/api/v1/test/set-live-sync-mode",
+      {
+        data: { cooldown: true, degraded: false },
+      },
+    );
 
     await page.goto("/jobs");
-    const liveSearchBtn = page.getByRole("button", { name: /trigger live search/i });
+    const liveSearchBtn = page.getByRole("button", {
+      name: /trigger live search/i,
+    });
     await liveSearchBtn.click();
 
     // Modal opens showing cooldown message
-    const dialog = page.getByRole("dialog", { name: /live catalog synchronization/i });
+    const dialog = page.getByRole("dialog", {
+      name: /live catalog synchronization/i,
+    });
     await expect(dialog).toBeVisible();
-    await expect(page.getByText(/cooldown active \(/i)).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText(/cooldown active \(/i)).toBeVisible({
+      timeout: 3000,
+    });
   });
 
   test("4. Keyboard accessibility: Escape key dismisses modal and restores focus", async ({
     page,
   }) => {
     await page.goto("/jobs");
-    const liveSearchBtn = page.getByRole("button", { name: /trigger live search/i });
+    const liveSearchBtn = page.getByRole("button", {
+      name: /trigger live search/i,
+    });
     await liveSearchBtn.click();
 
-    const dialog = page.getByRole("dialog", { name: /live catalog synchronization/i });
+    const dialog = page.getByRole("dialog", {
+      name: /live catalog synchronization/i,
+    });
     await expect(dialog).toBeVisible();
 
     // Press Escape to dismiss
@@ -108,13 +142,20 @@ test.describe("Interactive Live Search & SSE Streaming", () => {
     await expect(dialog).not.toBeVisible();
   });
 
-  test("5. Automated Axe accessibility audit on Live Search dialog", async ({ page }) => {
+  test("5. Automated Axe accessibility audit on Live Search dialog", async ({
+    page,
+  }) => {
     await page.goto("/jobs");
-    const liveSearchBtn = page.getByRole("button", { name: /trigger live search/i });
+    const liveSearchBtn = page.getByRole("button", {
+      name: /trigger live search/i,
+    });
     await liveSearchBtn.click();
 
-    const dialog = page.getByRole("dialog", { name: /live catalog synchronization/i });
+    const dialog = page.getByRole("dialog", {
+      name: /live catalog synchronization/i,
+    });
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(/synchronization complete/i)).toBeVisible();
 
     const accessibilityScan = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])

@@ -156,6 +156,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Next.js web application
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:8088
         run: pnpm --filter @job-engine/web run build
 
       - name: Install Playwright browsers and system dependencies

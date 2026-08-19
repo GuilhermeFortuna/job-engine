@@ -107,6 +107,7 @@ export function Silk({
     gl.canvas.style.width = "100%";
     gl.canvas.style.height = "100%";
     gl.canvas.style.display = "block";
+    gl.canvas.style.pointerEvents = "none";
 
     const geometry = new Triangle(gl);
     const initial = propsRef.current;

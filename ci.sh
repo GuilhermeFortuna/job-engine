@@ -5,6 +5,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${ROOT_DIR}"
 
+# GitHub Actions sets CI=true. Local runs must do the same or Playwright will
+# reuse leftover :3005/:8088 servers and follow the host color scheme / motion
+# preferences instead of the ubuntu-latest runner environment.
+export CI=true
+
+assert_listen_port_free() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1 && ss -ltnH "sport = :${port}" | grep -q .; then
+    echo "❌ Port ${port} is already in use. Stop that process so local CI starts fresh servers like GitHub Actions." >&2
+    exit 1
+  fi
+}
+
 echo "=========================================="
 echo "🧪 Running Job Engine Local CI Pipeline"
 echo "=========================================="
@@ -62,13 +75,29 @@ echo "✅ Frontend type checks, ESLint, and Vitest suite passed."
 
 # 5. Frontend production build & E2E tests
 echo "🎭 [5/5] Building Next.js application & running Playwright E2E suite..."
-if command -v corepack >/dev/null 2>&1; then
-  corepack pnpm --filter @job-engine/web run build
-  corepack pnpm --filter @job-engine/web run test:e2e
+assert_listen_port_free 3005
+assert_listen_port_free 8088
+
+E2E_API_BASE_URL="http://127.0.0.1:8088"
+pnpm_web() {
+  if command -v corepack >/dev/null 2>&1; then
+    corepack pnpm --filter @job-engine/web "$@"
+  else
+    pnpm --filter @job-engine/web "$@"
+  fi
+}
+
+NEXT_PUBLIC_API_BASE_URL="${E2E_API_BASE_URL}" pnpm_web run build
+
+# GitHub Actions uses --with-deps on Ubuntu. On other distros install the same
+# Chromium revision without attempting apt system packages.
+if grep -qi ubuntu /etc/os-release 2>/dev/null; then
+  (cd apps/web && pnpm exec playwright install --with-deps chromium)
 else
-  pnpm --filter @job-engine/web run build
-  pnpm --filter @job-engine/web run test:e2e
+  (cd apps/web && pnpm exec playwright install chromium)
 fi
+
+pnpm_web run test:e2e
 echo "✅ Frontend Next.js build and Playwright E2E suite passed."
 
 echo "=========================================="
