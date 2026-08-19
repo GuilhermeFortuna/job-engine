@@ -1,8 +1,8 @@
 # CROSS-010: Generic Embedded Form Assistance Runtime
 
-**Status:** `BLOCKED`
+**Status:** `IMPLEMENTING`
 
-**Owner:** Unassigned
+**Owner:** Guilherme Fortuna
 
 **Depends on:** CROSS-006, BACK-009, BACK-010, BACK-011
 
@@ -36,7 +36,29 @@ Add a browser-neutral normalized form layer and a generic assisted-apply runtime
 - `/apps/desktop/tests/fixtures/generic/**` (new; synthetic/minimal)
 - `/docs/development.md` (assisted-runtime commands only)
 
-Do not edit `/apps/web`, backend domain/API contracts, or platform-specific adapters in this order.
+### Approved backend scope expansion
+
+`POST /api/v1/runner/claims` was blind FIFO with no run ID, so the desktop
+runtime could be handed a run the owner never selected, or a `FULL_AUTO` run
+this batch must not execute, with no way to hand either back. The owner
+approved two additive backend changes on 2026-08-18. Neither alters an
+accepted BACK-009/010/011 contract.
+
+- `/apps/api/src/job_engine/api/applications.py` (runner claim/release only)
+- `/apps/api/src/job_engine/api/schemas.py` (runner claim/release only)
+- `/apps/api/src/job_engine/domain/applications.py` (release reason, audit event, retry counter)
+- `/apps/api/src/job_engine/db/models.py` (release record, retry counter)
+- `/apps/api/src/job_engine/db/repositories.py` (targeted claim, release, retry accounting)
+- `/apps/api/src/job_engine/services/applications.py` (claim/release only)
+- `/apps/api/migrations/versions/0005_add_runner_claim_release.py` (new)
+- `/apps/api/tests/api/test_runner_claim_release.py` (new)
+- `/apps/api/tests/db/test_application_claim_release.py` (new)
+- `/apps/desktop/scripts/run-fixtures.mjs` (new; fixture filter forwarding)
+- `/apps/desktop/tests/fixtures/backend/**` (new; synthetic seed only)
+- `/docs/v2-assisted-apply-spec.md` (runner API list only)
+
+Do not edit `/apps/web`, any other backend behavior, or platform-specific
+adapters in this order.
 
 ## Reused API contract
 
@@ -51,6 +73,48 @@ Use the implemented endpoints exactly as documented in `docs/v2-assisted-apply-s
 - At review, checkpoint `SUBMIT_ARMED` and raise the existing `SEMI_AUTO_ARMED` exception.
 - Wait for the trusted UI to call `release-submit`; reclaim the same run at `SUBMIT_ARMED` before one-time site submission.
 - Reconcile confirmed, ambiguous, and failed outcomes through the existing completion/evidence endpoints.
+
+## Frozen runner claim contracts
+
+### Targeted claim
+
+`POST /api/v1/runner/claims` accepts an optional body `{ "run_id": UUID }`.
+With it, the named run is claimed or nothing is; a targeted claim never
+substitutes a different run and returns `204` when the run is not claimable.
+An absent body preserves the original oldest-queued behavior.
+
+The desktop runtime only ever claims by explicit run ID, and only on two
+triggers: the owner opening a run, and a detected `release-submit` for the run
+it is already tracking. There is no polling claim loop and nothing claims at
+startup, which is what makes a wrong-run claim structurally impossible.
+
+### Claim release
+
+`POST /api/v1/runner/runs/{run_id}/release-claim`, authenticated with the
+runner bearer secret, `X-Runner-Lease-Token`, `X-Runner-Id`, and a required
+`Idempotency-Key`. Body: `{ "reason": "unsupported_automation_mode" |
+"run_not_selected" | "runtime_unavailable" }`. Returns the run.
+
+- Refuses with `409` once `submit_attempted_at` is set or the checkpoint is
+  `submitting` -- a run that may have reached the employer is reconciled
+  through `complete`, never re-queued -- and for any terminal run.
+- On release the run returns to `queued`, the lease is cleared, and every
+  unconsumed resume grant is consumed so the released grant token dies with it.
+- Replay is authorized by a persisted release record, never by the
+  caller-supplied `X-Runner-Id` alone. A replay must match the run, lease token
+  hash, runner ID, reason, and `Idempotency-Key`, and the record must not have
+  been retired. Every mismatch returns one generic `401`.
+- A later claim retires the run's release records, so a release token from a
+  prior attempt stops working the moment the run is claimed again.
+
+### Attempt identity and retry budget
+
+`attempt_count` is attempt identity: evidence lives under `attempt_{n}/`,
+`store_evidence` rejects a stale attempt, and every event row carries it. It
+stays monotonic, so a release never decrements it. Retry budget moved to
+`application_runs.retry_failure_count`, which only advances when an attempt
+actually fails; a pre-work release therefore consumes no retries. The
+`max_retries` threshold is unchanged for existing rows.
 
 ## Normalized adapter contract
 
@@ -71,6 +135,35 @@ Closed runtime outcomes are `PROGRESSED`, `NEEDS_ANSWERS`, `NEEDS_AUTH`, `CAPTCH
 Observed fields map exactly to the backend `QuestionObservationSchema`. Stable fingerprints use adapter ID, semantic page identity, label/accessibility semantics, control type, and normalized options—not DOM position alone.
 
 The generic adapter supports only conventional visible inputs, textareas, native selects, radio groups, checkboxes, and file inputs with discoverable accessible names. Custom comboboxes, contenteditable fields, canvas/shadow controls, signature widgets, unlabelled required controls, and ambiguous repeated fields pause as `UNSUPPORTED` or `NEEDS_ANSWERS`.
+
+## Recorded deviations
+
+### Isolated-world execution transport
+
+Procedure step 3 names `executeJavaScriptInIsolatedWorld`. In Electron 43 its
+signature is `(worldId, scripts: { code: string }[])` -- it accepts source
+strings only and cannot carry structured arguments. Using it would force
+page-derived values to be interpolated into script source, which this same
+order forbids.
+
+The runtime instead creates a dedicated world with CDP
+`Page.createIsolatedWorld` and calls the frozen script through
+`Runtime.callFunctionOn` with arguments passed **by value**, over the
+`webContents.debugger` session the resume upload already requires. The
+isolation guarantee is identical and the argument handling is strictly safer.
+Hostile payloads -- quotes, backslashes, newlines, U+2028/U+2029, script close
+tags, template expressions, command-shaped page text -- are round-tripped in
+tests and asserted byte-identical with nothing evaluated.
+
+### Evidence types
+
+This order emits `receipt` and `log` evidence only. `screenshot` and
+`dom_snapshot` are deferred: the backend's `sanitize_dom_snapshot` catches
+password inputs, card numbers, SSNs, and bearer tokens but not a filled answer,
+and `metadata.redaction_applied = true` is a caller's assertion rather than a
+proof. Adding them needs pre-capture masking of sensitive controls, guaranteed
+restoration, and tests proving known raw values are absent, which belongs in
+its own order.
 
 ## Mutation and review rules
 
@@ -98,10 +191,18 @@ The generic adapter supports only conventional visible inputs, textareas, native
 
 ## Required validation
 
+PostgreSQL must be running for the backend suite and the mandatory
+real-backend lifecycle fixture: `docker compose up -d postgres`.
+
 ```bash
+cd apps/api && uv run ruff format --check . && uv run ruff check .
+cd apps/api && uv run mypy src tests
+cd apps/api && uv run alembic upgrade head && uv run pytest
+
 corepack pnpm --filter @job-engine/desktop run check
 corepack pnpm --filter @job-engine/desktop run test
 corepack pnpm --filter @job-engine/desktop run test:fixtures -- generic
+corepack pnpm --filter @job-engine/desktop run test:fixtures
 corepack pnpm --filter @job-engine/desktop run build
 git diff --check
 ```
@@ -127,21 +228,43 @@ git diff --check
 
 ## Handoff evidence
 
-- Normalized field and adapter-contract documentation
-- Generic fixture matrix and end-to-end transcript
-- Decision/fill/conditional/upload verification examples
-- Review/release/one-click/receipt evidence
-- Restart, auth, CAPTCHA, hostile-page, and ambiguous-submit evidence
-- Full desktop runtime validation transcript
+Where each required item lives in the repository:
+
+| Evidence | Location |
+| --- | --- |
+| Normalized field and adapter contract | `apps/desktop/src/main/forms/types.ts`, `apps/desktop/src/main/adapters/contract.ts` |
+| Field identity rules and stability | `apps/desktop/src/main/forms/fingerprint.ts`, `apps/desktop/tests/forms/fingerprint.test.ts` |
+| Generic fixture matrix (real Electron) | `apps/desktop/tests/fixtures/generic-runtime-runner.ts` (13 cases) |
+| End-to-end lifecycle (real backend) | `apps/desktop/tests/fixtures/generic-real-backend.test.ts` (9 cases) |
+| Decision, fill, and verification behavior | `apps/desktop/tests/runtime/runner.test.ts`, `apps/desktop/tests/forms/page-script-fill.test.ts`, `apps/desktop/tests/forms/verify.test.ts` |
+| Conditional reveal after mutation | `tests/forms/page-script-observe.test.ts`, generic fixture case "discovers conditional fields only after a change" |
+| Upload verification and temp-file lifecycle | `apps/desktop/tests/runtime/upload.test.ts`, generic fixture upload cases |
+| Review, release, one-time submit, receipt | real-backend cases "arms the submit and pauses", "refuses to submit before the owner releases", "detects the owner release and reclaims", "submits once", "never submits a second time" |
+| Restart recovery | `apps/desktop/tests/runtime/checkpoints.test.ts` (`resumePhaseFor`) |
+| Auth and CAPTCHA pauses | `apps/desktop/tests/runtime/runner.test.ts`, generic fixture auth/CAPTCHA cases |
+| Hostile page isolation | generic fixture case "a hostile page cannot turn its text into commands", `apps/desktop/tests/runtime/isolated-world.test.ts` |
+| Ambiguous submit handling | `apps/desktop/tests/runtime/checkpoints.test.ts` (`submitAlreadyAttempted`), `/generic/ambiguous-submit` fixture |
+| Secret and answer redaction | `apps/desktop/tests/runtime/redaction.test.ts`, runner test "never writes an answer into the evidence log" |
+| Browser neutrality | `apps/desktop/tests/forms/adapter.test.ts`, "keeps the generic runtime free of platform-specific selectors" |
+| Backend claim/release contract | `apps/api/tests/api/test_runner_claim_release.py`, `apps/api/tests/db/test_application_claim_release.py` |
 
 ## Dispatch record
 
-- Worker: Unassigned
+- Worker: Claude Opus 5 (agent), for Guilherme Fortuna
 - Branch/worktree: `development`
-- Dispatched at: Not dispatched
+- Dispatched at: 2026-08-18
 
 ## Completion record
 
-- Commit: Pending
-- Evidence: Pending
+- Commits:
+  - `11fe78c` targeted runner claiming and claim release (backend)
+  - `e4710f9` browser-neutral normalized form layer
+  - `b60c63c` isolated-world transport and runtime foundations
+  - `cb9ee91` verified resume upload over CDP
+  - `d41552f` step orchestration and evidence recording
+  - `0ba1ee1` generic fixture matrix in real Electron
+  - `df81db2` mandatory real-backend lifecycle fixture
+- Evidence: see the handoff table above. Validation transcript recorded in the
+  handoff notes; all suites green (backend 304 passed, desktop 232 unit/form
+  tests, 3 Electron fixture suites).
 - Independent reviewer: Pending

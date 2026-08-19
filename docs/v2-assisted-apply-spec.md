@@ -115,7 +115,8 @@ No Batch 03 successor order may reopen accepted BACK-009, BACK-010, or BACK-011 
 
 ### Runner-facing APIs
 
-- `POST /api/v1/runner/claims`
+- `POST /api/v1/runner/claims` (optional `{ "run_id" }` body claims exactly that run)
+- `POST /api/v1/runner/runs/{run_id}/release-claim`
 - `POST /api/v1/runner/runs/{run_id}/heartbeat`
 - `POST /api/v1/runner/runs/{run_id}/events`
 - `POST /api/v1/runner/runs/{run_id}/checkpoints`

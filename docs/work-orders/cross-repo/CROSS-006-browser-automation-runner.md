@@ -1,6 +1,6 @@
 # CROSS-006: Electron Embedded-Browser Foundation
 
-**Status:** `READY`
+**Status:** `DONE`
 
 **Owner:** Unassigned
 

@@ -192,5 +192,23 @@ corepack pnpm --filter @job-engine/desktop run build
 - `dev` compiles TypeScript and launches the Electron application shell.
 - `check` runs strict `tsc --noEmit` on the desktop package.
 - `test` runs Vitest unit tests for main process logic, navigation policy, IPC validation, and bounds clipping.
-- `test:fixtures` runs synthetic local HTTPS test fixtures validating embedded browser sessions, popups/downloads denial, and hostile isolation.
+- `test` runs Vitest unit tests for main-process logic, the browser-neutral form
+  layer (under jsdom), and the assisted runtime.
+- `test:fixtures` runs the Electron fixture suites: the embedded browser
+  lifecycle, the generic assisted-apply matrix, and the mandatory real-backend
+  lifecycle. Pass a filter to narrow it, for example
+  `run test:fixtures -- generic`.
+
+The fixture suites need PostgreSQL running, because the real-backend lifecycle
+fixture creates a throwaway database, migrates it, boots the API, and drops the
+database afterwards:
+
+```bash
+docker compose up -d postgres
+```
+
+That fixture never skips. If PostgreSQL is unreachable it fails, because it is
+the acceptance evidence for the assisted-apply runtime. No external model
+provider, employer site, or personal data is involved: answers come from the
+deterministic provider and every form is synthetic and served from loopback.
 - `build` compiles the main and preload TypeScript sources into `dist/`.
