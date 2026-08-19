@@ -1446,6 +1446,14 @@ class SubmitArmedRequirementError(Exception):
     """Raised when release submit is called on a run not armed for submission."""
 
 
+class ClaimNotReleasableError(Exception):
+    """Raised when a claimed run may not be returned to the queue.
+
+    A run that has already attempted submission, or that has reached a terminal
+    status, must be reconciled through ``complete`` rather than re-queued.
+    """
+
+
 @dataclass(frozen=True)
 class ApplicationRunInput:
     job_group_id: UUID
@@ -1610,6 +1618,7 @@ def _application_run_from_row(row: orm.ApplicationRun) -> ApplicationRun:
         current_checkpoint=row.current_checkpoint,
         submit_attempted_at=row.submit_attempted_at,
         attempt_count=row.attempt_count,
+        retry_failure_count=row.retry_failure_count,
         max_retries=row.max_retries,
         idempotency_key=row.idempotency_key,
         lease_token_hash=row.lease_token_hash,
@@ -1962,7 +1971,14 @@ class ApplicationRepository:
         lease_token_hash: str,
         lease_duration_seconds: int,
         max_concurrency: int = 1,
+        run_id: UUID | None = None,
     ) -> tuple[ApplicationRun, ResumeAssetGrant, str] | None:
+        """Claim a queued run.
+
+        When ``run_id`` is given, claim exactly that run or nothing; a targeted
+        claim never substitutes a different run. When it is omitted the oldest
+        queued run is claimed, preserving the original FIFO behavior.
+        """
         # Acquire transaction-level advisory lock to serialize claim decisions
         await self._session.execute(
             text("SELECT pg_advisory_xact_lock(hashtext('runner_claim_queue'))")
@@ -1977,7 +1993,7 @@ class ApplicationRepository:
         if active_count >= max_concurrency:
             return None
 
-        # 3. Pick oldest QUEUED run with SKIP LOCKED
+        # 3. Pick the requested run, or the oldest QUEUED run, with SKIP LOCKED
         stmt = (
             select(orm.ApplicationRun)
             .where(orm.ApplicationRun.status == ApplicationRunStatus.QUEUED.value)
@@ -1985,6 +2001,8 @@ class ApplicationRepository:
             .with_for_update(skip_locked=True)
             .limit(1)
         )
+        if run_id is not None:
+            stmt = stmt.where(orm.ApplicationRun.id == run_id)
         row = await self._session.scalar(stmt)
         if row is None:
             return None
@@ -1999,6 +2017,18 @@ class ApplicationRepository:
         if row.started_at is None:
             row.started_at = now
         row.updated_at = now
+
+        # 4b. Retire every prior release record for this run. A release token
+        # from an earlier attempt must stop authorizing replay once the run has
+        # been claimed again.
+        await self._session.execute(
+            update(orm.ApplicationRunLeaseRelease)
+            .where(
+                orm.ApplicationRunLeaseRelease.run_id == row.id,
+                orm.ApplicationRunLeaseRelease.superseded_at.is_(None),
+            )
+            .values(superseded_at=now)
+        )
 
         # 5. Issue single-use resume asset grant
         raw_grant_token = secrets.token_urlsafe(32)
@@ -2344,6 +2374,129 @@ class ApplicationRepository:
             raise RuntimeError("Failed to reload released run")
         return loaded
 
+    async def release_claim(
+        self,
+        run_id: UUID,
+        lease_token_hash: str,
+        runner_id: str,
+        reason: str,
+        request_id: str,
+    ) -> ApplicationRun:
+        """Return a claimed run to the queue without consuming retry budget.
+
+        Idempotent: replaying the exact same release (same lease token, runner
+        ID, reason, and request ID) against a still-current release record is a
+        no-op that returns the run unchanged. Every other combination is a lease
+        authorization failure.
+        """
+        now = _utcnow()
+        stmt = (
+            select(orm.ApplicationRun)
+            .where(orm.ApplicationRun.id == run_id)
+            .with_for_update()
+        )
+        row = await self._session.scalar(stmt)
+        if row is None:
+            raise ApplicationRunNotFoundError(f"Run {run_id} not found")
+
+        # CRITICAL INVARIANT: a run that may have reached the employer must
+        # never be re-queued. It is reconciled through complete_run instead.
+        if (
+            row.submit_attempted_at is not None
+            or row.current_checkpoint == RunCheckpoint.SUBMITTING.value
+        ):
+            raise ClaimNotReleasableError(
+                f"Run {run_id} has attempted submission and cannot be released; "
+                "reconcile it through complete instead"
+            )
+        if is_terminal_status(ApplicationRunStatus(row.status)):
+            raise ClaimNotReleasableError(
+                f"Run {run_id} is terminal ('{row.status}') and cannot be released"
+            )
+
+        existing = await self._session.scalar(
+            select(orm.ApplicationRunLeaseRelease).where(
+                orm.ApplicationRunLeaseRelease.run_id == run_id,
+                orm.ApplicationRunLeaseRelease.released_lease_token_hash
+                == lease_token_hash,
+            )
+        )
+        if existing is not None:
+            # Replay. Every identifying attribute must match, and the record
+            # must not have been retired by a later claim. Failures share one
+            # message so a caller cannot probe which attribute mismatched.
+            if (
+                existing.superseded_at is not None
+                or existing.runner_id != runner_id
+                or existing.reason != reason
+                or existing.request_id != request_id
+            ):
+                raise LeaseExpiredOrInvalidError(
+                    f"Lease for run {run_id} is invalid or expired"
+                )
+            loaded = await self.get_run(run_id)
+            if loaded is None:
+                raise RuntimeError("Failed to reload released run")
+            return loaded
+
+        self._verify_lease_token_hash(row, lease_token_hash, now)
+
+        released_attempt = row.attempt_count
+        # attempt_count is attempt identity and stays monotonic; a release
+        # performs no work, so it advances no retry counter either.
+        row.status = ApplicationRunStatus.QUEUED.value
+        row.lease_token_hash = None
+        row.lease_expires_at = None
+        row.updated_at = now
+
+        # The grant issued with this lease must not outlive it.
+        await self._session.execute(
+            update(orm.ApplicationRunResumeGrant)
+            .where(
+                orm.ApplicationRunResumeGrant.run_id == run_id,
+                orm.ApplicationRunResumeGrant.consumed_at.is_(None),
+            )
+            .values(consumed_at=now)
+        )
+
+        self._session.add(
+            orm.ApplicationRunLeaseRelease(
+                id=uuid4(),
+                run_id=run_id,
+                attempt=released_attempt,
+                released_lease_token_hash=lease_token_hash,
+                runner_id=runner_id,
+                reason=reason,
+                request_id=request_id,
+                superseded_at=None,
+                created_at=now,
+            )
+        )
+
+        next_seq = await self._next_sequence_num(run_id)
+        self._session.add(
+            orm.ApplicationRunEvent(
+                id=uuid4(),
+                run_id=run_id,
+                attempt=released_attempt,
+                sequence_num=next_seq,
+                event_type=AuditEventType.LEASE_RELEASED.value,
+                event_payload=redact_audit_payload(
+                    {
+                        "reason": reason,
+                        "runner_id": runner_id,
+                        "attempt": released_attempt,
+                    }
+                ),
+                created_at=now,
+            )
+        )
+        await self._session.flush()
+        loaded = await self.get_run(run_id)
+        if loaded is None:
+            raise RuntimeError("Failed to reload released run")
+        return loaded
+
     async def resume_run(self, run_id: UUID) -> ApplicationRun:
         now = _utcnow()
         row = await self._session.get(orm.ApplicationRun, run_id)
@@ -2654,8 +2807,11 @@ class ApplicationRepository:
                     )
                 )
             else:
-                # Submit was not attempted; safe to retry or mark failed_final
-                if row.attempt_count < row.max_retries:
+                # Submit was not attempted; safe to retry or mark failed_final.
+                # Retry budget is tracked separately from attempt_count, which
+                # is attempt identity and must stay monotonic.
+                row.retry_failure_count += 1
+                if row.retry_failure_count < row.max_retries:
                     row.status = ApplicationRunStatus.QUEUED.value
                     row.lease_token_hash = None
                     row.lease_expires_at = None

@@ -73,6 +73,14 @@ class ExceptionStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class RunnerReleaseReason(StrEnum):
+    """Why a runner relinquished a claim before performing any work."""
+
+    UNSUPPORTED_AUTOMATION_MODE = "unsupported_automation_mode"
+    RUN_NOT_SELECTED = "run_not_selected"
+    RUNTIME_UNAVAILABLE = "runtime_unavailable"
+
+
 class EvidenceType(StrEnum):
     SCREENSHOT = "screenshot"
     DOM_SNAPSHOT = "dom_snapshot"
@@ -85,6 +93,7 @@ class AuditEventType(StrEnum):
     LEASE_CLAIMED = "lease_claimed"
     LEASE_EXTENDED = "lease_extended"
     LEASE_EXPIRED = "lease_expired"
+    LEASE_RELEASED = "lease_released"
     STATUS_CHANGED = "status_changed"
     CHECKPOINT_REACHED = "checkpoint_reached"
     STEP_PROGRESS = "step_progress"
@@ -316,6 +325,7 @@ class ApplicationRun(FrozenModel):
     current_checkpoint: str | None = None
     submit_attempted_at: datetime | None = None
     attempt_count: int = 0
+    retry_failure_count: int = 0
     max_retries: int = 2
     idempotency_key: str
     lease_token_hash: str | None = None

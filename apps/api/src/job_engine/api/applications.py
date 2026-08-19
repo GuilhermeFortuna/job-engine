@@ -40,16 +40,19 @@ from job_engine.api.schemas import (
     ReleaseSubmitRequest,
     ResolveAnswersRequest,
     RunnerCheckpointRequest,
+    RunnerClaimRequest,
     RunnerClaimResponse,
     RunnerCompleteRequest,
     RunnerEventRequest,
     RunnerExceptionRequest,
     RunnerHeartbeatRequest,
+    RunnerReleaseClaimRequest,
 )
 from job_engine.config import Settings
 from job_engine.db.repositories import (
     ApplicationRunFilterCriteria,
     ApplicationRunNotFoundError,
+    ClaimNotReleasableError,
     GrantAlreadyConsumedError,
     GrantExpiredError,
     LeaseExpiredOrInvalidError,
@@ -200,6 +203,7 @@ def _map_run_read(run: ApplicationRun) -> ApplicationRunRead:
         current_checkpoint=run.current_checkpoint,
         submit_attempted_at=run.submit_attempted_at,
         attempt_count=run.attempt_count,
+        retry_failure_count=run.retry_failure_count,
         max_retries=run.max_retries,
         idempotency_key=run.idempotency_key,
         terminal_reason=run.terminal_reason,
@@ -495,9 +499,13 @@ async def override_duplicate_run(
 )
 async def claim_runner_lease(
     service: Annotated[ApplicationService, Depends(get_application_service)],
+    request: RunnerClaimRequest | None = None,
     x_runner_id: Annotated[str, Header(alias="X-Runner-Id")] = "runner_default",
 ) -> Any:
-    claimed = await service.claim_run(runner_id=x_runner_id)
+    claimed = await service.claim_run(
+        runner_id=x_runner_id,
+        run_id=request.run_id if request else None,
+    )
     if claimed is None:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -528,6 +536,47 @@ async def heartbeat_runner_lease(
             extend_seconds=request.extend_seconds,
         )
         return _map_run_read(updated)
+    except LeaseExpiredOrInvalidError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
+        ) from exc
+    except ApplicationRunNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+
+
+@runner_router.post(
+    "/runs/{run_id}/release-claim",
+    response_model=ApplicationRunRead,
+    dependencies=[Depends(verify_runner_secret)],
+)
+async def release_runner_claim(
+    run_id: UUID,
+    request: RunnerReleaseClaimRequest,
+    lease_token: Annotated[str, Depends(get_runner_lease_token)],
+    service: Annotated[ApplicationService, Depends(get_application_service)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    x_runner_id: Annotated[str, Header(alias="X-Runner-Id")] = "runner_default",
+) -> ApplicationRunRead:
+    if not idempotency_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing Idempotency-Key header",
+        )
+    try:
+        updated = await service.release_claim(
+            run_id=run_id,
+            lease_token=lease_token,
+            runner_id=x_runner_id,
+            reason=request.reason,
+            request_id=idempotency_key,
+        )
+        return _map_run_read(updated)
+    except ClaimNotReleasableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
     except LeaseExpiredOrInvalidError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)

@@ -476,6 +476,7 @@ class ApplicationRun(Base):
     current_checkpoint: Mapped[str | None] = mapped_column(Text)
     submit_attempted_at: Mapped[datetime | None] = _optional_aware_dt()
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    retry_failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
     idempotency_key: Mapped[str] = mapped_column(String(64), nullable=False)
     lease_token_hash: Mapped[str | None] = mapped_column(String(64))
@@ -517,6 +518,9 @@ class ApplicationRun(Base):
         order_by="ApplicationRunEvidence.captured_at.asc()",
     )
     resume_grants: Mapped[list["ApplicationRunResumeGrant"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+    lease_releases: Mapped[list["ApplicationRunLeaseRelease"]] = relationship(
         back_populates="run", cascade="all, delete-orphan"
     )
 
@@ -633,3 +637,44 @@ class ApplicationRunResumeGrant(Base):
 
     run: Mapped[ApplicationRun] = relationship(back_populates="resume_grants")
     resume_asset: Mapped[ResumeAsset] = relationship()
+
+
+class ApplicationRunLeaseRelease(Base):
+    """Durable record of a runner voluntarily relinquishing a claim.
+
+    Authorizes idempotent replay of ``release-claim``: a replay must present the
+    same lease token, runner ID, reason, and request ID that produced the row,
+    and the row must not have been superseded by a later claim.
+    """
+
+    __tablename__ = "application_run_lease_releases"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "released_lease_token_hash",
+            name="uq_application_run_lease_releases_run_token",
+        ),
+        Index(
+            "ix_application_run_lease_releases_run_superseded",
+            "run_id",
+            "superseded_at",
+        ),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    released_lease_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    runner_id: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    request_id: Mapped[str] = mapped_column(Text, nullable=False)
+    superseded_at: Mapped[datetime | None] = _optional_aware_dt()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    run: Mapped[ApplicationRun] = relationship(back_populates="lease_releases")

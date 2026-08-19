@@ -42,6 +42,7 @@ from job_engine.domain.applications import (
     EvidenceType,
     ExceptionType,
     ReceiptSummary,
+    RunnerReleaseReason,
     calculate_answer_bank_hash,
     calculate_idempotency_key,
     calculate_token_hash,
@@ -288,7 +289,7 @@ class ApplicationService:
             return await repo.list_runs(criteria)
 
     async def claim_run(
-        self, runner_id: str
+        self, runner_id: str, run_id: UUID | None = None
     ) -> tuple[ApplicationRun, str, str, datetime] | None:
         raw_lease_token = secrets.token_urlsafe(32)
         lease_token_hash = calculate_token_hash(raw_lease_token)
@@ -300,6 +301,7 @@ class ApplicationService:
                 lease_token_hash=lease_token_hash,
                 lease_duration_seconds=self._settings.runner_lease_duration_seconds,
                 max_concurrency=self._settings.runner_concurrency_limit,
+                run_id=run_id,
             )
             if result is None:
                 return None
@@ -483,6 +485,38 @@ class ApplicationService:
             sequence_num=103,
             event_type=AuditEventType.SUBMIT_RELEASED.value,
             event_payload={"owner_confirmation": request.owner_confirmation},
+            created_at=datetime.now(UTC),
+        )
+        await self._broadcaster.publish(rel_event)
+        return updated
+
+    async def release_claim(
+        self,
+        run_id: UUID,
+        lease_token: str,
+        runner_id: str,
+        reason: RunnerReleaseReason,
+        request_id: str,
+    ) -> ApplicationRun:
+        lease_token_hash = calculate_token_hash(lease_token)
+        async with self._session_factory() as session:
+            repo = ApplicationRepository(session)
+            updated = await repo.release_claim(
+                run_id=run_id,
+                lease_token_hash=lease_token_hash,
+                runner_id=runner_id,
+                reason=reason.value,
+                request_id=request_id,
+            )
+            await session.commit()
+
+        rel_event = ApplicationRunEvent(
+            id=uuid4(),
+            run_id=run_id,
+            attempt=updated.attempt_count or 1,
+            sequence_num=107,
+            event_type=AuditEventType.LEASE_RELEASED.value,
+            event_payload={"reason": reason.value, "runner_id": runner_id},
             created_at=datetime.now(UTC),
         )
         await self._broadcaster.publish(rel_event)

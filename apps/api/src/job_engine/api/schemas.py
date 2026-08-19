@@ -25,6 +25,7 @@ from job_engine.domain.applications import (
     ExceptionStatus,
     ExceptionType,
     RunCheckpoint,
+    RunnerReleaseReason,
 )
 from job_engine.domain.enums import (
     EmploymentType,
@@ -719,6 +720,7 @@ class ApplicationRunRead(ApiModel):
     current_checkpoint: str | None = None
     submit_attempted_at: datetime | None = None
     attempt_count: int
+    retry_failure_count: int
     max_retries: int
     idempotency_key: str
     terminal_reason: str | None = None
@@ -796,6 +798,19 @@ class RunnerClaimResponse(ApiModel):
     lease_token: str
     grant_token: str
     lease_expires_at: datetime
+
+
+class RunnerClaimRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: UUID | None = None
+    """Claim exactly this run, or nothing. Omit for oldest-queued behavior."""
+
+
+class RunnerReleaseClaimRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: RunnerReleaseReason
 
 
 class RunnerHeartbeatRequest(BaseModel):
