@@ -28,6 +28,7 @@ import { DesktopConfig } from "../../src/main/config";
 import { registerIpcHandlers } from "../../src/main/ipc";
 import { configureApplicationSession } from "../../src/main/session";
 import { createMainWindow } from "../../src/main/window";
+import { reportHarnessResult } from "./electron-harness";
 import {
   MockBackendServer,
   MockHttpsAtsServer,
@@ -265,10 +266,12 @@ async function startHarness(): Promise<void> {
   await ats.close();
   await webRenderer.close();
 
-  const failed = results.filter((r) => !r.passed);
-  console.log(`\nResults: ${results.length - failed.length} passed, ${failed.length} failed.\n`);
+  const summary = reportHarnessResult(results);
+  console.log(
+    `\nResults: ${summary.passed} passed, ${summary.failed} failed.\n`,
+  );
 
-  if (failed.length > 0) {
+  if (summary.failed > 0) {
     app.exit(1);
   } else {
     app.exit(0);

@@ -1,98 +1,24 @@
-import { spawn } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-describe("Synthetic HTTPS Electron Fixtures Integration Suite", () => {
-  it("executes full embedded browser lifecycle in real Electron shell", async () => {
-    const electronBinary = path.resolve(
-      __dirname,
-      "..",
-      "..",
-      "..",
-      "..",
-      "node_modules",
-      ".pnpm",
-      "electron@43.2.0",
-      "node_modules",
-      "electron",
-      "dist",
-      "electron"
-    );
+import { runElectronSuite } from "./electron-harness";
 
-    const runnerCandidate1 = path.resolve(
-      __dirname,
-      "..",
-      "..",
-      "dist",
-      "tests",
-      "fixtures",
-      "electron-test-runner.js"
-    );
-    const runnerCandidate2 = path.resolve(
-      __dirname,
-      "..",
-      "..",
-      "dist",
-      "src",
-      "tests",
-      "fixtures",
-      "electron-test-runner.js"
-    );
-
-    const runnerScript = fs.existsSync(runnerCandidate1)
-      ? runnerCandidate1
-      : runnerCandidate2;
-
-    const env: Record<string, string | undefined> = {
-      ...process.env,
-      NODE_ENV: "test",
-      ELECTRON_ENABLE_LOGGING: "1",
-    };
-    delete env.ELECTRON_RUN_AS_NODE;
-
-    const child = spawn(
-      electronBinary,
-      [
-        "--no-sandbox",
-        runnerScript,
-        "--ozone-platform=headless",
-        "--disable-gpu",
-        "--headless",
-      ],
-      {
-        env,
-        stdio: ["ignore", "pipe", "pipe"],
-      }
-    );
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (data) => {
-      const chunk = data.toString();
-      stdout += chunk;
+describe("Synthetic HTTPS Electron fixtures", () => {
+  it("executes the embedded browser lifecycle in a real Electron shell", async () => {
+    const outcome = await runElectronSuite({
+      runner: "electron-test-runner",
+      timeoutMs: 30_000,
     });
 
-    child.stderr.on("data", (data) => {
-      const chunk = data.toString();
-      stderr += chunk;
-    });
-
-    const exitCode = await new Promise<number>((resolve) => {
-      child.on("close", (code) => {
-        resolve(code ?? 1);
-      });
-    });
-
-    console.log(stdout);
-
-    if (exitCode !== 0) {
-      console.error("Runner Exit Code:", exitCode);
-      console.error("STDERR:", stderr);
+    if (outcome.exitCode !== 0) {
+      console.error(outcome.stdout);
+      console.error(outcome.stderr);
     }
 
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain("Results: 8 passed, 0 failed.");
-  }, 30000);
+    expect(outcome.result, "runner did not report a structured result").not.toBeNull();
+    // Assert on the outcome, not on a hard-coded case count, so adding a case
+    // here does not break the wrapper.
+    expect(outcome.result!.cases.filter((c) => !c.passed)).toEqual([]);
+    expect(outcome.result!.passed).toBeGreaterThan(0);
+    expect(outcome.exitCode).toBe(0);
+  }, 40_000);
 });
