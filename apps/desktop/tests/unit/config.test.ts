@@ -32,7 +32,7 @@ describe("Desktop Config", () => {
     it("loads default loopback configuration", () => {
       const config = loadDesktopConfig({});
       expect(config.webOrigin).toBe("http://127.0.0.1:3000");
-      expect(config.apiBaseUrl).toBe("http://127.0.0.1:8000");
+      expect(config.apiBaseUrl).toBe("http://127.0.0.1:8001");
       expect(config.sessionPartition).toBe("persist:job-engine-ats");
       expect(config.userDataDir).toContain(".job-engine");
       expect(config.runnerSecret).toBe("");
@@ -57,7 +57,7 @@ describe("Desktop Config", () => {
       expect(() =>
         loadDesktopConfig({
           JOB_ENGINE_WEB_ORIGIN: "https://remote-site.com",
-        })
+        }),
       ).toThrowError(/JOB_ENGINE_WEB_ORIGIN must be a valid loopback origin/);
     });
 
@@ -65,7 +65,7 @@ describe("Desktop Config", () => {
       expect(() =>
         loadDesktopConfig({
           JOB_ENGINE_API_BASE_URL: "https://remote-api.com",
-        })
+        }),
       ).toThrowError(/JOB_ENGINE_API_BASE_URL must be a valid loopback origin/);
     });
   });

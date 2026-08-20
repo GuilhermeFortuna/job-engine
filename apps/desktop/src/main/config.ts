@@ -28,12 +28,12 @@ export function isLoopbackOrigin(urlStr: string): boolean {
 }
 
 export function loadDesktopConfig(
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
 ): DesktopConfig {
   const rawWebOrigin = env.JOB_ENGINE_WEB_ORIGIN || "http://127.0.0.1:3000";
   if (!isLoopbackOrigin(rawWebOrigin)) {
     throw new Error(
-      `JOB_ENGINE_WEB_ORIGIN must be a valid loopback origin (http://127.0.0.1:* or http://localhost:*), got: ${rawWebOrigin}`
+      `JOB_ENGINE_WEB_ORIGIN must be a valid loopback origin (http://127.0.0.1:* or http://localhost:*), got: ${rawWebOrigin}`,
     );
   }
   const webOrigin = new URL(rawWebOrigin).origin;
@@ -41,10 +41,10 @@ export function loadDesktopConfig(
   const rawApiBaseUrl =
     env.JOB_ENGINE_API_BASE_URL ||
     env.NEXT_PUBLIC_API_BASE_URL ||
-    "http://127.0.0.1:8000";
+    "http://127.0.0.1:8001";
   if (!isLoopbackOrigin(rawApiBaseUrl)) {
     throw new Error(
-      `JOB_ENGINE_API_BASE_URL must be a valid loopback origin, got: ${rawApiBaseUrl}`
+      `JOB_ENGINE_API_BASE_URL must be a valid loopback origin, got: ${rawApiBaseUrl}`,
     );
   }
   const apiBaseUrl = new URL(rawApiBaseUrl).origin;
@@ -52,7 +52,7 @@ export function loadDesktopConfig(
   const defaultUserDataDir = path.join(
     os.homedir(),
     ".job-engine",
-    "desktop-data"
+    "desktop-data",
   );
   const userDataDir = env.JOB_ENGINE_DESKTOP_USER_DATA_DIR
     ? path.resolve(env.JOB_ENGINE_DESKTOP_USER_DATA_DIR)

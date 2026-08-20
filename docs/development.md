@@ -72,7 +72,7 @@ Do not commit `.env`. The example contains only local development placeholders:
 | `POSTGRES_PASSWORD` | `job_engine` |
 | `POSTGRES_PORT` | `5432` |
 | `DATABASE_URL` | `postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine` |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://127.0.0.1:8000` |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://127.0.0.1:8001` |
 
 `compose.yaml` interpolates the same defaults, so `docker compose` also works before `.env` exists. Copying the example is still the normal local setup step.
 
@@ -143,7 +143,7 @@ corepack pnpm --filter @job-engine/api run build
 Equivalent uv commands from `apps/api`:
 
 ```bash
-uv run uvicorn job_engine.main:create_app --factory --reload --host 127.0.0.1 --port 8000
+uv run uvicorn job_engine.main:create_app --factory --reload --host 127.0.0.1 --port 8001
 uv run alembic upgrade head
 uv run alembic downgrade base
 uv run ruff check .
@@ -153,7 +153,7 @@ uv run pytest
 uv run python -c "from job_engine.main import create_app; create_app()"
 ```
 
-`dev` serves `GET /api/v1/health` on `http://127.0.0.1:8000`. That route reports process health (`{"status":"ok"}`) and does not query PostgreSQL. `build` verifies that `create_app()` imports; it does not create a container.
+`dev` serves `GET /api/v1/health` on `http://127.0.0.1:8001`. That route reports process health (`{"status":"ok"}`) and does not query PostgreSQL. `build` verifies that `create_app()` imports; it does not create a container.
 
 Alembic reads `DATABASE_URL` the same way as `Settings` (process environment only, documented default matching `.env.example`). It does not load `.env`. Apply catalog migrations against the local PostgreSQL service after `docker compose up -d postgres`:
 
@@ -185,7 +185,7 @@ See `docs/automation/ai-provider-policy.md` and `docs/evidence/ai-provider-evalu
 
 ## Frontend (`apps/web`)
 
-`NEXT_PUBLIC_API_BASE_URL` is the public backend origin. It is validated in `apps/web/src/lib/env.ts` and defaults to `http://127.0.0.1:8000` only in local development. Do not put credentials in this variable.
+`NEXT_PUBLIC_API_BASE_URL` is the public backend origin. It is validated in `apps/web/src/lib/env.ts` and defaults to `http://127.0.0.1:8001` only in local development. Do not put credentials in this variable.
 
 Workspace commands:
 
@@ -212,7 +212,7 @@ corepack pnpm --filter @job-engine/web run build
 ## Desktop (`apps/desktop`)
 
 `JOB_ENGINE_WEB_ORIGIN` is the trusted local web origin (defaults to `http://127.0.0.1:3000`). It must be a loopback address.
-`JOB_ENGINE_API_BASE_URL` is the local backend API origin (defaults to `http://127.0.0.1:8000`).
+`JOB_ENGINE_API_BASE_URL` is the local backend API origin (defaults to `http://127.0.0.1:8001`).
 `JOB_ENGINE_DESKTOP_USER_DATA_DIR` optionally overrides the persistent Electron profile directory outside the repository.
 
 Workspace commands:

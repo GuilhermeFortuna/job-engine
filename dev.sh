@@ -73,7 +73,7 @@ echo "✅ Database migrations are up to date."
 # 5. Launch development servers
 echo "=========================================="
 echo "✨ Starting backend API and web frontend..."
-echo "   - API: http://127.0.0.1:8000 (Health: http://127.0.0.1:8000/api/v1/health)"
+echo "   - API: http://127.0.0.1:8001 (Health: http://127.0.0.1:8001/api/v1/health)"
 echo "   - Web: http://localhost:3000"
 echo "=========================================="
 

@@ -180,12 +180,12 @@ cp .env.example .env
 | `POSTGRES_PASSWORD` | `job_engine` | Database password |
 | `POSTGRES_PORT` | `5432` | Local PostgreSQL host port |
 | `DATABASE_URL` | `postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine` | Async database connection string |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://127.0.0.1:8000` | Backend API origin used by the frontend |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://127.0.0.1:8001` | Backend API origin used by the frontend |
 | `JOB_ENGINE_RUNNER_SECRET` | *(32+ char secret)* | Shared secret for runner claims and internal authentication |
 | `JOB_ENGINE_RESUME_ROOT` | `docs/resume` | Local filesystem directory for registered resume PDFs |
 | `JOB_ENGINE_FRONTEND_ORIGIN` | `http://localhost:3000` | Allowed web origin for CORS and CSRF protection |
 | `JOB_ENGINE_WEB_ORIGIN` | `http://127.0.0.1:3000` | Trusted web origin for Electron renderer bridge |
-| `JOB_ENGINE_API_BASE_URL` | `http://127.0.0.1:8000` | Loopback backend API origin used by Electron main |
+| `JOB_ENGINE_API_BASE_URL` | `http://127.0.0.1:8001` | Loopback backend API origin used by Electron main |
 
 #### Step 3.2: Install Dependencies
 
@@ -220,7 +220,7 @@ cd apps/api && uv run alembic upgrade head && cd ../..
 corepack pnpm run dev
 
 # Option B: Run individual components
-# Backend API (http://127.0.0.1:8000)
+# Backend API (http://127.0.0.1:8001)
 corepack pnpm --filter @job-engine/api run dev
 
 # Frontend Web Dashboard (http://localhost:3000)
@@ -232,7 +232,7 @@ corepack pnpm --filter @job-engine/desktop run dev
 
 Verify backend health:
 ```bash
-curl http://127.0.0.1:8000/api/v1/health
+curl http://127.0.0.1:8001/api/v1/health
 # Response: {"status":"ok"}
 ```
 

@@ -1,8 +1,6 @@
-const DEFAULT_DEV_API_BASE_URL = "http://127.0.0.1:8000";
+const DEFAULT_DEV_API_BASE_URL = "http://127.0.0.1:8001";
 
-export function getApiBaseUrl(
-  env: NodeJS.ProcessEnv = process.env,
-): string {
+export function getApiBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
   const raw = env.NEXT_PUBLIC_API_BASE_URL?.trim();
   let value: string | undefined;
 
@@ -26,7 +24,6 @@ export function getApiBaseUrl(
 
   return assertPublicHttpOrigin(value);
 }
-
 
 function assertPublicHttpOrigin(value: string): string {
   let url: URL;

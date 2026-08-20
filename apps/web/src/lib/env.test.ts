@@ -7,13 +7,13 @@ const developmentEnv = {
 
 describe("getApiBaseUrl", () => {
   it("defaults to the local backend origin in development when unset", () => {
-    expect(getApiBaseUrl(developmentEnv)).toBe("http://127.0.0.1:8000");
+    expect(getApiBaseUrl(developmentEnv)).toBe("http://127.0.0.1:8001");
   });
 
   it("defaults to the local backend origin in development when empty", () => {
     expect(
       getApiBaseUrl({ ...developmentEnv, NEXT_PUBLIC_API_BASE_URL: "" }),
-    ).toBe("http://127.0.0.1:8000");
+    ).toBe("http://127.0.0.1:8001");
   });
 
   it("requires NEXT_PUBLIC_API_BASE_URL outside local development", () => {
