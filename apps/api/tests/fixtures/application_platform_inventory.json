@@ -1,0 +1,159 @@
+{
+  "evidence_revision": "cross-014-v1",
+  "owner_inventory_decision": "option_b_dual_number_reporting_with_vacuous_slice_fallback_to_c",
+  "total_distinct_application_urls": 9,
+  "resolvable_application_url_count": 0,
+  "unresolvable_feed_listing_count": 9,
+  "auto_supported_resolvable_count": 0,
+  "pct_of_resolvable_application_urls": null,
+  "measurability_verdict": "option_c_escalation",
+  "measurability_note": "All catalog application URLs in the committed source fixtures are feed listing hosts (himalayas.app, jobicy.com, remoteok.com). The >=95% criterion is unmeasurable against the current ingestion contract until downstream ATS URLs are stored or resolved.",
+  "family_decisions": {
+    "generic_standard_html": {
+      "support_tier": "AUTO_SUPPORTED",
+      "reason": null,
+      "evidence": "fixture_corpus; production_entrypoint pending CROSS-012"
+    },
+    "greenhouse": {
+      "support_tier": "AUTO_SUPPORTED",
+      "reason": null,
+      "evidence": "adapter_unit_and_fixture_corpus; production_entrypoint pending CROSS-012"
+    },
+    "lever": {
+      "support_tier": "AUTO_SUPPORTED",
+      "reason": null,
+      "evidence": "adapter_unit_and_fixture_corpus; production_entrypoint pending CROSS-012"
+    },
+    "ashby": {
+      "support_tier": "UNSUPPORTED",
+      "reason": "MISSING_ADAPTER_EVIDENCE",
+      "evidence": "exact_host_matcher_registered; no production smoke"
+    },
+    "smartrecruiters": {
+      "support_tier": "UNSUPPORTED",
+      "reason": "MISSING_ADAPTER_EVIDENCE",
+      "evidence": "exact_host_matcher_registered; no production smoke"
+    },
+    "workday": {
+      "support_tier": "UNSUPPORTED",
+      "reason": "LEGAL_GATE",
+      "evidence": "platform_register RESEARCH_ONLY; mandatory tenant auth"
+    },
+    "feed_listing": {
+      "support_tier": "UNSUPPORTED",
+      "reason": "FEED_LISTING_UNRESOLVED",
+      "evidence": "catalog stores listing URLs not downstream ATS apply hosts"
+    }
+  },
+  "rows": [
+    {
+      "source_id": "himalayas",
+      "normalized_host": "himalayas.app",
+      "path_family": "himalayas.app/companies/globex/jobs/python-engineer",
+      "provider": "feed_listing",
+      "eligible": false,
+      "support_tier": "UNSUPPORTED",
+      "reason": "FEED_LISTING_UNRESOLVED",
+      "evidence_revision": "cross-014-v1",
+      "count": 1,
+      "share": 0.1111111111111111
+    },
+    {
+      "source_id": "himalayas",
+      "normalized_host": "himalayas.app",
+      "path_family": "himalayas.app/companies/initech/jobs/backend-engineer",
+      "provider": "feed_listing",
+      "eligible": false,
+      "support_tier": "UNSUPPORTED",
+      "reason": "FEED_LISTING_UNRESOLVED",
+      "evidence_revision": "cross-014-v1",
+      "count": 1,
+      "share": 0.1111111111111111
+    },
+    {
+      "source_id": "himalayas",
+      "normalized_host": "himalayas.app",
+      "path_family": "himalayas.app/companies/acme/jobs/staff-engineer",
+      "provider": "feed_listing",
+      "eligible": false,
+      "support_tier": "UNSUPPORTED",
+      "reason": "FEED_LISTING_UNRESOLVED",
+      "evidence_revision": "cross-014-v1",
+      "count": 1,
+      "share": 0.1111111111111111
+    },
+    {
+      "source_id": "jobicy",
+      "normalized_host": "jobicy.com",
+      "path_family": "jobicy.com/jobs/150001-python-engineer-brazil",
+      "provider": "feed_listing",
+      "eligible": false,
+      "support_tier": "UNSUPPORTED",
+      "reason": "FEED_LISTING_UNRESOLVED",
+      "evidence_revision": "cross-014-v1",
+      "count": 1,
+      "share": 0.1111111111111111
+    },
+    {
+      "source_id": "jobicy",
+      "normalized_host": "jobicy.com",
+      "path_family": "jobicy.com/jobs/150002-backend-engineer-latam",
+      "provider": "feed_listing",
+      "eligible": false,
+      "support_tier": "UNSUPPORTED",
+      "reason": "FEED_LISTING_UNRESOLVED",
+      "evidence_revision": "cross-014-v1",
+      "count": 1,
+      "share": 0.1111111111111111
+    },
+    {
+      "source_id": "jobicy",
+      "normalized_host": "jobicy.com",
+      "path_family": "jobicy.com/jobs/150003-staff-engineer-anywhere",
+      "provider": "feed_listing",
+      "eligible": false,
+      "support_tier": "UNSUPPORTED",
+      "reason": "FEED_LISTING_UNRESOLVED",
+      "evidence_revision": "cross-014-v1",
+      "count": 1,
+      "share": 0.1111111111111111
+    },
+    {
+      "source_id": "remoteok",
+      "normalized_host": "remoteok.com",
+      "path_family": "remoteok.com/remote-jobs/200001-python-engineer",
+      "provider": "feed_listing",
+      "eligible": false,
+      "support_tier": "UNSUPPORTED",
+      "reason": "FEED_LISTING_UNRESOLVED",
+      "evidence_revision": "cross-014-v1",
+      "count": 1,
+      "share": 0.1111111111111111
+    },
+    {
+      "source_id": "remoteok",
+      "normalized_host": "remoteok.com",
+      "path_family": "remoteok.com/remote-jobs/200002-backend-engineer",
+      "provider": "feed_listing",
+      "eligible": false,
+      "support_tier": "UNSUPPORTED",
+      "reason": "FEED_LISTING_UNRESOLVED",
+      "evidence_revision": "cross-014-v1",
+      "count": 1,
+      "share": 0.1111111111111111
+    },
+    {
+      "source_id": "remoteok",
+      "normalized_host": "remoteok.com",
+      "path_family": "remoteok.com/remote-jobs/200003-ops-editorial",
+      "provider": "feed_listing",
+      "eligible": false,
+      "support_tier": "UNSUPPORTED",
+      "reason": "FEED_LISTING_UNRESOLVED",
+      "evidence_revision": "cross-014-v1",
+      "count": 1,
+      "share": 0.1111111111111111
+    }
+  ],
+  "source_row_total": 9
+}

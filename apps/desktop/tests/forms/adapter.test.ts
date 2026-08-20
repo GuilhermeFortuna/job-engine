@@ -18,6 +18,11 @@ function makeContext(url = "https://jobs.example.com/apply"): AdapterContext {
 function fakeAdapter(id: string, host: string): FormAdapter {
   return {
     adapterId: id,
+    capability: {
+      familyId: id,
+      supportTier: "AUTO_SUPPORTED",
+      reasonCode: null,
+    },
     matches: (url) => hostMatches(url, host),
   } as FormAdapter;
 }
@@ -80,6 +85,24 @@ describe("AdapterRegistry", () => {
     expect(
       registry.resolve("https://jobs.other.com/apply")?.adapterId,
     ).toBe("generic");
+  });
+
+  it("classifies feed listing hosts as FEED_LISTING_UNRESOLVED", () => {
+    const registry = createDefaultAdapterRegistry();
+    const result = registry.classify(
+      "https://jobicy.com/jobs/150001-python-engineer-brazil",
+    );
+    expect(result?.supportTier).toBe("UNSUPPORTED");
+    expect(result?.reasonCode).toBe("FEED_LISTING_UNRESOLVED");
+    expect(registry.resolve("https://jobicy.com/jobs/150001")).toBeNull();
+  });
+
+  it("rejects ATS lookalike hosts that suffix-match without an exact adapter", () => {
+    const registry = createDefaultAdapterRegistry();
+    expect(
+      registry.classify("https://jobs.eu.lever.co/acme/job/apply")?.reasonCode,
+    ).toBe("LOOKALIKE_HOST");
+    expect(registry.resolve("https://jobs.eu.lever.co/acme/job/apply")).toBeNull();
   });
 
   it("never resolves a non-HTTPS or malformed URL", () => {

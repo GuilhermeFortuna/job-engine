@@ -8,6 +8,7 @@ import {
   type AdapterContext,
   type AuthorizedFill,
   type FormAdapter,
+  type PlatformCapability,
   type ReceiptCapture,
 } from "./contract";
 import { GenericFormAdapter } from "./generic";
@@ -136,6 +137,11 @@ function formCleared(observation: ObserveResult): boolean {
  */
 export class LeverFormAdapter implements FormAdapter {
   readonly adapterId = LEVER_ADAPTER_ID;
+  readonly capability: PlatformCapability = {
+    familyId: "lever",
+    supportTier: "AUTO_SUPPORTED",
+    reasonCode: null,
+  };
   private readonly generic = new GenericFormAdapter();
 
   matches(url: URL): boolean {

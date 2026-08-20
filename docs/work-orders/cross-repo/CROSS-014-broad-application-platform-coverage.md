@@ -143,12 +143,13 @@ git diff --check
 
 ## Dispatch record
 
-- Worker: Unassigned
-- Branch/worktree: `development` (shared working branch)
-- Dispatched at: Not dispatched
+- Worker: Cursor agent
+- Branch/worktree: `cursor/cross-014-platform-coverage-833f`
+- Dispatched at: 2026-08-20T08:45:00+00:00
 
 ## Completion record
 
-- Commit: Pending
-- Evidence: Pending
+- Commit: Pending owner review
+- Evidence: [`docs/automation/application-platform-coverage.md`](../../automation/application-platform-coverage.md), [`apps/api/tests/fixtures/application_platform_inventory.json`](../../apps/api/tests/fixtures/application_platform_inventory.json)
 - Independent reviewer: Pending platform-coverage review
+- Measurability: Owner option (b) applied; vacuous resolvable slice triggers option (c) escalation — ≥95% not published

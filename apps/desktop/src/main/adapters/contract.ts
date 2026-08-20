@@ -6,6 +6,65 @@ import type {
   StepOutcome,
 } from "../forms/types";
 import type { PageScriptArgs } from "../forms/page-script";
+import type { RuntimeReasonCode } from "../../shared/contracts";
+
+/** Inventory and runtime support tier for an application-platform family. */
+export type CoverageSupportTier =
+  | "AUTO_SUPPORTED"
+  | "ASSISTED_SUPPORTED"
+  | "UNSUPPORTED";
+
+/**
+ * Stable coverage reason codes for inventory rows and hard automation vetoes.
+ * Runtime pause codes reuse {@link RuntimeReasonCode}; inaccessible controls map
+ * to existing `UNSUPPORTED_CONTROL`.
+ */
+export type PlatformCoverageReasonCode = Exclude<
+  RuntimeReasonCode,
+  | "UNAUTHORIZED_FULL_AUTO"
+  | "UNSUPPORTED_AUTOMATION_MODE"
+  | "ADAPTER_UNAVAILABLE"
+  | "STEP_EXHAUSTED"
+  | "STEP_RETRYABLE"
+  | "VIEW_LOCKED_SUBMITTING"
+  | "URL_MISMATCH"
+  | "CLAIM_REFUSED"
+  | "LEASE_LOST"
+  | "RENDERER_CRASHED"
+  | "NEEDS_INPUT"
+  | "SUBMISSION_UNKNOWN"
+  | null
+>;
+
+/** Hard vetoes that must never be overridden by canonical URL or loopback adapter id. */
+export const HARD_VETO_REASON_CODES: readonly PlatformCoverageReasonCode[] =
+  Object.freeze([
+    "LOOKALIKE_HOST",
+    "AMBIGUOUS_DETECTION",
+    "MISSING_ADAPTER_EVIDENCE",
+    "LEGAL_GATE",
+    "PLATFORM_DRIFT",
+    "FEED_LISTING_UNRESOLVED",
+  ]);
+
+export interface PlatformCapability {
+  readonly familyId: string;
+  readonly supportTier: CoverageSupportTier;
+  readonly reasonCode: PlatformCoverageReasonCode | null;
+}
+
+export interface PlatformClassification extends PlatformCapability {
+  readonly adapter: FormAdapter | null;
+}
+
+export function isHardVetoReason(
+  reasonCode: PlatformCoverageReasonCode | null,
+): reasonCode is PlatformCoverageReasonCode {
+  return (
+    reasonCode !== null &&
+    (HARD_VETO_REASON_CODES as readonly string[]).includes(reasonCode)
+  );
+}
 
 /**
  * Everything an adapter is allowed to do to a page.
@@ -63,6 +122,8 @@ export interface ReceiptCapture {
  */
 export interface FormAdapter {
   readonly adapterId: string;
+  /** Coverage metadata published in the platform inventory and registry. */
+  readonly capability: PlatformCapability;
 
   /**
    * Exact host/path matching. Implementations parse with `URL` and compare

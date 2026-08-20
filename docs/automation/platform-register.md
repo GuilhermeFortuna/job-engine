@@ -371,3 +371,24 @@ result=PASS cleanup=complete
 3. **Browser Restart / Checkpoint Resume**: The first persistent context wrote `STEP_2_READY` and closed. A newly launched browser process recovered its cookie and checkpoint, resumed directly at step 2, and verified that the step-1 action appeared exactly once.
 4. **Confirmation Detection**: The resumed run activated submit once, observed the synthetic receipt, and verified the submit control was disabled.
 5. **Bounded Claim**: This proves local runtime primitives only. It does not prove live ATS permission, selector durability, production authentication, or platform submission support; those remain gated by platform Work Orders and `LEGAL-GATE-ATS-001`.
+
+---
+
+## 6. Batch 04 coverage evidence (CROSS-014)
+
+**Report:** [application-platform-coverage.md](application-platform-coverage.md)  
+**Frozen inventory:** `apps/api/tests/fixtures/application_platform_inventory.json`  
+**Registry:** `apps/desktop/src/main/adapters/registry.ts` (`classify`, lookalike fail-closed via `hostMatches`)  
+**Selection:** `apps/desktop/src/main/runtime/coordinator.ts` (`selectAdapter`, visible-URL veto)
+
+| Adapter ID | CROSS-014 coverage tier | Notes |
+| --- | --- | --- |
+| `greenhouse` | `AUTO_SUPPORTED` | Exact-host matcher; production entrypoint smoke pending CROSS-012 |
+| `lever` | `AUTO_SUPPORTED` | Exact-host matcher; `/apply`-only detect |
+| `generic` | `AUTO_SUPPORTED` | HTTPS employer standard forms after platform matchers |
+| `ashby` | `UNSUPPORTED` (`MISSING_ADAPTER_EVIDENCE`) | Matcher registered; no production smoke |
+| `smartrecruiters` | `UNSUPPORTED` (`MISSING_ADAPTER_EVIDENCE`) | Matcher registered; no production smoke |
+| `workday` | `UNSUPPORTED` (`LEGAL_GATE`) | Detector only; no adapter drive |
+| feed listing hosts | `UNSUPPORTED` (`FEED_LISTING_UNRESOLVED`) | Catalog stores listing URLs, not ATS apply hosts |
+
+**Measurability (2026-08-20):** Committed source fixtures yield 0 resolvable / 9 feed-listing URL families. Owner option (b) dual-number reporting applies; ≥95% criterion escalates as unmeasurable (option c) until ingestion stores downstream apply URLs.

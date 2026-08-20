@@ -11,6 +11,7 @@ import type {
   AdapterContext,
   AuthorizedFill,
   FormAdapter,
+  PlatformCapability,
   ReceiptCapture,
 } from "./contract";
 
@@ -26,6 +27,11 @@ export const GENERIC_ADAPTER_ID = "generic";
  */
 export class GenericFormAdapter implements FormAdapter {
   readonly adapterId = GENERIC_ADAPTER_ID;
+  readonly capability: PlatformCapability = {
+    familyId: "generic_standard_html",
+    supportTier: "AUTO_SUPPORTED",
+    reasonCode: null,
+  };
 
   /** Any HTTPS page. Platform adapters are consulted first by the registry. */
   matches(url: URL): boolean {
