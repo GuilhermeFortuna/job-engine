@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderWithProviders } from "@/test/render";
+import { renderWithProviders, screen } from "@/test/render";
 import { BrowserViewport } from "./BrowserViewport";
 import {
   MIN_WORKSPACE_HEIGHT,
@@ -85,5 +85,26 @@ describe("BrowserViewport", () => {
     expect(supported.at(-1)).toBe(false);
 
     view.unmount();
+  });
+
+  it("renders a clear surrendered state instead of an empty frame", () => {
+    class ResizeObserverStub {
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+
+    renderWithProviders(
+      <BrowserViewport
+        onBounds={() => {}}
+        onSupportedChange={() => {}}
+        viewSurrendered
+      />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /view surrendered.*coordinator/i,
+    );
   });
 });

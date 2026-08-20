@@ -3,6 +3,9 @@ export const FULL_AUTO_MODE = "full_auto" as const;
 
 export type AutomationMode = typeof SEMI_AUTO_MODE | typeof FULL_AUTO_MODE;
 
+export const FULL_AUTO_OWNER_CONFIRMATION =
+  "Authorize automatic submission for these selected jobs" as const;
+
 export type ApplicationRunStatus =
   | "queued"
   | "claimed"
@@ -185,9 +188,12 @@ export interface ApplicationRunSummary {
   resume_asset_id: string;
   resume_sha256: string;
   automation_mode: AutomationMode;
+  automatic_submission_authorized_at: string | null;
+  automatic_submission_authorized: boolean;
   status: ApplicationRunStatus;
   current_step: string | null;
   current_checkpoint: string | null;
+  submit_attempted_at: string | null;
   terminal_reason: string | null;
   receipt_summary: ApplicationRunReceipt | null;
   policy_snapshot: {
@@ -220,6 +226,31 @@ export interface CreateApplicationRunResponse {
   conflicts: ApplicationRunConflict[];
 }
 
+export interface CreateApplicationRunInput {
+  job_group_ids: string[];
+  resume_id: string;
+  automation_mode: AutomationMode;
+}
+
+export interface ApplicationRunList {
+  items: ApplicationRunSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface ApplicationRunListOptions {
+  statuses?: ApplicationRunStatus[];
+  modes?: AutomationMode[];
+  job_group_id?: string;
+  platform_adapter_id?: string;
+  created_after?: string;
+  created_before?: string;
+  page?: number;
+  page_size?: number;
+}
+
 export interface ResolveAnswerItem {
   field_fingerprint: string;
   answer_text: string;
@@ -237,7 +268,128 @@ export interface SafeResume {
   language: string;
   is_default: boolean;
   file_size_bytes: number | null;
+  last_verified_at: string | null;
   version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ValueState = "unknown" | "provided" | "declined";
+export type FieldSource = "owner" | "resume_import";
+export type PolicyCategory =
+  | "verified_profile"
+  | "approved_reusable"
+  | "grounded_generated"
+  | "review_required"
+  | "decline_optional"
+  | "prohibited_automation";
+
+export interface ConfirmedField<T = unknown> {
+  state: ValueState;
+  value: T | null;
+  source: FieldSource | null;
+  last_confirmed_at: string | null;
+  policy_category: PolicyCategory;
+}
+
+export const APPLICANT_PROFILE_FIELD_NAMES = [
+  "first_name",
+  "last_name",
+  "email",
+  "phone",
+  "city",
+  "region",
+  "country",
+  "timezone",
+  "headline",
+  "summary",
+  "portfolio_url",
+  "linkedin_url",
+  "github_url",
+  "custom_urls",
+  "notice_period_days",
+  "employment_history",
+  "education_history",
+  "skills",
+  "languages",
+  "certifications",
+  "work_authorizations",
+  "compensation_expectation",
+  "location_preferences",
+  "demographics",
+] as const;
+
+export type ApplicantProfileFieldName =
+  (typeof APPLICANT_PROFILE_FIELD_NAMES)[number];
+
+export type ApplicantProfileFields = {
+  [Name in ApplicantProfileFieldName]: ConfirmedField;
+};
+
+export interface ApplicantProfile extends ApplicantProfileFields {
+  id: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ApplicantProfileUpdate = {
+  expected_version: number | null;
+} & ApplicantProfileFields;
+
+export interface ResumeRegistrationInput {
+  resume_id: string;
+  label: string;
+  source_markdown_path: string;
+  upload_pdf_path: string;
+  preview_html_path?: string | null;
+  language?: string;
+  is_default?: boolean;
+}
+
+export interface ResumeUpdateInput {
+  expected_version: number;
+  label?: string | null;
+  is_default?: boolean | null;
+  refresh_checksum?: boolean;
+}
+
+export interface ReusableAnswer {
+  id: string;
+  answer_id: string;
+  question_intent: QuestionIntent;
+  jurisdiction: string | null;
+  platform_scope: string | null;
+  answer_text: string;
+  policy_category: PolicyCategory;
+  provenance: string;
+  last_confirmed_at: string;
+  expires_at: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReusableAnswerInput {
+  answer_id: string;
+  question_intent: QuestionIntent;
+  jurisdiction?: string | null;
+  platform_scope?: string | null;
+  answer_text: string;
+  policy_category: PolicyCategory;
+  provenance?: string;
+  last_confirmed_at: string;
+  expires_at?: string | null;
+}
+
+export type ReusableAnswerUpdate = Omit<ReusableAnswerInput, "answer_id"> & {
+  expected_version: number;
+};
+
+export interface AnswerBankFilters {
+  question_intent?: QuestionIntent;
+  jurisdiction?: string;
+  platform_scope?: string;
 }
 
 export interface FieldCounts {

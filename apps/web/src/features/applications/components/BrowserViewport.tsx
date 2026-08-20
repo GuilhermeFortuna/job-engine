@@ -10,6 +10,7 @@ import {
 export interface BrowserViewportProps {
   onBounds: (bounds: ApplicationBounds | null) => void;
   onSupportedChange: (supported: boolean) => void;
+  viewSurrendered?: boolean;
 }
 
 function currentSupported(): boolean {
@@ -19,6 +20,7 @@ function currentSupported(): boolean {
 export function BrowserViewport({
   onBounds,
   onSupportedChange,
+  viewSurrendered = false,
 }: BrowserViewportProps) {
   const frameRef = useRef<HTMLDivElement>(null);
   const onBoundsRef = useRef(onBounds);
@@ -75,7 +77,14 @@ export function BrowserViewport({
       ref={frameRef}
       className="browser-viewport"
       data-testid="browser-viewport"
-      aria-hidden="true"
-    />
+      aria-hidden={viewSurrendered ? undefined : true}
+    >
+      {viewSurrendered ? (
+        <p role="status">
+          View surrendered by the coordinator while this run is paused for a
+          trusted owner action.
+        </p>
+      ) : null}
+    </div>
   );
 }

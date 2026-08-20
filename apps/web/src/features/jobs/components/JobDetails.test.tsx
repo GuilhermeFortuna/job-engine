@@ -7,6 +7,25 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+vi.mock("@/features/applications/hooks/useApplicationReadiness", () => ({
+  useApplicationReadiness: () => ({
+    profile: { id: "profile-1" },
+    resumes: [
+      {
+        id: "resume-record-1",
+        resume_id: "resume-1",
+        label: "Primary résumé",
+        checksum_summary: "aaaaaaaa…bbbb",
+        is_default: true,
+      },
+    ],
+    isReady: true,
+    isLoading: false,
+    error: null,
+    refresh: vi.fn(),
+  }),
+}));
+
 afterEach(() => {
   delete window.jobEngineDesktop;
 });
@@ -177,21 +196,47 @@ describe("JobDetails", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers Apply in Job Engine for https jobs when the desktop bridge is present", async () => {
+  it("shows exactly one Auto apply action for ready HTTPS jobs", async () => {
     window.jobEngineDesktop = {
-      getCapabilities: async () => ({ embeddedBrowser: true, platform: "linux" }),
+      getCapabilities: async () => ({
+        embeddedBrowser: true,
+        platform: "linux",
+        productionRuntime: true,
+      }),
       openApplication: async () => ({ success: true }),
       setApplicationBounds: async () => ({ success: true }),
       closeApplication: async () => ({ success: true }),
       goBack: async () => ({ success: true }),
       goForward: async () => ({ success: true }),
       reload: async () => ({ success: true }),
+      getRuntimeState: async () => ({
+        runId: null,
+        phase: "idle",
+        status: null,
+        checkpoint: null,
+        automationMode: null,
+        adapterId: null,
+        reasonCode: null,
+        blockingFieldCount: 0,
+      }),
       subscribeBrowserState: () => () => {},
+      subscribeRuntimeState: () => () => {},
     };
 
     renderWithProviders(<JobDetails job={sampleJob} />);
     expect(
-      await screen.findByRole("button", { name: /apply in job engine/i }),
+      await screen.findByRole("button", { name: "Auto apply" }),
     ).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Auto apply" })).toHaveLength(1);
+  });
+
+  it("keeps the external application link when ordinary browsers show runtime unavailability", async () => {
+    renderWithProviders(<JobDetails job={sampleJob} />);
+    expect(
+      await screen.findByText("The production desktop runtime is unavailable."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("link", { name: /apply on himalayas/i })[0],
+    ).toHaveAttribute("href", sampleJob.primary_application_url);
   });
 });

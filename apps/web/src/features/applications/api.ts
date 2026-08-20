@@ -1,15 +1,29 @@
 import { getApiBaseUrl } from "@/lib/env";
 import {
-  SEMI_AUTO_MODE,
+  APPLICANT_PROFILE_FIELD_NAMES,
+  FULL_AUTO_MODE,
+  FULL_AUTO_OWNER_CONFIRMATION,
   isStateChangingEvent,
   summarizeChecksum,
+  type AnswerBankFilters,
+  type ApplicantProfile,
+  type ApplicantProfileUpdate,
+  type ApplicationRunList,
+  type ApplicationRunListOptions,
   type ApplicationRunConflict,
+  type CreateApplicationRunInput,
   type ApplicationRunDetail,
   type ApplicationRunEvent,
   type ApplicationRunSummary,
   type CreateApplicationRunResponse,
+  type ConfirmedField,
   type EvidenceMetadata,
   type EvidenceType,
+  type ResumeRegistrationInput,
+  type ResumeUpdateInput,
+  type ReusableAnswer,
+  type ReusableAnswerInput,
+  type ReusableAnswerUpdate,
   type ResolveAnswerItem,
   type SafeException,
   type SafeFieldReport,
@@ -112,6 +126,14 @@ function asString(value: unknown): string {
 
 function asNullableString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" ? value : fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
 }
 
 function projectFieldReport(raw: Record<string, unknown>): SafeFieldReport {
@@ -225,9 +247,15 @@ function projectRunSummary(raw: Record<string, unknown>): ApplicationRunSummary 
     automation_mode: asString(
       raw.automation_mode,
     ) as ApplicationRunSummary["automation_mode"],
+    automatic_submission_authorized_at: asNullableString(
+      raw.automatic_submission_authorized_at,
+    ),
+    automatic_submission_authorized:
+      raw.automatic_submission_authorized === true,
     status: asString(raw.status) as ApplicationRunSummary["status"],
     current_step: asNullableString(raw.current_step),
     current_checkpoint: asNullableString(raw.current_checkpoint),
+    submit_attempted_at: asNullableString(raw.submit_attempted_at),
     terminal_reason: asNullableString(raw.terminal_reason),
     receipt_summary: projectReceipt(raw.receipt_summary),
     policy_snapshot: projectPolicySnapshot(raw.policy_snapshot),
@@ -285,19 +313,22 @@ function projectCreateResponse(raw: Record<string, unknown>): CreateApplicationR
   };
 }
 
-export async function createApplicationRun(input: {
-  jobGroupId: string;
-  resumeId: string;
-}): Promise<ApplicationRunSummary> {
+export async function createApplicationRun(
+  input: CreateApplicationRunInput,
+): Promise<CreateApplicationRunResponse> {
   const url = `${getApiBaseUrl()}/api/v1/application-runs`;
+  const requestBody = {
+    job_group_ids: input.job_group_ids,
+    resume_id: input.resume_id,
+    automation_mode: input.automation_mode,
+    ...(input.automation_mode === FULL_AUTO_MODE
+      ? { owner_confirmation: FULL_AUTO_OWNER_CONFIRMATION }
+      : {}),
+  };
   const response = await fetchJson(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      job_group_ids: [input.jobGroupId],
-      resume_id: input.resumeId,
-      automation_mode: SEMI_AUTO_MODE,
-    }),
+    body: JSON.stringify(requestBody),
   }, "Failed to create application run");
 
   const detail = await parseDetail(response);
@@ -312,11 +343,54 @@ export async function createApplicationRun(input: {
   if (!response.ok) {
     throwForStatus(response, detail);
   }
-  const created = body.created_runs[0];
-  if (!created) {
+  if (body.created_runs.length === 0) {
     throw new ApiError(response.status, response.statusText, detail);
   }
-  return created;
+  return body;
+}
+
+export async function fetchApplicationRuns(
+  options: ApplicationRunListOptions = {},
+  init?: RequestInit,
+): Promise<ApplicationRunList> {
+  const query = new URLSearchParams();
+  for (const status of options.statuses ?? []) {
+    query.append("status", status);
+  }
+  for (const mode of options.modes ?? []) {
+    query.append("mode", mode);
+  }
+  const scalarOptions: Array<[string, string | number | undefined]> = [
+    ["job_group_id", options.job_group_id],
+    ["platform_adapter_id", options.platform_adapter_id],
+    ["created_after", options.created_after],
+    ["created_before", options.created_before],
+    ["page", options.page],
+    ["page_size", options.page_size],
+  ];
+  for (const [name, value] of scalarOptions) {
+    if (value !== undefined) {
+      query.append(name, String(value));
+    }
+  }
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  const response = await fetchJson(
+    `${getApiBaseUrl()}/api/v1/application-runs${suffix}`,
+    init,
+    "Failed to fetch application runs",
+  );
+  if (!response.ok) {
+    throwForStatus(response, await parseDetail(response));
+  }
+  const raw = (await response.json()) as Record<string, unknown>;
+  const items = Array.isArray(raw.items) ? raw.items : [];
+  return {
+    items: items.filter(isRecord).map(projectRunSummary),
+    total: asNumber(raw.total),
+    page: asNumber(raw.page, 1),
+    page_size: asNumber(raw.page_size, 25),
+    total_pages: asNumber(raw.total_pages, 1),
+  };
 }
 
 export async function fetchApplicationRunDetail(
@@ -336,6 +410,129 @@ export async function fetchApplicationRunDetail(
   return projectApplicationRunDetail(raw);
 }
 
+function projectConfirmedField(raw: unknown): ConfirmedField {
+  const field = isRecord(raw) ? raw : {};
+  return {
+    state: asString(field.state) as ConfirmedField["state"],
+    value: field.value ?? null,
+    source: asNullableString(field.source) as ConfirmedField["source"],
+    last_confirmed_at: asNullableString(field.last_confirmed_at),
+    policy_category: asString(
+      field.policy_category,
+    ) as ConfirmedField["policy_category"],
+  };
+}
+
+function projectApplicantProfile(raw: Record<string, unknown>): ApplicantProfile {
+  const fields = Object.fromEntries(
+    APPLICANT_PROFILE_FIELD_NAMES.map((name) => [
+      name,
+      projectConfirmedField(raw[name]),
+    ]),
+  ) as Pick<ApplicantProfile, (typeof APPLICANT_PROFILE_FIELD_NAMES)[number]>;
+  return {
+    id: asString(raw.id),
+    version: asNumber(raw.version),
+    created_at: asString(raw.created_at),
+    updated_at: asString(raw.updated_at),
+    ...fields,
+  };
+}
+
+function projectResume(raw: Record<string, unknown>): SafeResume {
+  const sha256 = asString(raw.sha256);
+  return {
+    id: asString(raw.id),
+    resume_id: asString(raw.resume_id),
+    label: asString(raw.label),
+    sha256,
+    checksum_summary: summarizeChecksum(sha256),
+    language: asString(raw.language),
+    is_default: Boolean(raw.is_default),
+    file_size_bytes:
+      typeof raw.file_size_bytes === "number" ? raw.file_size_bytes : null,
+    last_verified_at: asNullableString(raw.last_verified_at),
+    version: asNumber(raw.version, 1),
+    created_at: asString(raw.created_at),
+    updated_at: asString(raw.updated_at),
+  };
+}
+
+function projectAnswer(raw: Record<string, unknown>): ReusableAnswer {
+  return {
+    id: asString(raw.id),
+    answer_id: asString(raw.answer_id),
+    question_intent: asString(
+      raw.question_intent,
+    ) as ReusableAnswer["question_intent"],
+    jurisdiction: asNullableString(raw.jurisdiction),
+    platform_scope: asNullableString(raw.platform_scope),
+    answer_text: asString(raw.answer_text),
+    policy_category: asString(
+      raw.policy_category,
+    ) as ReusableAnswer["policy_category"],
+    provenance: asString(raw.provenance),
+    last_confirmed_at: asString(raw.last_confirmed_at),
+    expires_at: asNullableString(raw.expires_at),
+    version: asNumber(raw.version, 1),
+    created_at: asString(raw.created_at),
+    updated_at: asString(raw.updated_at),
+  };
+}
+
+async function requestProjectedJson<T>(
+  url: string,
+  init: RequestInit | undefined,
+  networkMessage: string,
+  project: (raw: Record<string, unknown>) => T,
+): Promise<T> {
+  const response = await fetchJson(url, init, networkMessage);
+  if (!response.ok) {
+    throwForStatus(response, await parseDetail(response));
+  }
+  return project((await response.json()) as Record<string, unknown>);
+}
+
+export async function fetchApplicantProfile(
+  init?: RequestInit,
+): Promise<ApplicantProfile> {
+  return requestProjectedJson(
+    `${getApiBaseUrl()}/api/v1/applicant-profile`,
+    init,
+    "Failed to fetch applicant profile",
+    projectApplicantProfile,
+  );
+}
+
+export async function updateApplicantProfile(
+  input: ApplicantProfileUpdate,
+): Promise<ApplicantProfile> {
+  const missingFields = APPLICANT_PROFILE_FIELD_NAMES.filter(
+    (name) => !Object.hasOwn(input, name) || input[name] === undefined,
+  );
+  if (missingFields.length > 0) {
+    throw new TypeError(
+      `A complete applicant profile is required; missing: ${missingFields.join(", ")}`,
+    );
+  }
+  const body: Record<string, unknown> = {
+    expected_version: input.expected_version,
+  };
+  for (const name of APPLICANT_PROFILE_FIELD_NAMES) {
+    body[name] = input[name];
+  }
+  return requestProjectedJson(
+    `${getApiBaseUrl()}/api/v1/applicant-profile`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    "Failed to update applicant profile",
+    projectApplicantProfile,
+  );
+}
+
 export async function fetchResumes(init?: RequestInit): Promise<SafeResume[]> {
   const url = `${getApiBaseUrl()}/api/v1/resumes`;
   const response = await fetchJson(url, init, "Failed to fetch registered resumes");
@@ -344,20 +541,134 @@ export async function fetchResumes(init?: RequestInit): Promise<SafeResume[]> {
   }
   const raw = (await response.json()) as { items?: unknown[] };
   const items = Array.isArray(raw.items) ? raw.items : [];
-  return items
-    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
-    .map((item) => ({
-      id: asString(item.id),
-      resume_id: asString(item.resume_id),
-      label: asString(item.label),
-      sha256: asString(item.sha256),
-      checksum_summary: summarizeChecksum(asString(item.sha256)),
-      language: asString(item.language),
-      is_default: Boolean(item.is_default),
-      file_size_bytes:
-        typeof item.file_size_bytes === "number" ? item.file_size_bytes : null,
-      version: typeof item.version === "number" ? item.version : 1,
-    }));
+  return items.filter(isRecord).map(projectResume);
+}
+
+export async function registerResume(
+  input: ResumeRegistrationInput,
+): Promise<SafeResume> {
+  return requestProjectedJson(
+    `${getApiBaseUrl()}/api/v1/resumes`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+    "Failed to register resume",
+    projectResume,
+  );
+}
+
+export async function updateResume(
+  resumeId: string,
+  input: ResumeUpdateInput,
+): Promise<SafeResume> {
+  return requestProjectedJson(
+    `${getApiBaseUrl()}/api/v1/resumes/${encodeURIComponent(resumeId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+    `Failed to update resume ${resumeId}`,
+    projectResume,
+  );
+}
+
+async function deleteVersionedResource(
+  path: string,
+  expectedVersion: number,
+  networkMessage: string,
+): Promise<void> {
+  const query = new URLSearchParams({
+    expected_version: String(expectedVersion),
+  });
+  const response = await fetchJson(
+    `${getApiBaseUrl()}${path}?${query.toString()}`,
+    { method: "DELETE" },
+    networkMessage,
+  );
+  if (!response.ok) {
+    throwForStatus(response, await parseDetail(response));
+  }
+}
+
+export async function deleteResume(
+  resumeId: string,
+  expectedVersion: number,
+): Promise<void> {
+  return deleteVersionedResource(
+    `/api/v1/resumes/${encodeURIComponent(resumeId)}`,
+    expectedVersion,
+    `Failed to delete resume ${resumeId}`,
+  );
+}
+
+export async function fetchAnswerBank(
+  filters: AnswerBankFilters = {},
+  init?: RequestInit,
+): Promise<ReusableAnswer[]> {
+  const query = new URLSearchParams();
+  for (const [name, value] of Object.entries(filters)) {
+    if (value !== undefined) {
+      query.append(name, value);
+    }
+  }
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  const response = await fetchJson(
+    `${getApiBaseUrl()}/api/v1/answer-bank${suffix}`,
+    init,
+    "Failed to fetch answer bank",
+  );
+  if (!response.ok) {
+    throwForStatus(response, await parseDetail(response));
+  }
+  const raw = (await response.json()) as { items?: unknown[] };
+  return (Array.isArray(raw.items) ? raw.items : [])
+    .filter(isRecord)
+    .map(projectAnswer);
+}
+
+export async function createAnswer(
+  input: ReusableAnswerInput,
+): Promise<ReusableAnswer> {
+  return requestProjectedJson(
+    `${getApiBaseUrl()}/api/v1/answer-bank`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+    "Failed to create answer-bank entry",
+    projectAnswer,
+  );
+}
+
+export async function updateAnswer(
+  answerId: string,
+  input: ReusableAnswerUpdate,
+): Promise<ReusableAnswer> {
+  return requestProjectedJson(
+    `${getApiBaseUrl()}/api/v1/answer-bank/${encodeURIComponent(answerId)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+    `Failed to update answer-bank entry ${answerId}`,
+    projectAnswer,
+  );
+}
+
+export async function deleteAnswer(
+  answerId: string,
+  expectedVersion: number,
+): Promise<void> {
+  return deleteVersionedResource(
+    `/api/v1/answer-bank/${encodeURIComponent(answerId)}`,
+    expectedVersion,
+    `Failed to delete answer-bank entry ${answerId}`,
+  );
 }
 
 async function postRunAction(
@@ -449,6 +760,8 @@ export async function overrideDuplicateRun(
 }
 
 export interface StreamApplicationRunCallbacks {
+  onConnected?: () => void;
+  onLastEventId?: (lastEventId: string) => void;
   onEvent?: (event: ApplicationRunEvent) => void;
   onStateChanging?: (event: ApplicationRunEvent) => void;
   onRejected?: (event: ApplicationRunEvent) => void;
@@ -456,15 +769,21 @@ export interface StreamApplicationRunCallbacks {
 }
 
 export async function streamApplicationRunEvents(options: {
-  runId: string;
+  runId?: string;
   lastEventId?: string;
   signal?: AbortSignal;
+  onConnected?: () => void;
+  onLastEventId?: (lastEventId: string) => void;
   onEvent?: (event: ApplicationRunEvent) => void;
   onStateChanging?: (event: ApplicationRunEvent) => void;
   onRejected?: (event: ApplicationRunEvent) => void;
   onError?: (error: Error) => void;
 }): Promise<string | undefined> {
-  const url = `${getApiBaseUrl()}/api/v1/application-runs/${encodeURIComponent(options.runId)}/events/stream`;
+  const streamPath =
+    options.runId === undefined
+      ? "/api/v1/application-runs/events/stream"
+      : `/api/v1/application-runs/${encodeURIComponent(options.runId)}/events/stream`;
+  const url = `${getApiBaseUrl()}${streamPath}`;
   const headers: Record<string, string> = {
     Accept: "text/event-stream",
   };
@@ -503,6 +822,7 @@ export async function streamApplicationRunEvents(options: {
     options.onError?.(error);
     throw error;
   }
+  options.onConnected?.();
 
   const decoder = new TextDecoder();
   let buffer = "";
@@ -537,7 +857,7 @@ export async function streamApplicationRunEvents(options: {
         ...parsed,
         event_type: parsed.event_type ?? eventName,
       });
-      if (event.run_id !== options.runId) {
+      if (options.runId !== undefined && event.run_id !== options.runId) {
         options.onRejected?.(event);
         return;
       }
@@ -547,6 +867,7 @@ export async function streamApplicationRunEvents(options: {
       }
       seen.add(key);
       lastEventId = id || key;
+      options.onLastEventId?.(lastEventId);
       options.onEvent?.(event);
       if (isStateChangingEvent(event.event_type)) {
         options.onStateChanging?.(event);

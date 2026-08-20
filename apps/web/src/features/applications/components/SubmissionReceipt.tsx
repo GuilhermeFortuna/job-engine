@@ -3,26 +3,20 @@ import type {
   ApplicationRunStatus,
   EvidenceMetadata,
 } from "../types";
+import { isHttpsApplicationUrl } from "../types";
 
 export interface SubmissionReceiptProps {
   status: ApplicationRunStatus | string;
   receipt: ApplicationRunReceipt | null;
   evidence: EvidenceMetadata[];
   terminalReason: string | null;
-}
-
-function allowlistedEvidence(item: EvidenceMetadata): EvidenceMetadata | null {
-  if (item.evidence_type !== "receipt" && item.evidence_type !== "log") {
-    return null;
-  }
-  return item;
+  applicationUrl?: string | null;
 }
 
 export function SubmissionReceipt({
   status,
   receipt,
-  evidence,
-  terminalReason,
+  applicationUrl = null,
 }: SubmissionReceiptProps) {
   if (status === "submitted") {
     return (
@@ -38,16 +32,8 @@ export function SubmissionReceipt({
               <dd>{receipt.platform_adapter_id}</dd>
             </div>
             <div>
-              <dt>Confirmation</dt>
-              <dd>{receipt.confirmation_signal}</dd>
-            </div>
-            <div>
               <dt>Captured</dt>
               <dd>{receipt.capture_timestamp}</dd>
-            </div>
-            <div>
-              <dt>Receipt hash</dt>
-              <dd>{receipt.artifact_hash}</dd>
             </div>
           </dl>
         ) : (
@@ -58,7 +44,6 @@ export function SubmissionReceipt({
   }
 
   if (status === "submission_unknown") {
-    const items = evidence.map(allowlistedEvidence).filter(Boolean) as EvidenceMetadata[];
     return (
       <section
         className="submission-receipt submission-receipt-unknown"
@@ -66,21 +51,19 @@ export function SubmissionReceipt({
       >
         <h2 id="outcome-heading">Submission unknown</h2>
         <p>
-          The backend could not confirm the site receipt. Inspect allowlisted
-          evidence metadata only. Blind retry is not offered.
+          Verify directly in the ATS and check the confirmation email. Do not
+          retry blindly.
         </p>
-        {items.length === 0 ? (
-          <p>No receipt or log metadata is available.</p>
-        ) : (
-          <ul>
-            {items.map((item) => (
-              <li key={item.id}>
-                Type: {item.evidence_type}. Captured: {item.captured_at}. Hash:{" "}
-                {item.sha256}. Size: {item.file_size_bytes ?? "unknown"} bytes.
-              </li>
-            ))}
-          </ul>
-        )}
+        {isHttpsApplicationUrl(applicationUrl) ? (
+          <a
+            className="btn btn-secondary"
+            href={applicationUrl ?? undefined}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            Open external application
+          </a>
+        ) : null}
       </section>
     );
   }
@@ -94,7 +77,11 @@ export function SubmissionReceipt({
         <h2 id="outcome-heading">
           {status === "failed_retryable" ? "Retryable failure" : "Failed"}
         </h2>
-        <p>{terminalReason || "The application run failed."}</p>
+        <p>
+          {status === "failed_retryable"
+            ? "The backend permits resuming this run from its durable checkpoint."
+            : "The application run failed and cannot be retried."}
+        </p>
       </section>
     );
   }
@@ -106,7 +93,7 @@ export function SubmissionReceipt({
         aria-labelledby="outcome-heading"
       >
         <h2 id="outcome-heading">Cancelled</h2>
-        <p>{terminalReason || "This application run was cancelled."}</p>
+        <p>This application run was cancelled.</p>
       </section>
     );
   }

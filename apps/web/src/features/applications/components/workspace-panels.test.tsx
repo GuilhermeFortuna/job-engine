@@ -31,7 +31,10 @@ const resume: SafeResume = {
   language: "en",
   is_default: true,
   file_size_bytes: 1024,
+  last_verified_at: "2026-08-20T00:00:00Z",
   version: 1,
+  created_at: "2026-08-20T00:00:00Z",
+  updated_at: "2026-08-20T00:00:00Z",
 };
 
 describe("workspace review panels", () => {
@@ -67,6 +70,26 @@ describe("workspace review panels", () => {
     expect(screen.queryByText("Yes, hybrid")).not.toBeInTheDocument();
   });
 
+  it("does not render untrusted field reason detail", () => {
+    renderWithProviders(
+      <FieldReviewPanel
+        reports={[
+          {
+            ...report,
+            reason_code: "private owner answer at /home/owner/resume.pdf",
+            status: "private status payload",
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Hybrid work?")).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /private owner answer|private status payload|\/home\/owner|resume\.pdf/i,
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it("resolves pending questions with fingerprints and never asks for credentials", () => {
     const onResolve = vi.fn();
     const exception: SafeException = {
@@ -74,7 +97,12 @@ describe("workspace review panels", () => {
       run_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       exception_type: "unresolved_question",
       status: "pending",
-      field_reports: [report],
+      field_reports: [
+        {
+          ...report,
+          reason_code: "private owner answer at /home/owner/resume.pdf",
+        },
+      ],
       created_at: "2026-08-19T00:00:00Z",
       resolved_at: null,
     };
@@ -100,9 +128,12 @@ describe("workspace review panels", () => {
       },
     ]);
     expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/private owner answer|\/home\/owner|resume\.pdf/i),
+    ).not.toBeInTheDocument();
   });
 
-  it("instructs CAPTCHA completion in the embedded page then resumes", () => {
+  it("blocks paused authentication without offering a resume loop", () => {
     const onResume = vi.fn();
     renderWithProviders(
       <ExceptionResolver
@@ -124,8 +155,10 @@ describe("workspace review panels", () => {
       />,
     );
     expect(screen.getByText(/never asks for credentials/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /resume application/i }));
-    expect(onResume).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("button", { name: /resume application/i }),
+    ).not.toBeInTheDocument();
+    expect(onResume).not.toHaveBeenCalled();
   });
 
   it("renders distinct submitted, unknown, failed, and cancelled outcomes", () => {
@@ -142,10 +175,11 @@ describe("workspace review panels", () => {
           summary_notes: null,
         }}
         evidence={[]}
-        terminalReason={null}
+        terminalReason="private backend detail"
       />,
     );
     expect(screen.getByRole("heading", { name: "Submitted" })).toBeInTheDocument();
+    expect(screen.queryByText(/artifact|private backend detail/i)).not.toBeInTheDocument();
 
     rerender(
       <SubmissionReceipt
@@ -163,10 +197,17 @@ describe("workspace review panels", () => {
           },
         ]}
         terminalReason={null}
+        applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
       />,
     );
     expect(screen.getByRole("heading", { name: "Submission unknown" })).toBeInTheDocument();
+    expect(screen.getByText(/verify directly in the ATS/i)).toBeInTheDocument();
+    expect(screen.getByText(/confirmation email/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /open external application/i }),
+    ).toHaveAttribute("href", "https://boards.greenhouse.io/apex/jobs/1");
     expect(screen.queryByText(/relative_path/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("bb".repeat(32))).not.toBeInTheDocument();
 
     rerender(
       <SubmissionReceipt
@@ -177,6 +218,7 @@ describe("workspace review panels", () => {
       />,
     );
     expect(screen.getByRole("heading", { name: "Failed" })).toBeInTheDocument();
+    expect(screen.queryByText("Adapter error")).not.toBeInTheDocument();
 
     rerender(
       <SubmissionReceipt
@@ -187,5 +229,6 @@ describe("workspace review panels", () => {
       />,
     );
     expect(screen.getByRole("heading", { name: "Cancelled" })).toBeInTheDocument();
+    expect(screen.queryByText("Owner cancelled")).not.toBeInTheDocument();
   });
 });

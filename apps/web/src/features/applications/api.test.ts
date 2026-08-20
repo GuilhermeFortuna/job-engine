@@ -5,16 +5,28 @@ import {
   ApiNotFoundError,
   NetworkError,
   cancelApplicationRun,
+  createAnswer,
   createApplicationRun,
+  deleteAnswer,
+  deleteResume,
+  fetchAnswerBank,
+  fetchApplicantProfile,
+  fetchApplicationRuns,
   fetchApplicationRunDetail,
   fetchResumes,
   overrideDuplicateRun,
+  registerResume,
   releaseSubmit,
   resolveExceptionAnswers,
   resumeApplicationRun,
   streamApplicationRunEvents,
+  updateAnswer,
+  updateApplicantProfile,
+  updateResume,
 } from "./api";
 import {
+  APPLICANT_PROFILE_FIELD_NAMES,
+  FULL_AUTO_MODE,
   SEMI_AUTO_MODE,
   canReleaseSubmit,
   countFieldReports,
@@ -22,6 +34,8 @@ import {
   isHttpsApplicationUrl,
   summarizeChecksum,
   workspacePath,
+  type ApplicantProfileFields,
+  type ApplicantProfileUpdate,
   type ApplicationRunDetail,
   type SafeException,
   type SafeFieldReport,
@@ -134,7 +148,7 @@ describe("applications API client", () => {
     vi.unstubAllGlobals();
   });
 
-  it("creates one semi-auto run with job_group_ids and never sends full_auto", async () => {
+  it("creates explicit semi-auto and authorized full-auto runs", async () => {
     const created = {
       id: RUN_ID,
       job_group_id: JOB_ID,
@@ -144,6 +158,9 @@ describe("applications API client", () => {
       resume_asset_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
       resume_sha256: "abc123",
       automation_mode: SEMI_AUTO_MODE,
+      automatic_submission_authorized_at: null,
+      automatic_submission_authorized: false,
+      submit_attempted_at: null,
       status: "queued",
       current_step: "Run queued",
       current_checkpoint: null,
@@ -155,16 +172,38 @@ describe("applications API client", () => {
       started_at: null,
       completed_at: null,
     };
-    global.fetch = vi.fn().mockResolvedValue(
-      jsonResponse({ created_runs: [created], conflicts: [] }, 201),
-    );
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ created_runs: [created], conflicts: [] }, 201),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          created_runs: [
+            {
+              ...created,
+              automation_mode: FULL_AUTO_MODE,
+              automatic_submission_authorized_at: "2026-08-20T00:00:00Z",
+              automatic_submission_authorized: true,
+            },
+          ],
+          conflicts: [],
+        }, 201),
+      );
 
-    const result = await createApplicationRun({
-      jobGroupId: JOB_ID,
-      resumeId: "res_primary_pdf",
+    const semiAuto = await createApplicationRun({
+      job_group_ids: [JOB_ID],
+      resume_id: "res_primary_pdf",
+      automation_mode: SEMI_AUTO_MODE,
+    });
+    const fullAuto = await createApplicationRun({
+      job_group_ids: [JOB_ID],
+      resume_id: "res_primary_pdf",
+      automation_mode: FULL_AUTO_MODE,
     });
 
-    expect(result.id).toBe(RUN_ID);
+    expect(semiAuto.created_runs[0].id).toBe(RUN_ID);
+    expect(fullAuto.created_runs[0].automatic_submission_authorized).toBe(true);
     expect(global.fetch).toHaveBeenCalledWith(
       "http://127.0.0.1:8000/api/v1/application-runs",
       expect.objectContaining({
@@ -180,11 +219,23 @@ describe("applications API client", () => {
         }),
       }),
     );
-    const body = JSON.parse(
+    const semiAutoBody = JSON.parse(
       (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string,
     );
-    expect(body.automation_mode).not.toBe("full_auto");
-    expect(body).not.toHaveProperty("job_group_id");
+    const fullAutoBody = JSON.parse(
+      (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1][1].body as string,
+    );
+    expect(semiAutoBody).toEqual({
+      job_group_ids: [JOB_ID],
+      resume_id: "res_primary_pdf",
+      automation_mode: SEMI_AUTO_MODE,
+    });
+    expect(fullAutoBody).toEqual({
+      job_group_ids: [JOB_ID],
+      resume_id: "res_primary_pdf",
+      automation_mode: FULL_AUTO_MODE,
+      owner_confirmation: "Authorize automatic submission for these selected jobs",
+    });
   });
 
   it("throws ApiConflictError with existing_run_id on duplicate 409", async () => {
@@ -207,7 +258,11 @@ describe("applications API client", () => {
     );
 
     await expect(
-      createApplicationRun({ jobGroupId: JOB_ID, resumeId: "res_primary_pdf" }),
+      createApplicationRun({
+        job_group_ids: [JOB_ID],
+        resume_id: "res_primary_pdf",
+        automation_mode: SEMI_AUTO_MODE,
+      }),
     ).rejects.toMatchObject({
       name: "ApiConflictError",
       status: 409,
@@ -228,6 +283,9 @@ describe("applications API client", () => {
       resume_asset_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
       resume_sha256: "aa".repeat(32),
       automation_mode: SEMI_AUTO_MODE,
+      automatic_submission_authorized_at: null,
+      automatic_submission_authorized: false,
+      submit_attempted_at: "2026-08-19T00:00:04Z",
       status: "needs_input",
       current_step: "Waiting for owner",
       current_checkpoint: "questions_answered",
@@ -291,7 +349,64 @@ describe("applications API client", () => {
     expect(detail.evidence[0]).not.toHaveProperty("metadata_payload");
     expect(JSON.stringify(detail)).not.toContain("plaintext-should-not-reach-ui");
     expect(JSON.stringify(detail)).not.toContain("/var/lib/job-engine");
+    expect(detail.automatic_submission_authorized_at).toBeNull();
+    expect(detail.automatic_submission_authorized).toBe(false);
+    expect(detail.submit_attempted_at).toBe("2026-08-19T00:00:04Z");
     expect(detail as ApplicationRunDetail).toBeTruthy();
+  });
+
+  it("lists safely projected application runs with filters and pagination", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      jsonResponse({
+        items: [
+          {
+            id: RUN_ID,
+            job_group_id: JOB_ID,
+            canonical_application_url: "https://example.com/job",
+            application_url: "https://example.com/job",
+            platform_adapter_id: "generic",
+            resume_asset_id: "resume-uuid",
+            resume_sha256: "aa".repeat(32),
+            automation_mode: FULL_AUTO_MODE,
+            automatic_submission_authorized_at: "2026-08-20T00:00:00Z",
+            automatic_submission_authorized: true,
+            submit_attempted_at: null,
+            status: "queued",
+            current_step: null,
+            current_checkpoint: null,
+            terminal_reason: null,
+            receipt_summary: null,
+            policy_snapshot: null,
+            answer_bank_snapshot: { secret_answer: 1 },
+            idempotency_key: "secret",
+            created_at: "2026-08-20T00:00:00Z",
+            updated_at: "2026-08-20T00:00:00Z",
+            started_at: null,
+            completed_at: null,
+          },
+        ],
+        total: 1,
+        page: 2,
+        page_size: 10,
+        total_pages: 3,
+      }),
+    );
+
+    const result = await fetchApplicationRuns({
+      statuses: ["queued", "running"],
+      modes: [FULL_AUTO_MODE],
+      page: 2,
+      page_size: 10,
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:8000/api/v1/application-runs?status=queued&status=running&mode=full_auto&page=2&page_size=10",
+      expect.any(Object),
+    );
+    expect(result.items[0].automatic_submission_authorized).toBe(true);
+    expect(result).toMatchObject({ total: 1, page: 2, page_size: 10, total_pages: 3 });
+    expect(result.items[0]).not.toHaveProperty("answer_bank_snapshot");
+    expect(result.items[0]).not.toHaveProperty("idempotency_key");
   });
 
   it("throws ApiNotFoundError for missing runs", async () => {
@@ -334,6 +449,181 @@ describe("applications API client", () => {
     expect(resumes[0]).not.toHaveProperty("source_markdown_path");
     expect(resumes[0]).not.toHaveProperty("upload_pdf_path");
     expect(JSON.stringify(resumes)).not.toContain("/home/owner");
+  });
+
+  it("reads and updates the applicant profile through a known-field projection", async () => {
+    const firstName = {
+      state: "provided",
+      value: "Ada",
+      source: "owner",
+      last_confirmed_at: "2026-08-20T00:00:00Z",
+      policy_category: "verified_profile",
+      injected_secret: "drop-me",
+    };
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "profile-id",
+          version: 3,
+          created_at: "2026-08-19T00:00:00Z",
+          updated_at: "2026-08-20T00:00:00Z",
+          first_name: firstName,
+          arbitrary_payload: { secret: "drop-me" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "profile-id",
+          version: 4,
+          created_at: "2026-08-19T00:00:00Z",
+          updated_at: "2026-08-20T00:01:00Z",
+          first_name: firstName,
+        }),
+      );
+
+    const profile = await fetchApplicantProfile();
+    const completeFields = Object.fromEntries(
+      APPLICANT_PROFILE_FIELD_NAMES.map((name) => [name, profile[name]]),
+    ) as ApplicantProfileFields;
+    const updated = await updateApplicantProfile({
+      expected_version: profile.version,
+      ...completeFields,
+    });
+
+    expect(profile.first_name.value).toBe("Ada");
+    expect(profile.first_name).not.toHaveProperty("injected_secret");
+    expect(profile).not.toHaveProperty("arbitrary_payload");
+    expect(updated.version).toBe(4);
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      "http://127.0.0.1:8000/api/v1/applicant-profile",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ expected_version: 3, ...completeFields }),
+      }),
+    );
+  });
+
+  it("rejects incomplete replacement profiles before issuing PUT", async () => {
+    global.fetch = vi.fn();
+    const incomplete = {
+      expected_version: 3,
+      first_name: {
+        state: "provided",
+        value: "Ada",
+        source: "owner",
+        last_confirmed_at: "2026-08-20T00:00:00Z",
+        policy_category: "verified_profile",
+      },
+    } as unknown as ApplicantProfileUpdate;
+
+    await expect(updateApplicantProfile(incomplete)).rejects.toThrow(
+      /complete applicant profile/i,
+    );
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("registers, updates, and deletes resumes without returning local paths", async () => {
+    const rawResume = {
+      id: "resume-uuid",
+      resume_id: "res_primary_pdf",
+      label: "Primary resume",
+      source_markdown_path: "/home/owner/resume.md",
+      upload_pdf_path: "/home/owner/resume.pdf",
+      preview_html_path: "/home/owner/resume.html",
+      sha256: "cc".repeat(32),
+      language: "en",
+      is_default: true,
+      file_size_bytes: 1024,
+      last_verified_at: "2026-08-20T00:00:00Z",
+      version: 1,
+      created_at: "2026-08-20T00:00:00Z",
+      updated_at: "2026-08-20T00:00:00Z",
+    };
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(rawResume, 201))
+      .mockResolvedValueOnce(jsonResponse({ ...rawResume, label: "Updated", version: 2 }))
+      .mockResolvedValueOnce(jsonResponse(undefined, 204));
+
+    const registered = await registerResume({
+      resume_id: "res_primary_pdf",
+      label: "Primary resume",
+      source_markdown_path: "/home/owner/resume.md",
+      upload_pdf_path: "/home/owner/resume.pdf",
+      language: "en",
+      is_default: true,
+    });
+    const updated = await updateResume("res_primary_pdf", {
+      expected_version: 1,
+      label: "Updated",
+      refresh_checksum: false,
+    });
+    await deleteResume("res_primary_pdf", 2);
+
+    expect(registered).not.toHaveProperty("source_markdown_path");
+    expect(registered).not.toHaveProperty("upload_pdf_path");
+    expect(updated).toMatchObject({ label: "Updated", version: 2 });
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      3,
+      "http://127.0.0.1:8000/api/v1/resumes/res_primary_pdf?expected_version=2",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("lists and mutates owner-authored answer-bank entries", async () => {
+    const answer = {
+      id: "answer-uuid",
+      answer_id: "work_auth_us",
+      question_intent: "work_authorization",
+      jurisdiction: "US",
+      platform_scope: null,
+      answer_text: "Authorized",
+      policy_category: "approved_reusable",
+      provenance: "owner_authored",
+      last_confirmed_at: "2026-08-20T00:00:00Z",
+      expires_at: null,
+      version: 1,
+      created_at: "2026-08-20T00:00:00Z",
+      updated_at: "2026-08-20T00:00:00Z",
+      secret_metadata: "drop-me",
+    };
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [answer] }))
+      .mockResolvedValueOnce(jsonResponse(answer, 201))
+      .mockResolvedValueOnce(jsonResponse({ ...answer, answer_text: "Still authorized", version: 2 }))
+      .mockResolvedValueOnce(jsonResponse(undefined, 204));
+
+    const listed = await fetchAnswerBank({ question_intent: "work_authorization" });
+    const input = {
+      answer_id: answer.answer_id,
+      question_intent: "work_authorization" as const,
+      jurisdiction: answer.jurisdiction,
+      platform_scope: answer.platform_scope,
+      answer_text: answer.answer_text,
+      policy_category: "approved_reusable" as const,
+      provenance: answer.provenance,
+      last_confirmed_at: answer.last_confirmed_at,
+      expires_at: answer.expires_at,
+    };
+    const created = await createAnswer(input);
+    const updated = await updateAnswer(answer.answer_id, {
+      ...input,
+      expected_version: 1,
+      answer_text: "Still authorized",
+    });
+    await deleteAnswer(answer.answer_id, 2);
+
+    expect(listed[0]).not.toHaveProperty("secret_metadata");
+    expect(created.answer_text).toBe("Authorized");
+    expect(updated).toMatchObject({ answer_text: "Still authorized", version: 2 });
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      4,
+      "http://127.0.0.1:8000/api/v1/answer-bank/work_auth_us?expected_version=2",
+      expect.objectContaining({ method: "DELETE" }),
+    );
   });
 
   it("posts resolve-answers with fingerprints only and no policy fields", async () => {

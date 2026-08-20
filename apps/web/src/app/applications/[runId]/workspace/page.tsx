@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { ApplicationWorkspace } from "@/features/applications/components/ApplicationWorkspace";
+import { parseLaunchOutcome } from "@/features/applications/launch-outcome";
 
 interface WorkspacePageProps {
   params: Promise<{ runId: string }>;
+  searchParams?: Promise<{ launch?: string | string[] }>;
 }
 
 export const dynamic = "force-dynamic";
@@ -19,5 +21,11 @@ export async function generateMetadata(
 
 export default async function ApplicationWorkspacePage(props: WorkspacePageProps) {
   const { runId } = await props.params;
-  return <ApplicationWorkspace runId={runId} />;
+  const searchParams = await props.searchParams;
+  return (
+    <ApplicationWorkspace
+      runId={runId}
+      launchOutcome={parseLaunchOutcome(searchParams?.launch)}
+    />
+  );
 }

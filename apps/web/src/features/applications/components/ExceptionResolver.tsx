@@ -104,7 +104,6 @@ function ResolvableExceptionForm({
               }))
             }
           />
-          {report.reason_code ? <p>Reason: {report.reason_code}</p> : null}
           {report.allow_save_to_answer_bank ? (
             <label>
               <input
@@ -134,7 +133,6 @@ export function ExceptionResolver({
   exceptions,
   submitting,
   onResolve,
-  onResume,
 }: ExceptionResolverProps) {
   const pending = [...exceptions].reverse().find((exception) => exception.status === "pending");
 
@@ -143,17 +141,10 @@ export function ExceptionResolver({
       <section className="exception-resolver" aria-labelledby="exception-heading">
         <h2 id="exception-heading">Authentication pause</h2>
         <p>
-          Complete the sign-in or CAPTCHA challenge directly in the embedded
-          application page. Job Engine never asks for credentials here.
+          Complete sign-in or CAPTCHA directly at the external application.
+          Job Engine never asks for credentials here and will not create a
+          reopen loop.
         </p>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={submitting}
-          onClick={onResume}
-        >
-          Resume application
-        </button>
       </section>
     );
   }

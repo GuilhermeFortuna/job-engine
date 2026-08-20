@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { CatalogBackdrop } from "@/components/catalog-backdrop";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -38,7 +39,13 @@ export default function RootLayout({
           <CatalogBackdrop />
           <header className="relative z-10">
             <div className="site-header">
-              <p className="text-foreground tracking-tight">Job Engine</p>
+              <div className="site-header-identity">
+                <p className="text-foreground tracking-tight">Job Engine</p>
+                <nav aria-label="Primary navigation" className="site-navigation">
+                  <Link href="/jobs">Jobs</Link>
+                  <Link href="/applications">Applications</Link>
+                </nav>
+              </div>
               <ThemeToggle />
             </div>
           </header>

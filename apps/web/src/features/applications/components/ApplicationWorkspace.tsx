@@ -27,14 +27,29 @@ import {
   subscribeBrowserState,
   type ApplicationBounds,
   type DesktopBrowserState,
+  type OperationResult,
 } from "../desktop-bridge";
 import {
   collectFieldReports,
+  isHttpsApplicationUrl,
+  latestPendingException,
+  requiredFieldsResolved,
   workspacePath,
   type ApplicationRunDetail,
   type ResolveAnswerItem,
   type SafeResume,
 } from "../types";
+import {
+  runtimeReasonText,
+  selectDurableRunAction,
+  type DurableRunAction,
+} from "../projections";
+import { useApplicationRuntime } from "../hooks/useApplicationRuntime";
+import {
+  DESKTOP_OPEN_REQUESTED,
+  DESKTOP_OPEN_UNAVAILABLE,
+  type LaunchOutcome,
+} from "../launch-outcome";
 import { ApplicationStatusBar } from "./ApplicationStatusBar";
 import { BrowserToolbar } from "./BrowserToolbar";
 import { BrowserViewport } from "./BrowserViewport";
@@ -44,8 +59,55 @@ import { JobContextPanel } from "./JobContextPanel";
 import { SubmissionReceipt } from "./SubmissionReceipt";
 
 const OWNER_SUBMIT_CONFIRMATION = "Submit this application";
+const SUBMIT_FAILURE =
+  "Submission release failed. Review the application and try again.";
+const CANCEL_FAILURE =
+  "Cancellation failed. Review the run status and try again.";
+const RESOLVE_FAILURE =
+  "Answer update failed. Review the answers and try again.";
+const RESUME_FAILURE = "Resume failed. Review the run status and try again.";
+const POSITION_FAILURE = "Unable to position the desktop application view.";
+const OPEN_FAILURE =
+  "Unable to open the desktop application view. The run remains available in this workspace.";
+const CLOSE_FAILURE = "Unable to close the desktop application view.";
+const BACK_FAILURE =
+  "Unable to navigate back in the desktop application view.";
+const FORWARD_FAILURE =
+  "Unable to navigate forward in the desktop application view.";
+const RELOAD_FAILURE = "Unable to reload the desktop application view.";
 
-export function ApplicationWorkspace({ runId }: { runId: string }) {
+function runRevision(run: ApplicationRunDetail): string {
+  return [
+    run.id,
+    run.status,
+    run.current_checkpoint ?? "",
+    run.submit_attempted_at ?? "",
+    run.updated_at,
+  ].join(":");
+}
+
+function durableActionFor(
+  run: ApplicationRunDetail,
+  reasonCode: Parameters<typeof selectDurableRunAction>[1],
+): DurableRunAction {
+  const selected = selectDurableRunAction(run, reasonCode).action;
+  if (selected !== "RELEASE_SUBMIT") {
+    return selected;
+  }
+  const pending = latestPendingException(run.exceptions);
+  return pending?.exception_type === "semi_auto_armed" &&
+    requiredFieldsResolved(collectFieldReports(run.exceptions))
+    ? selected
+    : null;
+}
+
+export function ApplicationWorkspace({
+  runId,
+  launchOutcome = null,
+}: {
+  runId: string;
+  launchOutcome?: LaunchOutcome | null;
+}) {
   const [run, setRun] = useState<ApplicationRunDetail | null>(null);
   const [job, setJob] = useState<JobDetail | null>(null);
   const [resume, setResume] = useState<SafeResume | null>(null);
@@ -57,10 +119,48 @@ export function ApplicationWorkspace({ runId }: { runId: string }) {
   const [browserState, setBrowserState] = useState<DesktopBrowserState>(INITIAL_BROWSER_STATE);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const runtime = useApplicationRuntime(runId);
 
   const closedRef = useRef(false);
   const openedRef = useRef(false);
   const openingRef = useRef(false);
+  const mountedRef = useRef(false);
+  const actionLockRef = useRef(false);
+  const openAttemptRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const showActionFailure = useCallback((message: string) => {
+    if (mountedRef.current) {
+      setActionError(message);
+    }
+  }, []);
+
+  const runBridgeOperation = useCallback(
+    async (
+      operation: () => Promise<OperationResult>,
+      failureMessage: string,
+    ) => {
+      if (mountedRef.current) {
+        setActionError(null);
+      }
+      try {
+        const result = await operation();
+        if (!result.success) {
+          showActionFailure(failureMessage);
+        }
+      } catch {
+        showActionFailure(failureMessage);
+      }
+    },
+    [showActionFailure],
+  );
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const detail = await fetchApplicationRunDetail(runId, { signal });
@@ -69,7 +169,6 @@ export function ApplicationWorkspace({ runId }: { runId: string }) {
     }
     setRun(detail);
     setLoadError(null);
-    setDisconnected(false);
     return detail;
   }, [runId]);
 
@@ -118,9 +217,9 @@ export function ApplicationWorkspace({ runId }: { runId: string }) {
         } catch {
           // Job/resume context is supplemental; the run remains usable.
         }
-      } catch (err) {
+      } catch {
         if (!controller.signal.aborted) {
-          setLoadError(err instanceof Error ? err.message : "Unable to load application run");
+          setLoadError("Unable to load application workspace.");
         }
         return;
       }
@@ -131,6 +230,7 @@ export function ApplicationWorkspace({ runId }: { runId: string }) {
             runId,
             lastEventId,
             signal: controller.signal,
+            onConnected: () => setDisconnected(false),
             onStateChanging: () => {
               void refresh(controller.signal);
             },
@@ -163,8 +263,9 @@ export function ApplicationWorkspace({ runId }: { runId: string }) {
     closedRef.current = true;
     openedRef.current = false;
     openingRef.current = false;
-    void closeApplicationView();
-  }, []);
+    openAttemptRef.current = null;
+    void runBridgeOperation(closeApplicationView, CLOSE_FAILURE);
+  }, [runBridgeOperation]);
 
   useEffect(() => {
     closedRef.current = false;
@@ -183,96 +284,258 @@ export function ApplicationWorkspace({ runId }: { runId: string }) {
     return subscribeBrowserState(setBrowserState);
   }, [closeOnce, supported]);
 
-  useEffect(() => {
-    if (!supported || !desktopAvailable || !bounds || bounds.width <= 0 || bounds.height <= 0) {
-      return;
-    }
-    if (openedRef.current) {
-      void setApplicationBounds(bounds);
-      return;
-    }
-    if (openingRef.current) {
-      return;
-    }
-    openingRef.current = true;
-    void (async () => {
-      await setApplicationBounds(bounds);
-      if (closedRef.current) {
-        openingRef.current = false;
-        return;
+  const runtimeReason = runtime.runtimeState
+    ? runtimeReasonText(runtime.runtimeState.reasonCode)
+    : null;
+  const action = run
+    ? durableActionFor(run, runtime.runtimeState?.reasonCode ?? null)
+    : null;
+
+  const requestDesktopOpen = useCallback(
+    async (completedAction?: "resolved" | "released" | "resumed") => {
+      const continueFromDesktop = completedAction
+        ? `${completedAction} — continue from desktop.`
+        : null;
+      if (
+        !supported ||
+        !desktopAvailable ||
+        !bounds ||
+        bounds.width <= 0 ||
+        bounds.height <= 0
+      ) {
+        if (continueFromDesktop) {
+          setActionNotice(continueFromDesktop);
+        } else {
+          showActionFailure(OPEN_FAILURE);
+        }
+        return false;
       }
-      const result = await openApplicationView(runId);
-      openingRef.current = false;
-      if (result.success) {
+      openingRef.current = true;
+      let boundsResult: OperationResult;
+      try {
+        boundsResult = await setApplicationBounds(bounds);
+      } catch {
+        if (continueFromDesktop) {
+          setActionNotice(continueFromDesktop);
+        } else {
+          showActionFailure(POSITION_FAILURE);
+        }
+        openingRef.current = false;
+        return false;
+      }
+      if (!boundsResult.success) {
+        if (continueFromDesktop) {
+          setActionNotice(continueFromDesktop);
+        } else {
+          showActionFailure(POSITION_FAILURE);
+        }
+        openingRef.current = false;
+        return false;
+      }
+      try {
+        if (closedRef.current) {
+          return false;
+        }
+        const result = await openApplicationView(runId);
+        if (!result.success) {
+          if (continueFromDesktop) {
+            setActionNotice(continueFromDesktop);
+          } else {
+            showActionFailure(OPEN_FAILURE);
+          }
+          return false;
+        }
         openedRef.current = true;
         closedRef.current = false;
+        setActionNotice(
+          completedAction
+            ? `${completedAction} request accepted/queued. Automation has not resumed until matching runtime progress reaches claiming or filling.`
+            : "Desktop reopen request accepted/queued. Automation has not resumed until matching runtime progress reaches claiming or filling.",
+        );
+        return true;
+      } catch {
+        if (continueFromDesktop) {
+          setActionNotice(continueFromDesktop);
+        } else {
+          showActionFailure(OPEN_FAILURE);
+        }
+        return false;
+      } finally {
+        openingRef.current = false;
       }
-    })();
-  }, [bounds, desktopAvailable, runId, supported]);
+    },
+    [
+      bounds,
+      desktopAvailable,
+      runId,
+      showActionFailure,
+      supported,
+    ],
+  );
 
-  const handleSubmit = async () => {
-    if (submitting) {
+  useEffect(() => {
+    if (
+      !run ||
+      action !== "REOPEN" ||
+      runtime.viewAttached ||
+      !supported ||
+      !desktopAvailable ||
+      !bounds
+    ) {
       return;
     }
+    const revision = runRevision(run);
+    if (openAttemptRef.current === revision || openingRef.current) {
+      return;
+    }
+    openAttemptRef.current = revision;
+    void requestDesktopOpen();
+  }, [
+    action,
+    bounds,
+    desktopAvailable,
+    requestDesktopOpen,
+    run,
+    runtime.viewAttached,
+    supported,
+  ]);
+
+  useEffect(() => {
+    if (
+      !openedRef.current ||
+      openingRef.current ||
+      !supported ||
+      !desktopAvailable ||
+      !bounds
+    ) {
+      return;
+    }
+    void runBridgeOperation(
+      () => setApplicationBounds(bounds),
+      POSITION_FAILURE,
+    );
+  }, [
+    bounds,
+    desktopAvailable,
+    runBridgeOperation,
+    supported,
+  ]);
+
+  const beginAction = () => {
+    if (actionLockRef.current) {
+      return false;
+    }
+    actionLockRef.current = true;
     setSubmitting(true);
     setActionError(null);
+    setActionNotice(null);
+    return true;
+  };
+
+  const finishAction = () => {
+    actionLockRef.current = false;
+    if (mountedRef.current) {
+      setSubmitting(false);
+    }
+  };
+
+  const reopenAfterMutation = async (
+    detail: ApplicationRunDetail,
+    completedAction: "resolved" | "released" | "resumed",
+  ) => {
+    openAttemptRef.current = runRevision(detail);
+    setRun(detail);
+    await requestDesktopOpen(completedAction);
+  };
+
+  const handleSubmit = async () => {
+    if (action !== "RELEASE_SUBMIT" || !beginAction()) {
+      return;
+    }
     try {
       const detail = await releaseSubmit(runId, OWNER_SUBMIT_CONFIRMATION);
-      setRun(detail);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Unable to release submission");
-      setSubmitting(false);
+      await reopenAfterMutation(detail, "released");
+    } catch {
+      setActionError(SUBMIT_FAILURE);
+    } finally {
+      finishAction();
     }
   };
 
   const handleCancel = async () => {
-    setSubmitting(true);
+    if (!beginAction()) {
+      return;
+    }
     try {
       const detail = await cancelApplicationRun(runId, "Owner cancelled from workspace");
       setRun(detail);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Unable to cancel the run");
+    } catch {
+      setActionError(CANCEL_FAILURE);
     } finally {
-      setSubmitting(false);
+      finishAction();
     }
   };
 
   const handleResolve = async (exceptionId: string, answers: ResolveAnswerItem[]) => {
-    setSubmitting(true);
-    setActionError(null);
+    if (action !== "RESOLVE" || !beginAction()) {
+      return;
+    }
     try {
       const detail = await resolveExceptionAnswers(runId, {
         exception_id: exceptionId,
         answers,
       });
-      setRun(detail);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Unable to resolve answers");
+      await reopenAfterMutation(detail, "resolved");
+    } catch {
+      setActionError(RESOLVE_FAILURE);
     } finally {
-      setSubmitting(false);
+      finishAction();
     }
   };
 
   const handleResume = async () => {
-    setSubmitting(true);
-    setActionError(null);
+    if (action !== "RESUME" || !beginAction()) {
+      return;
+    }
     try {
       const detail = await resumeApplicationRun(runId);
-      setRun(detail);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Unable to resume the run");
+      await reopenAfterMutation(detail, "resumed");
+    } catch {
+      setActionError(RESUME_FAILURE);
     } finally {
-      setSubmitting(false);
+      finishAction();
+    }
+  };
+
+  const handlePrimaryAction = () => {
+    switch (action) {
+      case "REOPEN":
+        void requestDesktopOpen();
+        break;
+      case "RELEASE_SUBMIT":
+        void handleSubmit();
+        break;
+      case "RESUME":
+        void handleResume();
+        break;
+      case "RESOLVE":
+      case "BLOCKED":
+      case null:
+        break;
+      default: {
+        const exhaustive: never = action;
+        throw new Error(`Unhandled durable action: ${String(exhaustive)}`);
+      }
     }
   };
 
   if (loadError && !run) {
     return (
       <div className="application-workspace-error" role="alert">
-        <h1>Unable to open workspace</h1>
-        <p>{loadError}</p>
-        <Link href="/jobs" className="btn btn-secondary">
-          Back to search
+        <h1>{loadError}</h1>
+        <p>Return to Applications and try opening this run again.</p>
+        <Link href="/applications" className="btn btn-secondary">
+          Back to Applications
         </Link>
       </div>
     );
@@ -305,6 +568,36 @@ export function ApplicationWorkspace({ runId }: { runId: string }) {
         <span className="sr-only">{workspacePath(runId)}</span>
       </div>
 
+      {launchOutcome === DESKTOP_OPEN_REQUESTED ? (
+        <p role="status" aria-label="Launch outcome">
+          Run accepted and queued. The desktop view request was accepted.
+          Automation has not resumed unless this run reports claiming or
+          filling.
+        </p>
+      ) : launchOutcome === DESKTOP_OPEN_UNAVAILABLE ? (
+        <p role="alert" aria-label="Launch outcome">
+          Run accepted and queued, but the desktop application view was
+          unavailable or failed to open. Review this workspace before
+          continuing.
+        </p>
+      ) : null}
+
+      {actionNotice ? (
+        <p role="status" aria-live="polite">
+          {actionNotice}
+        </p>
+      ) : null}
+      {runtime.runtimeState?.phase === "claiming" ||
+      runtime.runtimeState?.phase === "filling" ? (
+        <p role="status">Resumed progress confirmed by the matching runtime.</p>
+      ) : null}
+      {runtime.error ? (
+        <p role="alert">
+          Runtime status is unavailable. Durable backend state remains
+          authoritative.
+        </p>
+      ) : null}
+
       {!supported ? (
         <p className="workspace-unsupported" role="alert">
           This embedded workspace needs a 1280×720 window or larger. The native
@@ -327,11 +620,25 @@ export function ApplicationWorkspace({ runId }: { runId: string }) {
             <BrowserToolbar
               desktopAvailable={desktopAvailable}
               browserState={browserState}
-              onBack={() => void goBack()}
-              onForward={() => void goForward()}
-              onReload={() => void reloadApplicationView()}
+              onBack={() =>
+                void runBridgeOperation(goBack, BACK_FAILURE)
+              }
+              onForward={() =>
+                void runBridgeOperation(goForward, FORWARD_FAILURE)
+              }
+              onReload={() =>
+                void runBridgeOperation(reloadApplicationView, RELOAD_FAILURE)
+              }
             />
-            <BrowserViewport onBounds={setBounds} onSupportedChange={setSupported} />
+            <BrowserViewport
+              onBounds={setBounds}
+              onSupportedChange={setSupported}
+              viewSurrendered={
+                runtime.viewAttached === false &&
+                (runtime.runtimeState?.phase === "armed" ||
+                  runtime.runtimeState?.phase === "paused")
+              }
+            />
           </section>
 
           <aside className="application-workspace-assist" aria-label="Assistance">
@@ -343,11 +650,23 @@ export function ApplicationWorkspace({ runId }: { runId: string }) {
               onResolve={(exceptionId, answers) => void handleResolve(exceptionId, answers)}
               onResume={() => void handleResume()}
             />
+            {run.status === "paused_auth" &&
+            isHttpsApplicationUrl(run.application_url) ? (
+              <a
+                className="btn btn-secondary"
+                href={run.application_url}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                Open external application
+              </a>
+            ) : null}
             <SubmissionReceipt
               status={run.status}
               receipt={run.receipt_summary}
               evidence={run.evidence}
               terminalReason={run.terminal_reason}
+              applicationUrl={run.application_url}
             />
           </aside>
         </div>
@@ -363,11 +682,18 @@ export function ApplicationWorkspace({ runId }: { runId: string }) {
         status={run.status}
         checkpoint={run.current_checkpoint}
         exceptions={run.exceptions}
-        openRunId={browserState.runId}
-        routeRunId={runId}
+        mode={run.automation_mode}
+        automaticSubmissionAuthorized={run.automatic_submission_authorized}
+        automaticSubmissionAuthorizedAt={
+          run.automatic_submission_authorized_at
+        }
+        submitAttemptedAt={run.submit_attempted_at}
+        runtimePhase={runtime.runtimeState?.phase ?? null}
+        runtimeReasonText={runtimeReason}
+        action={action}
         submitting={submitting}
         disconnected={disconnected}
-        onSubmit={() => void handleSubmit()}
+        onPrimaryAction={handlePrimaryAction}
         onCancel={() => void handleCancel()}
       />
     </div>

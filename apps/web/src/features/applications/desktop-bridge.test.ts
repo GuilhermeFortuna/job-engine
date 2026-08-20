@@ -3,13 +3,16 @@ import {
   closeApplicationView,
   getCapabilities,
   getDesktopBridge,
+  getRuntimeState,
   goBack,
   goForward,
+  isProductionRuntimeReady,
   measureViewportBounds,
   openApplicationView,
   reloadApplicationView,
   setApplicationBounds,
   subscribeBrowserState,
+  subscribeRuntimeState,
 } from "./desktop-bridge";
 import type { JobEngineDesktopAPI } from "./desktop-bridge";
 
@@ -18,6 +21,7 @@ function mockBridge(overrides: Partial<JobEngineDesktopAPI> = {}): JobEngineDesk
     getCapabilities: vi.fn().mockResolvedValue({
       embeddedBrowser: true,
       platform: "linux",
+      productionRuntime: true,
     }),
     openApplication: vi.fn().mockResolvedValue({ success: true }),
     setApplicationBounds: vi.fn().mockResolvedValue({ success: true }),
@@ -25,7 +29,18 @@ function mockBridge(overrides: Partial<JobEngineDesktopAPI> = {}): JobEngineDesk
     goBack: vi.fn().mockResolvedValue({ success: true }),
     goForward: vi.fn().mockResolvedValue({ success: true }),
     reload: vi.fn().mockResolvedValue({ success: true }),
+    getRuntimeState: vi.fn().mockResolvedValue({
+      runId: null,
+      phase: "idle",
+      status: null,
+      checkpoint: null,
+      automationMode: null,
+      adapterId: null,
+      reasonCode: null,
+      blockingFieldCount: 0,
+    }),
     subscribeBrowserState: vi.fn().mockReturnValue(() => {}),
+    subscribeRuntimeState: vi.fn().mockReturnValue(() => {}),
     ...overrides,
   };
 }
@@ -41,6 +56,7 @@ describe("desktop bridge", () => {
     await expect(getCapabilities()).resolves.toEqual({
       embeddedBrowser: false,
       platform: null,
+      productionRuntime: false,
     });
     await expect(openApplicationView("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")).resolves.toEqual({
       success: false,
@@ -51,6 +67,11 @@ describe("desktop bridge", () => {
       error: "Desktop bridge unavailable",
     });
     expect(subscribeBrowserState(() => {})).toEqual(expect.any(Function));
+    await expect(getRuntimeState()).resolves.toMatchObject({
+      phase: "idle",
+      reasonCode: null,
+    });
+    expect(subscribeRuntimeState(() => {})).toEqual(expect.any(Function));
   });
 
   it("exposes capabilities only through the typed window bridge", async () => {
@@ -58,8 +79,72 @@ describe("desktop bridge", () => {
     await expect(getCapabilities()).resolves.toEqual({
       embeddedBrowser: true,
       platform: "linux",
+      productionRuntime: true,
     });
     expect(window.jobEngineDesktop.getCapabilities).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires the production runtime capability for automation readiness", () => {
+    expect(
+      isProductionRuntimeReady({
+        embeddedBrowser: true,
+        platform: "linux",
+        productionRuntime: false,
+      }),
+    ).toBe(false);
+    expect(
+      isProductionRuntimeReady({
+        embeddedBrowser: true,
+        platform: "linux",
+        productionRuntime: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("gets and subscribes to the redacted CROSS-012 runtime state", async () => {
+    const state = {
+      runId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      phase: "paused" as const,
+      status: "needs_input",
+      checkpoint: "questions_answered",
+      automationMode: "full_auto",
+      adapterId: "greenhouse",
+      reasonCode: "NEEDS_INPUT" as const,
+      blockingFieldCount: 2,
+    };
+    const listener = vi.fn();
+    const unsubscribe = vi.fn();
+    const bridge = mockBridge({
+      getRuntimeState: vi.fn().mockResolvedValue(state),
+      subscribeRuntimeState: vi.fn().mockImplementation((callback) => {
+        callback(state);
+        return unsubscribe;
+      }),
+    });
+    window.jobEngineDesktop = bridge;
+
+    await expect(getRuntimeState()).resolves.toEqual(state);
+    const stop = subscribeRuntimeState(listener);
+
+    expect(listener).toHaveBeenCalledWith(state);
+    stop();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a no-op subscription for incomplete or throwing bridges", () => {
+    window.jobEngineDesktop = {} as JobEngineDesktopAPI;
+    const missingStop = subscribeRuntimeState(() => {});
+    expect(missingStop).toEqual(expect.any(Function));
+    expect(() => missingStop()).not.toThrow();
+
+    window.jobEngineDesktop = {
+      subscribeRuntimeState: vi.fn(() => {
+        throw new Error("preload disconnected");
+      }),
+    } as unknown as JobEngineDesktopAPI;
+    const throwingStop = subscribeRuntimeState(() => {});
+    expect(throwingStop).toEqual(expect.any(Function));
+    expect(() => throwingStop()).not.toThrow();
   });
 
   it("opens by run ID only after bounds are reported", async () => {
