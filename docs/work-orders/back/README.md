@@ -16,5 +16,6 @@ Backend orders own Python/FastAPI domain behavior, source ingestion, PostgreSQL 
 | [BACK-010](BACK-010-application-orchestration-audit.md) | Application orchestration, queue, and audit | `DONE` |
 | [BACK-011](BACK-011-grounded-application-answering.md) | Grounded application answering | `DONE` |
 | [BACK-012](BACK-012-full-auto-authorization.md) | Explicit full-auto authorization and audit semantics | `BLOCKED` |
+| [BACK-013](BACK-013-hybrid-ai-answer-provider.md) | Hybrid local/Gemini grounded answer provider | `BLOCKED` |
 
 The authoritative live status is the project-wide [Work Order Status](../STATUS.md).

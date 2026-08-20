@@ -80,11 +80,13 @@ Batch 04 repairs the gap between Batch 03's tested modules and the visible produ
 
 - [`CROSS-011`](cross-repo/CROSS-011-auto-apply-outcome-lock.md): freeze the V2.1 outcome, audit production wiring, and bind downstream contracts
 - [`BACK-012`](back/BACK-012-full-auto-authorization.md): persist and enforce exact owner authorization for unattended submission
+- [`BACK-013`](back/BACK-013-hybrid-ai-answer-provider.md): add deterministic-first local/Gemini grounded narrative answers and an evaluation/privacy gate
 - [`CROSS-012`](cross-repo/CROSS-012-production-runtime-integration.md): compose the automation runtime from the production Electron main process
+- [`CROSS-014`](cross-repo/CROSS-014-broad-application-platform-coverage.md): inventory downstream ATS providers and prove broad embedded-browser auto-apply coverage
 - [`FRONT-006`](front/FRONT-006-visible-automation-control-center.md): expose Applications, readiness, explicit modes, actions, exceptions, and results
 - [`CROSS-013`](cross-repo/CROSS-013-auto-apply-production-acceptance.md): prove the real production path and obtain owner-visible acceptance
 
-Only `CROSS-011` begins `READY`. Later orders remain `BLOCKED` until the authoritative status board records their prerequisites and owner approval.
+Only `CROSS-011` begins `READY`. After it is accepted, BACK-012 and BACK-013 may proceed independently when the authoritative status board marks them `READY`; later orders remain `BLOCKED` until their recorded prerequisites and owner approval are complete.
 
 ## Work Order contract
 

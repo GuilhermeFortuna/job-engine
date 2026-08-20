@@ -6,7 +6,7 @@
 
 **Depends on:** CROSS-011, BACK-012
 
-**Unblocks:** CROSS-013
+**Unblocks:** CROSS-014, CROSS-013
 
 **Product contract:** `docs/v2.1-auto-apply-outcome-contract.md` after CROSS-011 acceptance
 

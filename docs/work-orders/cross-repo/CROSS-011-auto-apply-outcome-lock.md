@@ -6,7 +6,7 @@
 
 **Depends on:** CROSS-009 evidence
 
-**Unblocks:** BACK-012, CROSS-012, FRONT-006
+**Unblocks:** BACK-012, BACK-013, CROSS-012, CROSS-014, FRONT-006
 
 **Product authority:** Owner-approved Batch 04 outcome in this order; the completed deliverable becomes `docs/v2.1-auto-apply-outcome-contract.md`
 
@@ -19,9 +19,11 @@ Freeze the user-visible V2.1 outcome before more code is written, audit the diff
 - `/docs/v2.1-auto-apply-outcome-contract.md` (new)
 - `/docs/automation/production-wiring-audit.md` (new)
 - `/docs/work-orders/back/BACK-012-full-auto-authorization.md` (binding updates only)
+- `/docs/work-orders/back/BACK-013-hybrid-ai-answer-provider.md` (binding updates only)
 - `/docs/work-orders/cross-repo/CROSS-012-production-runtime-integration.md` (binding updates only)
 - `/docs/work-orders/front/FRONT-006-visible-automation-control-center.md` (binding updates only)
 - `/docs/work-orders/cross-repo/CROSS-013-auto-apply-production-acceptance.md` (binding updates only)
+- `/docs/work-orders/cross-repo/CROSS-014-broad-application-platform-coverage.md` (binding updates only)
 - `/docs/work-orders/README.md` and directory indexes (Batch 04 binding text only)
 
 Do not edit product code, tests, fixtures, existing Batch 03 completion records, or approval statuses.
@@ -38,10 +40,13 @@ The outcome contract must state all of the following without weakening them:
 6. No autonomous job selection, fabricated applicant fact, credential capture, CAPTCHA bypass, access-control bypass, or blind retry after a submission attempt is allowed.
 7. The Applications destination exposes readiness, queued/running/needs-attention/terminal state, mode, selected resume, audit progress, and receipt or uncertainty.
 8. Ordinary browser use remains safe and explains that automation requires the desktop runtime.
+9. AI is a bounded, deterministic-policy-first answer provider for permitted narrative fields. It never selects jobs, controls the browser, answers sensitive/legal facts, or authorizes submission from model self-confidence. Local development and Gemini production use the same schema/evidence contract and fail closed.
+10. The embedded Chromium surface is the production automation surface. Auto Apply targets every technically automatable standard form and broad measured ATS coverage, beginning with generic HTML, Greenhouse, and Lever and evaluating Ashby, SmartRecruiters, Workday, and every provider found in the frozen catalog inventory. Unsupported pages remain visible with an exact reason; universal coverage is never claimed without evidence.
 
 ## Required audit
 
 - Trace the production path from `apps/desktop/src/main/index.ts` through IPC, `ApplicationViewManager`, the application session, runtime coordinator, lease, `StepRunner`, form transport, adapter, backend events, and receipt.
+- Trace the answer path from observed field through deterministic policy, frozen evidence, `AnswerProvider`, schema/claim validation, derived submission eligibility, runner fill, and exception state. Distinguish local, Gemini, and deterministic behavior.
 - Record every production path that is absent or composed only by tests/fixture drivers. In particular, verify whether any production module instantiates `StepRunner`, `LeaseManager`, `RunnerClient`, `EvidenceRecorder`, and Greenhouse/Lever/generic adapters.
 - Produce a matrix with columns: owner outcome, Work Order, production entrypoint, implementation file, automated proof, real-Electron proof, owner-visible proof, and current gap.
 - Compare the original automatic-submission decision, the later semi-auto pivot, the current V2 specification, Work Orders, implementation, and acceptance evidence. Mark superseded behavior explicitly; do not silently rewrite history.
@@ -62,7 +67,7 @@ The outcome contract must state all of the following without weakening them:
 ```bash
 rg -n "StepRunner|LeaseManager|RunnerClient|EvidenceRecorder" apps/desktop/src/main
 rg -n "FULL_AUTO|SEMI_AUTO_PAUSE_BEFORE_SUBMIT|release-submit" docs apps
-rg -n "T[B]D|TO_BE_BOUN[D]|PENDING_OWNE[R]" docs/v2.1-auto-apply-outcome-contract.md docs/automation/production-wiring-audit.md docs/work-orders/{back/BACK-012-full-auto-authorization.md,cross-repo/CROSS-012-production-runtime-integration.md,front/FRONT-006-visible-automation-control-center.md,cross-repo/CROSS-013-auto-apply-production-acceptance.md}
+rg -n "T[B]D|TO_BE_BOUN[D]|PENDING_OWNE[R]" docs/v2.1-auto-apply-outcome-contract.md docs/automation/production-wiring-audit.md docs/work-orders/{back/BACK-012-full-auto-authorization.md,back/BACK-013-hybrid-ai-answer-provider.md,cross-repo/CROSS-012-production-runtime-integration.md,cross-repo/CROSS-014-broad-application-platform-coverage.md,front/FRONT-006-visible-automation-control-center.md,cross-repo/CROSS-013-auto-apply-production-acceptance.md}
 git diff --check
 ```
 
@@ -72,6 +77,7 @@ git diff --check
 - The before/after table makes the removal of the routine final click explicit.
 - The wiring audit distinguishes production reachability from fixture-only execution and names every missing binding.
 - Every fixed outcome maps to one implementation owner and one production-path acceptance scenario.
+- The AI boundary binds deterministic-first policy, local/Gemini parity, privacy activation, derived submission eligibility, and provider-independent failure behavior without making AI a browser agent.
 - Downstream Work Orders contain no unresolved behavior, API, mode, route, or acceptance placeholder.
 - The owner reviews the rendered contract and explicitly approves or rejects it before any downstream order becomes `READY`.
 

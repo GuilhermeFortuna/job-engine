@@ -17,5 +17,6 @@ Job Engine is a monorepo. `CROSS-` orders own root-level concerns spanning backe
 | [CROSS-011](CROSS-011-auto-apply-outcome-lock.md) | Auto-apply outcome lock and production-wiring audit | `READY` |
 | [CROSS-012](CROSS-012-production-runtime-integration.md) | Production Electron automation runtime integration | `BLOCKED` |
 | [CROSS-013](CROSS-013-auto-apply-production-acceptance.md) | Auto-apply production-path acceptance | `BLOCKED` |
+| [CROSS-014](CROSS-014-broad-application-platform-coverage.md) | Broad application-platform coverage | `BLOCKED` |
 
 The authoritative live status is the project-wide [Work Order Status](../STATUS.md).

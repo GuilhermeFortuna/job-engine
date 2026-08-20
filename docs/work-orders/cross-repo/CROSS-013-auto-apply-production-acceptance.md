@@ -4,7 +4,7 @@
 
 **Owner:** Unassigned
 
-**Depends on:** BACK-012, CROSS-012, FRONT-006
+**Depends on:** BACK-012, BACK-013, CROSS-012, CROSS-014, FRONT-006
 
 **Unblocks:** Batch 04 completion
 
@@ -24,7 +24,7 @@ No product implementation, fixture expectation, selector, policy, personal data,
 
 ## Entry gate
 
-- CROSS-011, BACK-012, CROSS-012, and FRONT-006 are `DONE` in `docs/work-orders/STATUS.md`.
+- CROSS-011, BACK-012, BACK-013, CROSS-012, CROSS-014, and FRONT-006 are `DONE` in `docs/work-orders/STATUS.md`.
 - The candidate commit is named, clean, and built from a frozen lockfile.
 - A disposable PostgreSQL database, synthetic applicant/profile/answer bank/resume, and local HTTPS generic/Greenhouse/Lever sites are available.
 - The compiled Electron production main entrypoint is used; test-only runtime composition is prohibited.
@@ -59,7 +59,22 @@ No product implementation, fixture expectation, selector, policy, personal data,
 2. Open the ordinary browser UI and verify it explains the desktop requirement while retaining safe external application links.
 3. Verify remote content cannot access Electron, IPC, filesystem, tokens, cookies from another profile, or the trusted renderer.
 
-### E. Owner-visible acceptance
+### E. Hybrid AI answer boundary
+
+1. Run the committed synthetic corpus through recorded offline responses and the configured loopback local model; prove deterministic/profile/answer-bank answers bypass AI and prohibited/sensitive intents always abstain.
+2. Exercise permitted narrative questions with valid evidence, missing evidence, unsupported claims, prompt injection, malformed schema, timeout, unavailable model, budget exhaustion, and low-quality output.
+3. Prove provider self-confidence cannot authorize `AUTO_FILL_AND_SUBMIT`; only the exact provider/model/prompt revision accepted by BACK-013's deterministic evaluation gate can make a generated answer submission-eligible.
+4. Run an opt-in Gemini smoke with synthetic data only unless the exact paid-project privacy attestation is owner-accepted. Verify backend-only key custody, structured output, provider/model audit identity, and fail-closed behavior.
+5. Confirm AI never selects a job, navigates/clicks the ATS, uploads a file, releases a run, or activates submit.
+
+### F. Broad application-platform coverage
+
+1. Recalculate CROSS-014's frozen platform inventory and verify that every application URL from all approved job sources is classified by downstream application provider and support tier.
+2. Run every counted generic/ATS family through the compiled production Electron entrypoint; verify that all committed standard-form scenarios and at least 95% of eligible inventory URLs are represented by proven auto-supported families.
+3. Inspect Ashby, SmartRecruiters, Workday, and every additional inventoried provider decision. Verify unsupported families remain visible with an exact assisted/manual reason and are excluded honestly from the numerator.
+4. Prove the embedded Chromium page is the surface operated by deterministic runtime code and AI supplies only bounded grounded answer decisions.
+
+### G. Owner-visible acceptance
 
 1. Record screenshots or video of the exact desktop journey at 1440x900 and 1280x720.
 2. Give the owner the candidate commit, launch command, selected synthetic scenario, expected UI labels, and evidence location.
@@ -77,6 +92,7 @@ corepack pnpm run build
 corepack pnpm --filter @job-engine/desktop run test:production
 corepack pnpm --filter @job-engine/desktop run test:fixtures
 corepack pnpm --filter @job-engine/web run test:e2e -- auto-apply-control-center.spec.ts
+cd apps/api && uv run pytest tests/domain/test_application_answers.py tests/services/test_answer_providers.py tests/services/test_application_answers.py
 git status --short
 git diff --check
 ```
@@ -88,6 +104,8 @@ git diff --check
 - One initial owner authorization is sufficient for supported full-auto submission; routine success has no second click.
 - Only explicitly selected jobs and frozen applicant/resume data are used.
 - Genuine exceptions pause safely and remain actionable in the visible Applications UI.
+- Local and Gemini providers obey one deterministic-first schema/evidence policy; unaccepted models remain review-only, and self-reported confidence never unlocks submission.
+- All standard-form scenarios and the measured broad-provider target pass through production; the final report states the actual coverage percentage and every unsupported provider without claiming unevidenced universality.
 - Submission activation is at most once; ambiguous results remain non-success and cannot be blindly retried.
 - Assisted mode, ordinary-browser fallback, isolation, accessibility, and restart recovery remain correct.
 - Automated evidence, real-Electron evidence, and owner-visible acceptance are independently recorded against one clean commit.

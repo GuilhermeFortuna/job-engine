@@ -65,9 +65,11 @@ then continue. A stale placeholder is not an owner-approval request.
 | [CROSS-009](cross-repo/CROSS-009-automated-application-acceptance.md) | Cross    | `REVIEW` | BACK-009, BACK-010, BACK-011, CROSS-006, CROSS-010, CROSS-007, CROSS-008, FRONT-005 | Batch 03 embedded assisted-apply acceptance                               |
 | [CROSS-011](cross-repo/CROSS-011-auto-apply-outcome-lock.md)          | Cross    | `READY`  | CROSS-009 evidence                                                                  | V2.1 outcome lock, drift reconciliation, and production-wiring audit      |
 | [BACK-012](back/BACK-012-full-auto-authorization.md)                  | Backend  | `BLOCKED` | CROSS-011                                                                          | Explicit full-auto authorization and durable audit semantics              |
+| [BACK-013](back/BACK-013-hybrid-ai-answer-provider.md)                | Backend  | `BLOCKED` | CROSS-011, BACK-011                                                                | Hybrid local/Gemini grounded answer provider and evaluation gate          |
 | [CROSS-012](cross-repo/CROSS-012-production-runtime-integration.md)   | Cross    | `BLOCKED` | CROSS-011, BACK-012                                                                | Production Electron automation runtime integration                        |
+| [CROSS-014](cross-repo/CROSS-014-broad-application-platform-coverage.md) | Cross | `BLOCKED` | CROSS-011, BACK-013, CROSS-012                                                    | Broad measured ATS and standard-form auto-apply coverage                   |
 | [FRONT-006](front/FRONT-006-visible-automation-control-center.md)     | Frontend | `BLOCKED` | CROSS-011, BACK-012                                                                | Visible automation control center, readiness, and launch UI                |
-| [CROSS-013](cross-repo/CROSS-013-auto-apply-production-acceptance.md) | Cross    | `BLOCKED` | BACK-012, CROSS-012, FRONT-006                                                     | Production-path auto-apply acceptance and owner-visible proof             |
+| [CROSS-013](cross-repo/CROSS-013-auto-apply-production-acceptance.md) | Cross    | `BLOCKED` | BACK-012, BACK-013, CROSS-012, CROSS-014, FRONT-006                                | Production-path auto-apply acceptance and owner-visible proof             |
 
 
 
@@ -101,14 +103,16 @@ BACK-009 + BACK-010 + BACK-011 + CROSS-006 + CROSS-010
 
 CROSS-009 evidence -> CROSS-011 (Batch 04 Outcome Lock)
 CROSS-011 -> BACK-012
+          -> BACK-013
 CROSS-011 + BACK-012 -> CROSS-012
                          -> FRONT-006
-BACK-012 + CROSS-012 + FRONT-006 -> CROSS-013 (Batch 04 Acceptance)
+BACK-013 + CROSS-012 -> CROSS-014
+BACK-012 + BACK-013 + CROSS-012 + CROSS-014 + FRONT-006 -> CROSS-013 (Batch 04 Acceptance)
 ```
 
 `BACK-005`, `BACK-006`, and `BACK-007` may proceed in parallel after their prerequisites are `DONE`. Documentation research in `CROSS-002` may proceed in parallel with `CROSS-001`.
 
-For Batch 04, `CROSS-011` is the only `READY` order. It freezes the owner-visible outcome and binds production-path evidence before more implementation. After owner acceptance makes `CROSS-011` `DONE`, `BACK-012` may proceed. `CROSS-012` and `FRONT-006` may proceed in parallel only after `BACK-012` is `DONE` and their statuses are explicitly changed to `READY`.
+For Batch 04, `CROSS-011` is the only `READY` order. It freezes the owner-visible outcome and binds production-path evidence before more implementation. After owner acceptance makes `CROSS-011` `DONE`, `BACK-012` and `BACK-013` may proceed in parallel when their statuses are explicitly changed to `READY`. `CROSS-012` and `FRONT-006` may proceed in parallel only after `BACK-012` is `DONE` and their statuses are explicitly changed to `READY`. `CROSS-014` follows the production runtime plus AI-answer boundary and must finish before final acceptance.
 
 ### Batch completion rule
 
@@ -160,6 +164,8 @@ For Batch 04, `CROSS-011` is the only `READY` order. It freezes the owner-visibl
 | 2026-08-17 | CROSS-005 | Bound [playwright@1.62.1](mailto:playwright@1.62.1), chromium, greenhouse (primary 1), lever (primary 2), ashby (backup 1), smartrecruiters (backup 2), 6-category answer policy, automation modes (FULL_AUTO, SEMI_AUTO), SUBMISSION_UNKNOWN state, retry stages, and LLM cost cap | Antigravity agent |
 | 2026-08-18 | Batch 03  | Owner superseded unattended-first presentation/runtime scope with an Electron embedded application workspace. Batch 03 exposes one visible `SEMI_AUTO_PAUSE_BEFORE_SUBMIT` run, requires explicit owner release, retains Playwright for testing, and defers `FULL_AUTO`.            | Project owner     |
 | 2026-08-19 | Batch 04  | Owner approved a remediation batch that restores visible, owner-selected supported-platform auto apply, removes the routine second submission click for authorized `FULL_AUTO`, requires production Electron wiring rather than fixture-only proof, and adds outcome-lock/change-control gates. | Project owner |
+| 2026-08-19 | BACK-013 | Owner added a hybrid AI answer layer to Batch 04: loopback local models for development and Gemini support through a backend-only API key, while deterministic policy, evidence validation, privacy gates, and production runtime retain authority. | Project owner |
+| 2026-08-19 | CROSS-014 | Owner clarified that Auto Apply must operate the browser embedded in the desktop UI and target broad provider coverage—ideally every technically automatable provider—while unsupported or gated cases pause visibly and AI remains bounded by deterministic runtime controls. | Project owner |
 
 
 | 2026-08-19 | CROSS-009 | Batch 03 acceptance executed against commit `e433810` on synthetic evidence only. Decision `CONDITIONAL_GO`: all nine acceptance criteria met except live-inspection evidence, which was not produced because `LEGAL-GATE-ATS-001` is OPEN and no owner authorization named a live target. Report: `/docs/evidence/embedded-assisted-apply-acceptance.md`. Status remains owner-controlled. | CROSS-009 agent |
