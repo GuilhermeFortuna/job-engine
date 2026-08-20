@@ -12,6 +12,7 @@ import type { ClaimResponse, ReleaseReason, RunnerClient } from "./runner-client
 export type ClaimRefusal =
   | "NOT_CLAIMABLE"
   | "UNSUPPORTED_AUTOMATION_MODE"
+  | "UNAUTHORIZED_FULL_AUTO"
   | "PREVIOUSLY_REFUSED";
 
 export interface ClaimOutcome {
@@ -32,7 +33,30 @@ const DEFAULT_TIMERS: LeaseTimers = {
 /** Backend lease lifetime is 60s; beat well inside it. */
 export const HEARTBEAT_INTERVAL_MS = 15_000;
 
-export const SUPPORTED_AUTOMATION_MODE = "semi_auto_pause_before_submit";
+export const SEMI_AUTO_MODE = "semi_auto_pause_before_submit";
+export const FULL_AUTO_MODE = "full_auto";
+
+/** @deprecated Batch 03 alias; production accepts authorized full-auto as well. */
+export const SUPPORTED_AUTOMATION_MODE = SEMI_AUTO_MODE;
+
+function isSupportedClaim(run: {
+  automation_mode: string;
+  automatic_submission_authorized?: boolean;
+}): ClaimRefusal | null {
+  if (run.automation_mode === SEMI_AUTO_MODE) {
+    return null;
+  }
+  if (
+    run.automation_mode === FULL_AUTO_MODE &&
+    run.automatic_submission_authorized === true
+  ) {
+    return null;
+  }
+  if (run.automation_mode === FULL_AUTO_MODE) {
+    return "UNAUTHORIZED_FULL_AUTO";
+  }
+  return "UNSUPPORTED_AUTOMATION_MODE";
+}
 
 export class LeaseManager {
   private current: ClaimResponse | null = null;
@@ -93,14 +117,15 @@ export class LeaseManager {
       return { claim: null, refusal: "NOT_CLAIMABLE" };
     }
 
-    if (claim.run.automation_mode !== SUPPORTED_AUTOMATION_MODE) {
+    const modeRefusal = isSupportedClaim(claim.run);
+    if (modeRefusal !== null) {
       this.refused.add(runId);
       await this.safeRelease(
         runId,
         claim.lease_token,
         "unsupported_automation_mode",
       );
-      return { claim: null, refusal: "UNSUPPORTED_AUTOMATION_MODE" };
+      return { claim: null, refusal: modeRefusal };
     }
 
     // A targeted claim cannot return another run, but a mismatch would mean

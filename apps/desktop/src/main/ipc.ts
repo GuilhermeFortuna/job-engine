@@ -2,6 +2,8 @@ import { ipcMain, IpcMainInvokeEvent } from "electron";
 import {
   ApplicationBounds,
   DesktopCapabilities,
+  DesktopRuntimeState,
+  INITIAL_RUNTIME_STATE,
   IPC_CHANNELS,
   OpenApplicationParams,
   OperationResult,
@@ -9,6 +11,7 @@ import {
 import { fetchApplicationRun, isValidUuid } from "./api-client";
 import { ApplicationViewManager } from "./application-view";
 import { DesktopConfig } from "./config";
+import type { RuntimeCoordinator } from "./runtime/coordinator";
 
 export function isTrustedSender(
   event: IpcMainInvokeEvent,
@@ -27,9 +30,9 @@ export function isTrustedSender(
 
 export function registerIpcHandlers(
   viewManager: ApplicationViewManager,
-  config: DesktopConfig
+  config: DesktopConfig,
+  coordinator?: RuntimeCoordinator
 ): void {
-  // Remove existing handlers if reloading/re-registering
   for (const channel of Object.values(IPC_CHANNELS)) {
     ipcMain.removeHandler(channel);
   }
@@ -43,7 +46,18 @@ export function registerIpcHandlers(
       return {
         embeddedBrowser: true,
         platform: process.platform,
+        productionRuntime: coordinator !== undefined,
       };
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.GET_RUNTIME_STATE,
+    (event): DesktopRuntimeState => {
+      if (!isTrustedSender(event, config.webOrigin)) {
+        throw new Error("Unauthorized IPC sender: forbidden frame origin");
+      }
+      return coordinator ? coordinator.getState() : { ...INITIAL_RUNTIME_STATE };
     }
   );
 
@@ -71,6 +85,9 @@ export function registerIpcHandlers(
           config.runnerSecret
         );
 
+        if (coordinator) {
+          return await coordinator.openRun(run.runId, run.applicationUrl);
+        }
         return await viewManager.openApplication(run.runId, run.applicationUrl);
       } catch (err) {
         return {
@@ -107,9 +124,12 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.CLOSE_APPLICATION,
-    (event): OperationResult => {
+    (event): OperationResult | Promise<OperationResult> => {
       if (!isTrustedSender(event, config.webOrigin)) {
         throw new Error("Unauthorized IPC sender: forbidden frame origin");
+      }
+      if (coordinator) {
+        return coordinator.closeActive();
       }
       return viewManager.closeApplication();
     }

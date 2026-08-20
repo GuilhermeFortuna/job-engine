@@ -1,9 +1,9 @@
-"""Seed a disposable database with one synthetic semi-auto application run.
+"""Seed a disposable database with profile, resume, and one catalog job.
 
-Used only by the desktop real-backend lifecycle fixture. Every value here is
-invented: no employer site is contacted and no personal data appears.
+Used by CROSS-012 production smoke. The smoke creates the application run
+through POST /api/v1/application-runs rather than inserting it here.
 
-Prints one JSON object to stdout describing what the fixture needs.
+Prints one JSON object to stdout.
 """
 
 from __future__ import annotations
@@ -21,14 +21,12 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
-API_ROOT = Path(__file__).resolve().parents[4] / "api"
+API_ROOT = Path(__file__).resolve().parents[3] / "api"
 sys.path.insert(0, str(API_ROOT / "src"))
 
 from job_engine.config import DOCUMENTED_DATABASE_URL  # noqa: E402
 from job_engine.db.repositories import (  # noqa: E402
     ApplicantVaultRepository,
-    ApplicationRepository,
-    ApplicationRunInput,
     CatalogRepository,
 )
 from job_engine.db.session import create_engine as create_async_engine  # noqa: E402
@@ -41,18 +39,13 @@ from job_engine.domain.applicant import (  # noqa: E402
     ResumeAssetInput,
     ValueState,
 )
-from job_engine.domain.applications import (  # noqa: E402
-    AutomationMode,
-    calculate_answer_bank_hash,
-    calculate_idempotency_key,
-)
 from job_engine.domain.enums import (  # noqa: E402
     EmploymentType,
     JobStatus,
     RemoteStatus,
     Seniority,
 )
-from job_engine.domain.jobs import Compensation, JobGroupInput  # noqa: E402
+from job_engine.domain.jobs import Compensation, JobGroupInput, SourcePostingInput  # noqa: E402
 
 SYNTHETIC_PDF = b"%PDF-1.4 synthetic fixture resume\n%%EOF\n"
 
@@ -68,13 +61,13 @@ def _owner_field(value: str) -> ConfirmedField[str]:
 
 
 def create_database(db_name: str) -> str:
-    admin_url = make_url(DOCUMENTED_DATABASE_URL)
     engine = create_engine(to_sync_url(DOCUMENTED_DATABASE_URL), isolation_level="AUTOCOMMIT")
     try:
         with engine.connect() as connection:
             connection.execute(text(f'CREATE DATABASE "{db_name}"'))
     finally:
         engine.dispose()
+    admin_url = make_url(DOCUMENTED_DATABASE_URL)
     return admin_url.set(database=db_name).render_as_string(hide_password=False)
 
 
@@ -86,7 +79,13 @@ def migrate(database_url: str) -> None:
     command.upgrade(config, "head")
 
 
-async def seed(database_url: str, application_url: str, resume_root: Path) -> dict[str, str]:
+async def seed(
+    database_url: str,
+    application_url: str,
+    canonical_url: str,
+    source_id: str,
+    resume_root: Path,
+) -> dict[str, str]:
     resume_root.mkdir(parents=True, exist_ok=True)
     pdf_path = resume_root / "synthetic-resume.pdf"
     pdf_path.write_bytes(SYNTHETIC_PDF)
@@ -96,7 +95,7 @@ async def seed(database_url: str, application_url: str, resume_root: Path) -> di
     factory = create_session_factory(engine)
     async with factory() as session:
         vault = ApplicantVaultRepository(session)
-        profile = await vault.replace_profile(
+        await vault.replace_profile(
             ApplicantProfileInput(
                 first_name=_owner_field("Ada"),
                 last_name=_owner_field("Fixture"),
@@ -129,7 +128,7 @@ async def seed(database_url: str, application_url: str, resume_root: Path) -> di
                 company="Fixture Industries",
                 company_original="Fixture Industries",
                 company_comparison_key="fixture industries",
-                description="Synthetic role used only by the desktop fixture suite.",
+                description="Synthetic role used only by the desktop production smoke.",
                 location_original="Remote",
                 location_comparison_key="remote",
                 location_normalized_country="PT",
@@ -148,47 +147,49 @@ async def seed(database_url: str, application_url: str, resume_root: Path) -> di
                 last_ingestion_run_id=None,
             )
         )
-
-        answer_bank_snapshot: dict[str, int] = {}
-        answer_bank_hash = calculate_answer_bank_hash(answer_bank_snapshot)
-        runs = ApplicationRepository(session)
-        run = await runs.create_run(
-            ApplicationRunInput(
-                job_group_id=group.id,
-                source_posting_id=None,
-                canonical_application_url=application_url,
+        posting = await catalog.upsert_source_posting(
+            SourcePostingInput(
+                source_id=source_id,
+                source_posting_id="smoke-1",
+                source_name=source_id,
                 application_url=application_url,
-                platform_adapter_id="generic",
-                resume_asset_id=resume.id,
-                resume_sha256=resume_sha256,
-                applicant_profile_version=profile.version,
-                answer_bank_snapshot=answer_bank_snapshot,
-                answer_bank_hash=answer_bank_hash,
-                automation_mode=AutomationMode.SEMI_AUTO_PAUSE_BEFORE_SUBMIT,
-                idempotency_key=calculate_idempotency_key(
-                    application_url, resume_sha256, profile.version, answer_bank_hash
-                ),
-                policy_snapshot={
-                    "profile_version": profile.version,
-                    "resume_id": resume.resume_id,
-                    "answer_bank_hash": answer_bank_hash,
-                },
+                application_url_canonical=canonical_url,
+                title_original="Senior Platform Engineer",
+                company_original="Fixture Industries",
+                description="Synthetic",
+                location_original="Remote",
+                remote_status=RemoteStatus.REMOTE,
+                employment_type=EmploymentType.FULL_TIME,
+                seniority=Seniority.SENIOR,
+                first_seen_at=now,
+                last_seen_at=now,
+                closed_at=None,
+                status=JobStatus.ACTIVE,
             )
         )
+        await catalog.add_posting_to_group(group.id, posting.id)
         await session.commit()
 
     await engine.dispose()
-    return {"run_id": str(run.id), "resume_sha256": resume_sha256}
+    return {
+        "job_group_id": str(group.id),
+        "resume_id": resume.resume_id,
+        "resume_sha256": resume_sha256,
+    }
 
 
 def main() -> None:
     application_url = sys.argv[1]
-    resume_root = Path(sys.argv[2])
-    db_name = f"job_engine_desktop_fixture_{uuid4().hex[:12]}"
+    canonical_url = sys.argv[2]
+    source_id = sys.argv[3]
+    resume_root = Path(sys.argv[4])
+    db_name = f"job_engine_desktop_prod_{uuid4().hex[:12]}"
 
     database_url = create_database(db_name)
     migrate(database_url)
-    seeded = asyncio.run(seed(database_url, application_url, resume_root))
+    seeded = asyncio.run(
+        seed(database_url, application_url, canonical_url, source_id, resume_root)
+    )
 
     print(
         json.dumps(

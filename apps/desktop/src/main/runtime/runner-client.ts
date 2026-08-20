@@ -24,7 +24,10 @@ export const runSchema = z.object({
   attempt_count: z.number(),
   platform_adapter_id: z.string(),
   application_url: z.string(),
+  canonical_application_url: z.string().optional(),
   resume_sha256: z.string(),
+  automatic_submission_authorized: z.boolean().optional().default(false),
+  automatic_submission_authorized_at: z.string().nullable().optional(),
 });
 export type RunnerRun = z.infer<typeof runSchema>;
 

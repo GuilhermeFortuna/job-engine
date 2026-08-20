@@ -19,6 +19,16 @@ export interface ClampedBounds {
   height: number;
 }
 
+export type ViewLifecycleEvent =
+  | { type: "loaded"; runId: string }
+  | { type: "navigated"; runId: string; displayUrl: string }
+  | { type: "crashed"; runId: string }
+  | { type: "closed"; runId: string };
+
+export type ViewLifecycleListener = (
+  event: ViewLifecycleEvent,
+) => void | Promise<void>;
+
 export function validateAndClampBounds(
   rawBounds: ApplicationBounds,
   windowContentSize: { width: number; height: number }
@@ -53,6 +63,9 @@ export class ApplicationViewManager {
   private state: DesktopBrowserState = { ...INITIAL_BROWSER_STATE };
   private lastReportedBounds: ApplicationBounds | null = null;
   private stateListeners: Set<(state: DesktopBrowserState) => void> = new Set();
+  private lifecycleListeners: Set<ViewLifecycleListener> = new Set();
+  private replacementBlocked = false;
+  private tearingDown = false;
 
   constructor(
     private readonly getMainWindow: () => BrowserWindow | null,
@@ -70,8 +83,37 @@ export class ApplicationViewManager {
     };
   }
 
+  public onViewLifecycle(listener: ViewLifecycleListener): () => void {
+    this.lifecycleListeners.add(listener);
+    return () => {
+      this.lifecycleListeners.delete(listener);
+    };
+  }
+
   public getState(): DesktopBrowserState {
     return { ...this.state };
+  }
+
+  public getActiveView(): WebContentsView | null {
+    return this.view;
+  }
+
+  public getCurrentRunId(): string | null {
+    return this.currentRunId;
+  }
+
+  /**
+   * While true, openApplication refuses to destroy the current view.
+   *
+   * The coordinator sets this at/past the submitting checkpoint so a second
+   * owner open cannot orphan receipt reconciliation.
+   */
+  public setReplacementBlocked(blocked: boolean): void {
+    this.replacementBlocked = blocked;
+  }
+
+  public isReplacementBlocked(): boolean {
+    return this.replacementBlocked;
   }
 
   private emitState(): void {
@@ -82,6 +124,23 @@ export class ApplicationViewManager {
       } catch {
         // Ignore listener errors
       }
+    }
+  }
+
+  private async emitLifecycle(event: ViewLifecycleEvent): Promise<void> {
+    const pending: Promise<void>[] = [];
+    for (const listener of this.lifecycleListeners) {
+      try {
+        const result = listener(event);
+        if (result !== undefined) {
+          pending.push(result);
+        }
+      } catch {
+        // Ignore listener errors
+      }
+    }
+    if (pending.length > 0) {
+      await Promise.allSettled(pending);
     }
   }
 
@@ -104,6 +163,13 @@ export class ApplicationViewManager {
       return { success: false, error: "Main window is not available" };
     }
 
+    if (this.replacementBlocked && this.view !== null) {
+      return {
+        success: false,
+        error: "Active submitting run cannot be replaced before receipt reconciliation",
+      };
+    }
+
     const validation = validateNavigationUrl(targetUrl, this.config.isTest);
     if (!validation.allowed) {
       this.state.blockedNavigationReason = validation.reason;
@@ -114,7 +180,6 @@ export class ApplicationViewManager {
       };
     }
 
-    // Safely dispose existing view if any
     this.closeApplication();
 
     this.currentRunId = runId;
@@ -146,14 +211,12 @@ export class ApplicationViewManager {
       this.view = view;
       const wc = view.webContents;
 
-      // Popup handler: strictly deny all popups
       wc.setWindowOpenHandler(() => {
         this.state.blockedNavigationReason = "UNAPPROVED_POPUP";
         this.emitState();
         return { action: "deny" };
       });
 
-      // Navigation listeners
       wc.on("will-navigate", (event, url) => {
         const check = validateNavigationUrl(url, this.config.isTest);
         if (!check.allowed) {
@@ -188,6 +251,9 @@ export class ApplicationViewManager {
         this.state.isLoading = false;
         this.updateNavFlags();
         this.emitState();
+        if (this.currentRunId) {
+          void this.emitLifecycle({ type: "loaded", runId: this.currentRunId });
+        }
       });
 
       wc.on("page-title-updated", (_event, title) => {
@@ -199,6 +265,13 @@ export class ApplicationViewManager {
         this.state.displayUrl = sanitizeDisplayUrl(url);
         this.updateNavFlags();
         this.emitState();
+        if (this.currentRunId) {
+          void this.emitLifecycle({
+            type: "navigated",
+            runId: this.currentRunId,
+            displayUrl: this.state.displayUrl,
+          });
+        }
       });
 
       wc.on("did-navigate-in-page", (_event, url) => {
@@ -207,8 +280,7 @@ export class ApplicationViewManager {
         this.emitState();
       });
 
-      wc.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
-        // -3 is ABORTED (e.g. redirected or stopped intentionally)
+      wc.on("did-fail-load", (_event, errorCode) => {
         if (errorCode !== -3) {
           this.state.isLoading = false;
           this.state.blockedNavigationReason = "LOAD_FAILED";
@@ -216,20 +288,15 @@ export class ApplicationViewManager {
         }
       });
 
-      wc.on("render-process-gone", (_event, details) => {
-        this.state.isLoading = false;
-        this.state.blockedNavigationReason = "CRASHED";
-        this.closeApplication(false);
-        this.emitState();
+      wc.on("render-process-gone", () => {
+        void this.handleRendererCrash();
       });
 
       mainWindow.contentView.addChildView(view);
 
-      // Apply bounds if already reported
       if (this.lastReportedBounds) {
         this.applyBounds(this.lastReportedBounds);
       } else {
-        // Default to a sensible layout inside window
         const [w, h] = mainWindow.getContentSize();
         view.setBounds({ x: 0, y: 0, width: w, height: h });
       }
@@ -245,6 +312,21 @@ export class ApplicationViewManager {
         error: `Failed to load application URL: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
+  }
+
+  private async handleRendererCrash(): Promise<void> {
+    if (this.tearingDown) {
+      return;
+    }
+    const runId = this.currentRunId;
+    this.state.isLoading = false;
+    this.state.blockedNavigationReason = "CRASHED";
+    this.replacementBlocked = false;
+    if (runId) {
+      await this.emitLifecycle({ type: "crashed", runId });
+    }
+    this.closeApplication(false);
+    this.emitState();
   }
 
   public setApplicationBounds(bounds: ApplicationBounds): OperationResult {
@@ -273,6 +355,16 @@ export class ApplicationViewManager {
   }
 
   public closeApplication(resetState: boolean = true): OperationResult {
+    if (this.replacementBlocked && this.view !== null && !this.tearingDown) {
+      return {
+        success: false,
+        error: "Active submitting run cannot be closed before receipt reconciliation",
+      };
+    }
+
+    const closingRunId = this.currentRunId;
+    const hadView = this.view !== null;
+    this.tearingDown = true;
     if (this.view) {
       const mainWindow = this.getMainWindow();
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -296,6 +388,11 @@ export class ApplicationViewManager {
       this.currentRunId = null;
       this.state = { ...INITIAL_BROWSER_STATE };
       this.emitState();
+    }
+    this.tearingDown = false;
+
+    if (hadView && closingRunId) {
+      void this.emitLifecycle({ type: "closed", runId: closingRunId });
     }
 
     return { success: true };
@@ -325,7 +422,7 @@ export class ApplicationViewManager {
     return { success: false, error: "No active view to reload" };
   }
 
-  public onDownloadDenied(url: string): void {
+  public onDownloadDenied(_url: string): void {
     this.state.blockedNavigationReason = "DOWNLOAD_DENIED";
     this.emitState();
   }

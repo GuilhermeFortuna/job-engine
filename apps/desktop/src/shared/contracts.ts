@@ -1,6 +1,7 @@
 export interface DesktopCapabilities {
   embeddedBrowser: true;
   platform: string;
+  productionRuntime: boolean;
 }
 
 export interface OpenApplicationParams {
@@ -34,6 +35,44 @@ export interface DesktopBrowserState {
   blockedNavigationReason: BlockedNavigationReason | null;
 }
 
+export type RuntimePhase =
+  | "idle"
+  | "claiming"
+  | "filling"
+  | "armed"
+  | "submitting"
+  | "paused"
+  | "queued"
+  | "terminal";
+
+export type RuntimeReasonCode =
+  | "UNAUTHORIZED_FULL_AUTO"
+  | "UNSUPPORTED_AUTOMATION_MODE"
+  | "ADAPTER_UNAVAILABLE"
+  | "STEP_EXHAUSTED"
+  | "VIEW_LOCKED_SUBMITTING"
+  | "URL_MISMATCH"
+  | "CLAIM_REFUSED"
+  | "LEASE_LOST"
+  | "RENDERER_CRASHED"
+  | "CAPTCHA_REQUIRED"
+  | "AUTH_REQUIRED"
+  | "NEEDS_INPUT"
+  | "UNSUPPORTED_CONTROL"
+  | "SUBMISSION_UNKNOWN"
+  | null;
+
+export interface DesktopRuntimeState {
+  runId: string | null;
+  phase: RuntimePhase;
+  status: string | null;
+  checkpoint: string | null;
+  automationMode: string | null;
+  adapterId: string | null;
+  reasonCode: RuntimeReasonCode;
+  blockingFieldCount: number;
+}
+
 export interface OperationResult {
   success: boolean;
   error?: string;
@@ -47,8 +86,12 @@ export interface JobEngineDesktopAPI {
   goBack(): Promise<OperationResult>;
   goForward(): Promise<OperationResult>;
   reload(): Promise<OperationResult>;
+  getRuntimeState(): Promise<DesktopRuntimeState>;
   subscribeBrowserState(
     listener: (state: DesktopBrowserState) => void
+  ): () => void;
+  subscribeRuntimeState(
+    listener: (state: DesktopRuntimeState) => void
   ): () => void;
 }
 
@@ -61,6 +104,8 @@ export const IPC_CHANNELS = {
   GO_FORWARD: "job-engine:desktop:go-forward",
   RELOAD: "job-engine:desktop:reload",
   BROWSER_STATE_CHANGED: "job-engine:desktop:browser-state-changed",
+  GET_RUNTIME_STATE: "job-engine:desktop:get-runtime-state",
+  RUNTIME_STATE_CHANGED: "job-engine:desktop:runtime-state-changed",
 } as const;
 
 export const INITIAL_BROWSER_STATE: DesktopBrowserState = {
@@ -71,6 +116,17 @@ export const INITIAL_BROWSER_STATE: DesktopBrowserState = {
   canGoBack: false,
   canGoForward: false,
   blockedNavigationReason: null,
+};
+
+export const INITIAL_RUNTIME_STATE: DesktopRuntimeState = {
+  runId: null,
+  phase: "idle",
+  status: null,
+  checkpoint: null,
+  automationMode: null,
+  adapterId: null,
+  reasonCode: null,
+  blockingFieldCount: 0,
 };
 
 declare global {

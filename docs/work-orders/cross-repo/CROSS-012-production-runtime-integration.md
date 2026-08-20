@@ -127,12 +127,12 @@ git diff --check
 
 ## Dispatch record
 
-- Worker: Unassigned
+- Worker: Cursor agent
 - Branch/worktree: `development` (shared working branch)
-- Dispatched at: Not dispatched
+- Dispatched at: 2026-08-20
 
 ## Completion record
 
-- Commit: Pending
-- Evidence: Pending
+- Commit: Pending owner commit
+- Evidence: `/docs/evidence/cross-012-production-runtime.md`
 - Independent reviewer: Pending

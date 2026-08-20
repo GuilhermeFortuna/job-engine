@@ -341,9 +341,9 @@ async function main(): Promise<void> {
     const lease = new LeaseManager(client);
 
     const first = await lease.claimFor(runId);
-    assert(first.claim === null, "full_auto run must not be executed");
+    assert(first.claim === null, "unauthorized full_auto run must not be executed");
     assert(
-      first.refusal === "UNSUPPORTED_AUTOMATION_MODE",
+      first.refusal === "UNAUTHORIZED_FULL_AUTO",
       `expected refusal, got ${first.refusal}`,
     );
     assert(api.runs.get(runId)!.status === "queued", "run must be back in the queue");

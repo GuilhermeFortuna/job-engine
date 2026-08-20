@@ -17,6 +17,8 @@ function makeClaim(overrides: Partial<ClaimResponse["run"]> = {}): ClaimResponse
       platform_adapter_id: "generic",
       application_url: "https://jobs.example.com/apply",
       resume_sha256: "a".repeat(64),
+      automatic_submission_authorized: false,
+      automatic_submission_authorized_at: null,
       ...overrides,
     },
     lease_token: "lease-token",
@@ -79,7 +81,7 @@ describe("targeted claiming", () => {
 });
 
 describe("unsupported automation mode", () => {
-  it("hands a full_auto run straight back and never executes it", async () => {
+  it("hands an unauthorized full_auto run straight back and never executes it", async () => {
     const client = makeClient({
       claim: vi.fn(async () => makeClaim({ automation_mode: "full_auto" })),
     });
@@ -87,13 +89,31 @@ describe("unsupported automation mode", () => {
     const outcome = await manager.claimFor(RUN_ID);
 
     expect(outcome.claim).toBeNull();
-    expect(outcome.refusal).toBe("UNSUPPORTED_AUTOMATION_MODE");
+    expect(outcome.refusal).toBe("UNAUTHORIZED_FULL_AUTO");
     expect(client.releaseClaim).toHaveBeenCalledWith(
       RUN_ID,
       "lease-token",
       "unsupported_automation_mode",
     );
     expect(manager.lease).toBeNull();
+  });
+
+  it("claims an authorized full_auto run", async () => {
+    const client = makeClient({
+      claim: vi.fn(async () =>
+        makeClaim({
+          automation_mode: "full_auto",
+          automatic_submission_authorized: true,
+          automatic_submission_authorized_at: "2026-08-19T00:00:00Z",
+        }),
+      ),
+    });
+    const manager = new LeaseManager(client);
+    const outcome = await manager.claimFor(RUN_ID);
+
+    expect(outcome.refusal).toBeNull();
+    expect(outcome.claim?.run.automation_mode).toBe("full_auto");
+    expect(client.releaseClaim).not.toHaveBeenCalled();
   });
 
   it("refuses a rejected run again without re-claiming it", async () => {
@@ -137,7 +157,7 @@ describe("unsupported automation mode", () => {
     const outcome = await manager.claimFor(RUN_ID);
 
     // The lease simply expires; refusing must not throw or retry.
-    expect(outcome.refusal).toBe("UNSUPPORTED_AUTOMATION_MODE");
+    expect(outcome.refusal).toBe("UNAUTHORIZED_FULL_AUTO");
     expect(manager.hasRefused(RUN_ID)).toBe(true);
   });
 

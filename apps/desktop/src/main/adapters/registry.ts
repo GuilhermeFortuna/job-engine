@@ -56,6 +56,13 @@ export class AdapterRegistry {
   get registeredIds(): string[] {
     return this.adapters.map((a) => a.adapterId);
   }
+
+  adapterById(adapterId: string): FormAdapter | null {
+    if (this.fallback.adapterId === adapterId) {
+      return this.fallback;
+    }
+    return this.adapters.find((adapter) => adapter.adapterId === adapterId) ?? null;
+  }
 }
 
 /** Exact host match, or an exact subdomain of it. Never a substring test. */

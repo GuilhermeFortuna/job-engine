@@ -238,6 +238,7 @@ async function main(): Promise<void> {
         currentCheckpoint: run.current_checkpoint ?? null,
         submitAttemptedAt: run.submit_attempted_at ?? null,
         automationMode: run.automation_mode,
+        automaticSubmissionAuthorized: run.automatic_submission_authorized,
       }),
       "an unreleased run must never read as submittable",
     );

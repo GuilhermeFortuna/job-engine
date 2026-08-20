@@ -35,6 +35,17 @@ export default defineConfig({
           include: ["tests/fixtures/**/*.test.ts"],
         },
       },
+      {
+        // CROSS-012 reconciled omission: production smoke is not in the Work
+        // Order owned-files list for this config, but tests/production/** will
+        // not run without a dedicated project.
+        test: {
+          name: "production",
+          environment: "node",
+          include: ["tests/production/**/*.test.ts"],
+          testTimeout: 240000,
+        },
+      },
     ],
   },
 });

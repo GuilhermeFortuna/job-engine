@@ -46,6 +46,7 @@ export interface RunProgress {
   currentCheckpoint: string | null;
   submitAttemptedAt: string | null;
   automationMode: string;
+  automaticSubmissionAuthorized: boolean;
 }
 
 /**
@@ -66,14 +67,37 @@ export function submitAlreadyAttempted(run: RunProgress): boolean {
 /**
  * Whether the owner has released this run for submission.
  *
- * The backend puts a released run back in the queue with the checkpoint still
- * at `submit_armed`; that pairing is the only thing that authorizes a submit.
+ * Release returns the run to `queued` at `submit_armed`. The next claim
+ * changes status to `claimed`/`running` without moving the checkpoint, so
+ * those statuses must still count as released. `needs_input` does not: that
+ * is the armed pause before the owner clicks submit.
  */
 export function isReleasedForSubmit(run: RunProgress): boolean {
+  if (run.automationMode !== "semi_auto_pause_before_submit") {
+    return false;
+  }
+  if (run.currentCheckpoint !== "submit_armed") {
+    return false;
+  }
   return (
-    run.automationMode === "semi_auto_pause_before_submit" &&
-    run.status === "queued" &&
-    run.currentCheckpoint === "submit_armed"
+    run.status === "queued" ||
+    run.status === "claimed" ||
+    run.status === "running"
+  );
+}
+
+/**
+ * Whether an authorized full-auto run may activate submit without release-submit.
+ *
+ * Authorization is frozen at creation. A missing flag can never be repaired
+ * locally; the runtime must pause with a named reason instead.
+ */
+export function isAuthorizedForFullAutoSubmit(run: RunProgress): boolean {
+  return (
+    run.automationMode === "full_auto" &&
+    run.automaticSubmissionAuthorized &&
+    run.currentCheckpoint === "submit_armed" &&
+    !submitAlreadyAttempted(run)
   );
 }
 
@@ -84,8 +108,24 @@ export function resumePhaseFor(
   if (submitAlreadyAttempted(run)) {
     return "reconcile_submit";
   }
-  if (isReleasedForSubmit(run)) {
+  if (isReleasedForSubmit(run) || isAuthorizedForFullAutoSubmit(run)) {
     return "submit";
   }
   return "fill";
+}
+
+export function runProgressFrom(run: {
+  status: string;
+  current_checkpoint?: string | null;
+  submit_attempted_at?: string | null;
+  automation_mode: string;
+  automatic_submission_authorized?: boolean;
+}): RunProgress {
+  return {
+    status: run.status,
+    currentCheckpoint: run.current_checkpoint ?? null,
+    submitAttemptedAt: run.submit_attempted_at ?? null,
+    automationMode: run.automation_mode,
+    automaticSubmissionAuthorized: run.automatic_submission_authorized === true,
+  };
 }

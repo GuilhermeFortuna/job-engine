@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  isAuthorizedForFullAutoSubmit,
   isCheckpoint,
   isReleasedForSubmit,
   resumePhaseFor,
@@ -13,6 +14,7 @@ const run = (overrides: Partial<Parameters<typeof resumePhaseFor>[0]> = {}) => (
   currentCheckpoint: null,
   submitAttemptedAt: null,
   automationMode: "semi_auto_pause_before_submit",
+  automaticSubmissionAuthorized: false,
   ...overrides,
 });
 
@@ -56,15 +58,20 @@ describe("submit attempt detection", () => {
 });
 
 describe("release detection", () => {
-  it("requires queued status and the armed checkpoint together", () => {
+  it("requires the armed checkpoint and a claimable status together", () => {
     expect(
       isReleasedForSubmit(
         run({ status: "queued", currentCheckpoint: "submit_armed" }),
       ),
     ).toBe(true);
+    expect(
+      isReleasedForSubmit(
+        run({ status: "claimed", currentCheckpoint: "submit_armed" }),
+      ),
+    ).toBe(true);
   });
 
-  it("rejects an armed run that is not queued", () => {
+  it("rejects an armed run that is still waiting for the owner", () => {
     expect(
       isReleasedForSubmit(
         run({ status: "needs_input", currentCheckpoint: "submit_armed" }),
@@ -106,9 +113,9 @@ describe("restart recovery", () => {
     ).toBe("reconcile_submit");
   });
 
-  it("submits only for a released, unattempted run", () => {
+  it("submits a released run after reclaim changes status to claimed", () => {
     expect(
-      resumePhaseFor(run({ status: "queued", currentCheckpoint: "submit_armed" })),
+      resumePhaseFor(run({ status: "claimed", currentCheckpoint: "submit_armed" })),
     ).toBe("submit");
   });
 
@@ -116,5 +123,41 @@ describe("restart recovery", () => {
     expect(resumePhaseFor(run({ currentCheckpoint: "profile_filled" }))).toBe(
       "fill",
     );
+  });
+
+  it("submits authorized full-auto at submit_armed without a release", () => {
+    expect(
+      resumePhaseFor(
+        run({
+          status: "running",
+          currentCheckpoint: "submit_armed",
+          automationMode: "full_auto",
+          automaticSubmissionAuthorized: true,
+        }),
+      ),
+    ).toBe("submit");
+    expect(
+      isAuthorizedForFullAutoSubmit(
+        run({
+          status: "running",
+          currentCheckpoint: "submit_armed",
+          automationMode: "full_auto",
+          automaticSubmissionAuthorized: true,
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not submit unauthorized full-auto", () => {
+    expect(
+      resumePhaseFor(
+        run({
+          status: "running",
+          currentCheckpoint: "submit_armed",
+          automationMode: "full_auto",
+          automaticSubmissionAuthorized: false,
+        }),
+      ),
+    ).toBe("fill");
   });
 });
