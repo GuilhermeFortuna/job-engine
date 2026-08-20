@@ -220,7 +220,7 @@ export function ActiveFilters({
 
   return (
     <div
-      className="mb-4 rounded-lg border border-border bg-card p-3"
+      className="rounded-lg border border-border bg-card p-3"
       aria-label="Active filters"
     >
       <div className="mb-2 flex items-center justify-between">

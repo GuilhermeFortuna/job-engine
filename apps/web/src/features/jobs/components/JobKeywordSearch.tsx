@@ -41,7 +41,7 @@ export function JobKeywordSearch({ params }: { params: JobSearchParams }) {
       <form
         role="search"
         aria-label="Job Search"
-        className="mx-auto flex w-full max-w-3xl flex-col gap-2"
+        className="flex w-full flex-col gap-2"
         onSubmit={handleKeywordSubmit}
       >
         <Label htmlFor="search-keywords" className="font-bold">

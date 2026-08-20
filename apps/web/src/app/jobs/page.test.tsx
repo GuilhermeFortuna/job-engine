@@ -91,7 +91,7 @@ describe("JobsPage Server Component", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: "Software Engineering Jobs",
+        name: "Looking for a new job?",
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("Showing 1–1 of 1 jobs")).toBeInTheDocument();

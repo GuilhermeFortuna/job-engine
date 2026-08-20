@@ -19,7 +19,7 @@ test.describe("Job Search and Resilience", () => {
     await expect(
       page.getByRole("heading", {
         level: 1,
-        name: "Software Engineering Jobs",
+        name: "Looking for a new job?",
       }),
     ).toBeVisible();
 
@@ -136,7 +136,7 @@ test.describe("Job Search and Resilience", () => {
     await expect(
       page.getByRole("heading", {
         level: 1,
-        name: "Software Engineering Jobs",
+        name: "Looking for a new job?",
       }),
     ).toBeVisible();
   });

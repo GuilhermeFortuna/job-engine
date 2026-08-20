@@ -237,8 +237,17 @@ a {
 }
 
 /* Page Header */
+.jobs-search-column {
+  grid-area: search;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
 .jobs-page-header {
-  margin-bottom: var(--space-6);
+  margin: 0;
+  text-align: center;
 }
 
 .jobs-page-heading {
@@ -255,21 +264,37 @@ a {
 }
 
 .jobs-keyword-search {
-  margin: 0 auto var(--space-6);
-  max-width: 48rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.jobs-sidebar {
+  grid-area: sidebar;
+}
+
+.jobs-main-content {
+  grid-area: main;
 }
 
 /* Layout Grid */
 .jobs-page-layout {
   display: grid;
   grid-template-columns: 1fr;
+  grid-template-areas:
+    "search"
+    "sidebar"
+    "main";
   gap: var(--space-6);
 }
 
 @media (min-width: 64rem) {
   .jobs-page-layout {
     grid-template-columns: 19rem 1fr;
-    gap: var(--space-8);
+    grid-template-areas:
+      ". search"
+      "sidebar main";
+    column-gap: var(--space-8);
+    row-gap: var(--space-6);
     align-items: start;
   }
 

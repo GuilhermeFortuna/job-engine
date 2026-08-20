@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Search Jobs - Job Engine",
   description:
-    "Unified search and aggregated results for software development roles from multiple sources.",
+    "Search aggregated job listings from multiple catalog sources.",
 };
 
 interface JobsPageProps {
@@ -41,23 +41,35 @@ export default async function JobsPage(props: JobsPageProps) {
 
   return (
     <div className="jobs-page">
-      <header className="jobs-page-header">
-        <h1 className="jobs-page-heading">Software Engineering Jobs</h1>
-        <p className="jobs-page-subheading">
-          <AnimatedShinyText className="mx-0 max-w-none text-muted-foreground dark:text-muted-foreground">
-            Aggregated and verified remote opportunities from multiple catalog
-            sources.
-          </AnimatedShinyText>
-        </p>
-      </header>
-
       <CatalogHealthNotice health={catalogHealth} />
 
-      <div className="jobs-keyword-search rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-elevated)]">
-        <JobKeywordSearch params={validatedParams} />
-      </div>
-
       <div className="jobs-page-layout">
+        <div className="jobs-search-column">
+          <header className="jobs-page-header">
+            <h1 className="jobs-page-heading">Looking for a new job?</h1>
+            <p className="jobs-page-subheading">
+              <AnimatedShinyText className="mx-auto max-w-none text-muted-foreground dark:text-muted-foreground">
+                Search openings from multiple catalogs in one place.
+              </AnimatedShinyText>
+            </p>
+          </header>
+
+          <div className="jobs-keyword-search rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-elevated)]">
+            <JobKeywordSearch params={validatedParams} />
+          </div>
+
+          <SearchStatus
+            total={searchResponse.total}
+            page={searchResponse.page}
+            pageSize={searchResponse.page_size}
+          />
+
+          <ActiveFilters
+            params={validatedParams}
+            catalogFilters={catalogFilters}
+          />
+        </div>
+
         <aside
           className="jobs-sidebar rounded-xl border border-border bg-card p-4 shadow-[var(--shadow-elevated)]"
           aria-label="Filter Controls"
@@ -69,17 +81,6 @@ export default async function JobsPage(props: JobsPageProps) {
         </aside>
 
         <section className="jobs-main-content" aria-label="Job Search Results">
-          <SearchStatus
-            total={searchResponse.total}
-            page={searchResponse.page}
-            pageSize={searchResponse.page_size}
-          />
-
-          <ActiveFilters
-            params={validatedParams}
-            catalogFilters={catalogFilters}
-          />
-
           <JobResults items={searchResponse.items} />
 
           <Pagination

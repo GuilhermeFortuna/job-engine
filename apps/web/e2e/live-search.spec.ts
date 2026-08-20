@@ -91,7 +91,7 @@ test.describe("Interactive Live Search & SSE Streaming", () => {
     await expect(
       page.getByRole("heading", {
         level: 1,
-        name: "Software Engineering Jobs",
+        name: "Looking for a new job?",
       }),
     ).toBeVisible();
   });
