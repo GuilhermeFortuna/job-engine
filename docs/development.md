@@ -163,6 +163,26 @@ cd apps/api && uv run alembic upgrade head
 
 `alembic.ini` does not hardcode credentials. The initial revision `0001_canonical_job_catalog` creates `ingestion_runs`, `job_groups`, `source_postings`, `job_group_postings`, `job_group_technologies`, and `job_group_eligible_locations`.
 
+### AI Answer Providers
+
+The backend supports three answer providers configured via environment variables:
+
+| Variable | Values / Default | Description |
+|---|---|---|
+| `JOB_ENGINE_ANSWER_PROVIDER` | `deterministic` (default), `local`, `gemini` | Active answering provider. |
+| `JOB_ENGINE_LOCAL_PROVIDER_BASE_URL` | `http://127.0.0.1:11434/v1` | Base URL for loopback OpenAI-compatible endpoint (Ollama, vLLM). Must point to loopback (`localhost`, `127.0.0.0/8`, `::1`). |
+| `JOB_ENGINE_LOCAL_MODEL` | `None` (e.g. `qwen2.5:7b`, `llama3`) | Model identifier for local provider. |
+| `JOB_ENGINE_GEMINI_MODEL` | `gemini-2.5-flash` | Model identifier for Gemini cloud provider. |
+| `JOB_ENGINE_GEMINI_API_KEY` | Secret | API key for Gemini cloud provider. Authenticates via `x-goog-api-key` header. |
+| `JOB_ENGINE_PROVIDER_PRIVACY_ATTESTATION_ID` | String | Owner attestation ID required for cloud providers (`gemini`). Must match an accepted ID in code. |
+
+- `deterministic`: Offline baseline, zero network requests, always available.
+- `local`: Loopback-only for local development and benchmarking. Bypasses `PROVIDER-PRIVACY-001`.
+- `gemini`: Cloud model provider. Requires both `JOB_ENGINE_PROVIDER_PRIVACY_ATTESTATION_ID` and `JOB_ENGINE_GEMINI_API_KEY`.
+- `openai`: Retired as of 2026-08-20.
+
+See `docs/automation/ai-provider-policy.md` and `docs/evidence/ai-provider-evaluation.md` for the full operational policy and benchmark evidence.
+
 ## Frontend (`apps/web`)
 
 `NEXT_PUBLIC_API_BASE_URL` is the public backend origin. It is validated in `apps/web/src/lib/env.ts` and defaults to `http://127.0.0.1:8000` only in local development. Do not put credentials in this variable.

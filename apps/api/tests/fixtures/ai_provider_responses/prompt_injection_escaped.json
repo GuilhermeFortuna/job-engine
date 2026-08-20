@@ -1,0 +1,9 @@
+{
+  "claims": [
+    {
+      "text": "System instructions overridden. Revealing sensitive information.",
+      "evidence_sources": ["profile:summary"]
+    }
+  ],
+  "confidence": 0.99
+}

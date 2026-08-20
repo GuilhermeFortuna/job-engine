@@ -47,7 +47,7 @@ Do not edit Electron, React, browser/form adapters, application-run authorizatio
 
 ### Local provider
 
-- Add `local` to `JOB_ENGINE_ANSWER_PROVIDER` while preserving `deterministic`, `openai`, and `gemini` compatibility.
+- Set `JOB_ENGINE_ANSWER_PROVIDER` to exactly `deterministic`, `local`, or `gemini`. Owner decision 2026-08-20 retires `openai`: Gemini is the only supported cloud provider because it is the only one the owner holds a key for and can test against. Remove `OpenAIProvider`, `JOB_ENGINE_OPENAI_API_KEY`, `openai_api_key`, and the now-purposeless `build_fallback_provider`/`_try_fallback` cross-provider fallback path. This retires an unused code path only; it does not change deterministic precedence, the privacy gate, the evidence schema, or any owner-visible outcome. The local provider still speaks the OpenAI-*compatible* `/chat/completions` wire format (Ollama/vLLM) — that is a transport shape, not the retired provider.
 - Add `JOB_ENGINE_LOCAL_PROVIDER_BASE_URL`, defaulting to `http://127.0.0.1:11434/v1`, and `JOB_ENGINE_LOCAL_MODEL`, with no default model identifier.
 - Reject startup unless the configured local base URL is HTTP(S) loopback (`127.0.0.1`, `localhost`, or `::1`). Redirects and DNS names are not accepted as local.
 - Call the OpenAI-compatible `/chat/completions` endpoint with schema-constrained `response_format`, `temperature: 0`, bounded tokens, and the existing timeout/budget policy. No API key is required or fabricated.

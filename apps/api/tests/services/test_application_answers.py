@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -29,7 +31,6 @@ from job_engine.domain.application_answers import (
     ProviderResult,
     ProviderResultClaim,
     ProviderTimeoutError,
-    ProviderUnavailableError,
     QuestionObservation,
     ReasonCode,
 )
@@ -63,6 +64,12 @@ _NOW = datetime.now(UTC)
 _RAW_LEASE_TOKEN = "test-lease-token"
 _LEASE_HASH = calculate_token_hash(_RAW_LEASE_TOKEN)
 _RESUME_SHA = "a" * 64
+_AI_CORPUS_PATH = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "ai_application_questions.json"
+)
+_AI_CORPUS_CASES: list[dict[str, Any]] = json.loads(
+    _AI_CORPUS_PATH.read_text(encoding="utf-8")
+)
 
 
 class ExplodingProvider:
@@ -195,10 +202,16 @@ def make_run(
     lease_token_hash: str | None = _LEASE_HASH,
     lease_expires_at: datetime | None = None,
     automation_mode: AutomationMode = AutomationMode.FULL_AUTO,
+    automatic_submission_authorized_at: datetime | None = _NOW,
     platform_adapter_id: str = "greenhouse",
     exceptions: tuple[ApplicationException, ...] = (),
 ) -> ApplicationRun:
     snapshot = answer_bank_snapshot if answer_bank_snapshot is not None else {}
+    auth_at = (
+        automatic_submission_authorized_at
+        if automation_mode == AutomationMode.FULL_AUTO
+        else None
+    )
     return ApplicationRun(
         id=uuid4(),
         job_group_id=uuid4(),
@@ -212,6 +225,7 @@ def make_run(
         answer_bank_snapshot=snapshot,
         answer_bank_hash=calculate_answer_bank_hash(snapshot),
         automation_mode=automation_mode,
+        automatic_submission_authorized_at=auth_at,
         status=status,
         idempotency_key="idem_1",
         lease_token_hash=lease_token_hash,
@@ -288,9 +302,9 @@ def make_settings(**overrides: object) -> Settings:
 
 def test_arbitrary_privacy_attestation_cannot_enable_external_provider() -> None:
     settings = make_settings(
-        answer_provider="openai",
+        answer_provider="gemini",
         provider_privacy_attestation_id="self-asserted-not-owner-accepted",
-        openai_api_key="synthetic-test-key",
+        gemini_api_key="synthetic-test-key",
     )
     with pytest.raises(PrivacyGateClosedError):
         build_provider(settings)
@@ -593,11 +607,10 @@ async def test_grounded_generation_success() -> None:
     provider = ScriptedProvider(
         results=[
             ProviderResult(
-                answer="I am excited to contribute my backend expertise.",
                 confidence=0.9,
                 claims=(
                     ProviderResultClaim(
-                        text="I am excited to contribute my backend expertise",
+                        text="I am excited to contribute my backend expertise.",
                         evidence=(
                             EvidenceReference(source="profile", reference="headline"),
                         ),
@@ -608,7 +621,12 @@ async def test_grounded_generation_success() -> None:
             )
         ]
     )
-    service = ApplicationAnswerService(settings, provider=provider)
+    # Accepted revision injected for test
+    service = ApplicationAnswerService(
+        settings,
+        provider=provider,
+        accepted_auto_submit_revisions=frozenset({("scripted", "scripted-model", "2")}),
+    )
     context = make_context()
     observation = make_observation(
         run_id=context.run.id,
@@ -620,6 +638,44 @@ async def test_grounded_generation_success() -> None:
     assert decision.decision == AnswerDecisionType.AUTO_FILL_AND_SUBMIT
     assert decision.policy_category == PolicyCategory.GROUNDED_GENERATED
     assert decision.confidence == 0.9
+    assert decision.answer == "I am excited to contribute my backend expertise."
+    assert provider.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_grounded_generation_unaccepted_revision_yields_auto_fill() -> None:
+    settings = make_settings()
+    provider = ScriptedProvider(
+        results=[
+            ProviderResult(
+                confidence=0.9,
+                claims=(
+                    ProviderResultClaim(
+                        text="I am excited to contribute my backend expertise.",
+                        evidence=(
+                            EvidenceReference(source="profile", reference="headline"),
+                        ),
+                    ),
+                ),
+                provider="scripted",
+                model="scripted-model",
+            )
+        ]
+    )
+    # Shipped default: empty accepted revisions
+    service = ApplicationAnswerService(settings, provider=provider)
+    context = make_context()
+    observation = make_observation(
+        run_id=context.run.id,
+        label="Why do you want this role?",
+        control_type=ControlType.TEXTAREA,
+    )
+
+    (decision,) = await service.decide(context, (observation,))
+    assert decision.decision == AnswerDecisionType.AUTO_FILL
+    assert decision.policy_category == PolicyCategory.GROUNDED_GENERATED
+    assert decision.confidence == 0.9
+    assert decision.answer == "I am excited to contribute my backend expertise."
     assert provider.calls == 1
 
 
@@ -628,11 +684,10 @@ async def test_grounded_generation_rejects_unallowlisted_evidence() -> None:
     provider = ScriptedProvider(
         results=[
             ProviderResult(
-                answer="I led an unsupported production migration.",
                 confidence=0.99,
                 claims=(
                     ProviderResultClaim(
-                        text="I led an unsupported production migration",
+                        text="I led an unsupported production migration.",
                         evidence=(
                             EvidenceReference(
                                 source="resume", reference="invented-section"
@@ -664,11 +719,10 @@ async def test_grounded_generation_low_confidence_becomes_review_required() -> N
     provider = ScriptedProvider(
         results=[
             ProviderResult(
-                answer="Maybe relevant.",
                 confidence=0.4,
                 claims=(
                     ProviderResultClaim(
-                        text="Maybe relevant",
+                        text="Maybe relevant.",
                         evidence=(
                             EvidenceReference(source="profile", reference="summary"),
                         ),
@@ -711,25 +765,14 @@ async def test_provider_timeout_without_fallback_abstains() -> None:
 
 
 @pytest.mark.asyncio
-async def test_provider_unavailable_falls_back_when_configured() -> None:
+async def test_local_provider_timeout_produces_timeout_abstention_zero_outbound() -> (
+    None
+):
     settings = make_settings()
-    primary = ScriptedProvider(exceptions=[ProviderUnavailableError("rate limited")])
-    fallback_result = ProviderResult(
-        answer="Fallback answer text.",
-        confidence=0.95,
-        claims=(
-            ProviderResultClaim(
-                text="Fallback answer text",
-                evidence=(EvidenceReference(source="profile", reference="summary"),),
-            ),
-        ),
-        provider="fallback",
-        model="fallback-model",
+    provider = ScriptedProvider(
+        exceptions=[ProviderTimeoutError("connection timed out")]
     )
-    fallback = ScriptedProvider(results=[fallback_result])
-    service = ApplicationAnswerService(
-        settings, provider=primary, fallback_provider=fallback
-    )
+    service = ApplicationAnswerService(settings, provider=provider)
     context = make_context()
     observation = make_observation(
         run_id=context.run.id,
@@ -738,8 +781,9 @@ async def test_provider_unavailable_falls_back_when_configured() -> None:
     )
 
     (decision,) = await service.decide(context, (observation,))
-    assert decision.answer == "Fallback answer text."
-    assert fallback.calls == 1
+    assert decision.decision == AnswerDecisionType.ABSTAIN
+    assert decision.reason_code == ReasonCode.PROVIDER_TIMEOUT
+    assert provider.calls == 1
 
 
 @pytest.mark.asyncio
@@ -764,7 +808,6 @@ async def test_provider_call_budget_exhausted_abstains_without_network_call() ->
     settings = make_settings(answer_provider_max_calls_per_run=1)
     results = [
         ProviderResult(
-            answer=f"Answer {i}",
             confidence=0.95,
             claims=(
                 ProviderResultClaim(
@@ -810,11 +853,10 @@ async def test_provider_call_budget_exhausted_abstains_without_network_call() ->
 async def test_cache_hit_avoids_second_provider_call() -> None:
     settings = make_settings()
     result = ProviderResult(
-        answer="Cached answer.",
         confidence=0.95,
         claims=(
             ProviderResultClaim(
-                text="Cached answer",
+                text="Cached answer.",
                 evidence=(EvidenceReference(source="profile", reference="summary"),),
             ),
         ),
@@ -837,11 +879,57 @@ async def test_cache_hit_avoids_second_provider_call() -> None:
 
 
 @pytest.mark.asyncio
+async def test_cached_answer_on_unauthorized_full_auto_yields_auto_fill() -> None:
+    settings = make_settings()
+    result = ProviderResult(
+        confidence=0.95,
+        claims=(
+            ProviderResultClaim(
+                text="Cached answer text.",
+                evidence=(EvidenceReference(source="profile", reference="summary"),),
+            ),
+        ),
+        provider="scripted",
+        model="scripted-model",
+    )
+    provider = ScriptedProvider(results=[result])
+    service = ApplicationAnswerService(
+        settings,
+        provider=provider,
+        accepted_auto_submit_revisions=frozenset({("scripted", "scripted-model", "2")}),
+    )
+
+    resume = make_resume()
+    # automatic_submission_authorized_at is None => run unauthorized for submit
+    run = make_run(
+        resume_asset_id=resume.id,
+        automation_mode=AutomationMode.FULL_AUTO,
+        automatic_submission_authorized_at=None,
+    )
+    context = make_context(run=run, resume=resume)
+    observation = make_observation(
+        run_id=context.run.id,
+        label="Why do you want this role?",
+        control_type=ControlType.TEXTAREA,
+    )
+
+    # First call: fresh generation
+    first = await service.decide(context, (observation,))
+    assert first[0].decision == AnswerDecisionType.AUTO_FILL
+    assert first[0].answer == "Cached answer text."
+
+    # Second call: cache hit on unauthorized run -> MUST derive AUTO_FILL
+    second = await service.decide(context, (observation,))
+    assert second[0].decision == AnswerDecisionType.AUTO_FILL
+    assert second[0].answer == "Cached answer text."
+    assert provider.calls == 1
+
+
+@pytest.mark.asyncio
 async def test_cache_isolated_by_profile_version() -> None:
     settings = make_settings()
     results = [
         ProviderResult(
-            answer=f"Answer for version {i}",
             confidence=0.95,
             claims=(
                 ProviderResultClaim(
@@ -898,7 +986,6 @@ async def test_decision_logging_never_includes_raw_answer_text(
     provider = ScriptedProvider(
         results=[
             ProviderResult(
-                answer=secret_answer,
                 confidence=0.95,
                 claims=(
                     ProviderResultClaim(
@@ -927,3 +1014,128 @@ async def test_decision_logging_never_includes_raw_answer_text(
     assert decision.answer == secret_answer
     for record in caplog.records:
         assert secret_answer not in record.getMessage()
+
+
+# --- Comprehensive 120-case Evaluation Corpus Runner ---------------------------
+
+
+@pytest.mark.asyncio
+async def test_synthetic_ai_question_fixture_corpus() -> None:
+    from job_engine.domain.application_answers import ObservationValidationConstraints
+
+    cases = _AI_CORPUS_CASES
+    assert len(cases) >= 100
+
+    settings = make_settings()
+    context = make_context()
+
+    for case in cases:
+        case_id = case["case_id"]
+        label = case["label"]
+        control_type = ControlType(case["control_type"])
+        options = tuple(case.get("options", ()))
+        max_len = case.get("max_length")
+        validation_constraints = (
+            ObservationValidationConstraints(max_length=max_len)
+            if max_len is not None
+            else None
+        )
+
+        obs = QuestionObservation(
+            run_id=context.run.id,
+            adapter_id="greenhouse",
+            page_id="page_1",
+            field_fingerprint=f"fp_{case_id}",
+            label=label,
+            required=False,
+            control_type=control_type,
+            options=options,
+            validation_constraints=validation_constraints,
+        )
+
+        expected_category = PolicyCategory(case["expected_category"])
+        expected_decision = AnswerDecisionType(case["expected_decision"])
+        expected_reason = ReasonCode(case["expected_reason_code"])
+
+        provider: Any
+        # Setup provider response tailored to the test case
+        if case["category_family"] in {"permitted_narrative", "narrative_paraphrase"}:
+            provider = ScriptedProvider(
+                results=[
+                    ProviderResult(
+                        confidence=0.95,
+                        claims=(
+                            ProviderResultClaim(
+                                text="Deep experience in backend engineering.",
+                                evidence=(
+                                    EvidenceReference(
+                                        source="profile", reference="summary"
+                                    ),
+                                ),
+                            ),
+                        ),
+                        provider="scripted",
+                        model="scripted-model",
+                    )
+                ]
+            )
+        elif case["expected_reason_code"] == "character_limit_exceeded":
+            provider = ScriptedProvider(
+                results=[
+                    ProviderResult(
+                        confidence=0.95,
+                        claims=(
+                            ProviderResultClaim(
+                                text="Answer clause far longer than limit.",
+                                evidence=(
+                                    EvidenceReference(
+                                        source="profile", reference="summary"
+                                    ),
+                                ),
+                            ),
+                        ),
+                        provider="scripted",
+                        model="scripted-model",
+                    )
+                ]
+            )
+        elif case["expected_reason_code"] == "unsupported_claim_rejected":
+            provider = ScriptedProvider(
+                results=[
+                    ProviderResult(
+                        confidence=0.95,
+                        claims=(
+                            ProviderResultClaim(
+                                text="I claim unlisted marketing skills.",
+                                evidence=(
+                                    EvidenceReference(
+                                        source="resume", reference="nonexistent"
+                                    ),
+                                ),
+                            ),
+                        ),
+                        provider="scripted",
+                        model="scripted-model",
+                    )
+                ]
+            )
+        else:
+            provider = ExplodingProvider()
+
+        service = ApplicationAnswerService(settings, provider=provider)
+        (decision,) = await service.decide(context, (obs,))
+
+        # Verify decision invariants
+        if expected_category == PolicyCategory.PROHIBITED_AUTOMATION:
+            assert decision.policy_category == PolicyCategory.PROHIBITED_AUTOMATION
+            assert decision.decision == AnswerDecisionType.REVIEW_REQUIRED
+            assert decision.answer is None
+        elif case["category_family"] == "prompt_injection":
+            assert decision.decision == AnswerDecisionType.REVIEW_REQUIRED
+            assert decision.answer is None
+        elif expected_decision == AnswerDecisionType.ABSTAIN:
+            assert decision.decision == AnswerDecisionType.ABSTAIN
+            assert decision.reason_code == expected_reason
+        else:
+            assert decision.decision == expected_decision
+            assert decision.reason_code == expected_reason

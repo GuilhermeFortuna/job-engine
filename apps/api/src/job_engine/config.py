@@ -1,6 +1,8 @@
+import ipaddress
 from decimal import Decimal
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -95,12 +97,27 @@ class Settings(BaseSettings):
     )
     evidence_retention_days: int = 30
 
-    # BACK-011: grounded application answering. deterministic-only by
-    # default; a non-deterministic provider is fail-closed until
-    # PROVIDER-PRIVACY-001 is accepted (provider_privacy_attestation_id set).
-    answer_provider: Literal["deterministic", "openai", "gemini"] = Field(
+    # BACK-013: hybrid local and Gemini grounded answer provider.
+    # Deterministic by default; local is loopback-only for development;
+    # Gemini is fail-closed until PROVIDER-PRIVACY-001 is accepted.
+    answer_provider: Literal["deterministic", "local", "gemini"] = Field(
         default="deterministic",
         validation_alias=AliasChoices("job_engine_answer_provider", "answer_provider"),
+    )
+    local_provider_base_url: str = Field(
+        default="http://127.0.0.1:11434/v1",
+        validation_alias=AliasChoices(
+            "job_engine_local_provider_base_url",
+            "local_provider_base_url",
+        ),
+    )
+    local_model: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("job_engine_local_model", "local_model"),
+    )
+    gemini_model: str = Field(
+        default="gemini-2.5-flash",
+        validation_alias=AliasChoices("job_engine_gemini_model", "gemini_model"),
     )
     provider_privacy_attestation_id: str | None = Field(
         default=None,
@@ -108,10 +125,6 @@ class Settings(BaseSettings):
             "job_engine_provider_privacy_attestation_id",
             "provider_privacy_attestation_id",
         ),
-    )
-    openai_api_key: SecretStr | None = Field(
-        default=None,
-        validation_alias=AliasChoices("job_engine_openai_api_key", "openai_api_key"),
     )
     gemini_api_key: SecretStr | None = Field(
         default=None,
@@ -123,7 +136,38 @@ class Settings(BaseSettings):
     answer_provider_estimated_cost_per_call_usd: Decimal = Decimal("0.01")
     answer_run_cost_cap_usd: Decimal = Decimal("0.05")
     answer_batch_cost_cap_usd: Decimal = Decimal("5.00")
+    # Review threshold; never an authorization signal (V2.1 Outcome 5 / BACK-013)
     answer_auto_submit_confidence_threshold: float = 0.85
+
+    @field_validator("local_provider_base_url")
+    @classmethod
+    def validate_local_provider_base_url(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("local_provider_base_url must use http or https scheme")
+        if parsed.username or parsed.password:
+            raise ValueError(
+                "local_provider_base_url must not contain embedded credentials"
+            )
+        host = parsed.hostname
+        if not host:
+            raise ValueError("local_provider_base_url missing hostname")
+        host_lower = host.lower()
+        if host_lower == "localhost":
+            return value
+        try:
+            ip = ipaddress.ip_address(host_lower)
+            if not ip.is_loopback:
+                raise ValueError(
+                    f"local_provider_base_url must point to loopback, got: {host}"
+                )
+        except ValueError as exc:
+            if "must point to loopback" in str(exc):
+                raise
+            raise ValueError(
+                f"local_provider_base_url must point to loopback, got: {host}"
+            ) from exc
+        return value
 
     @property
     def resolved_evidence_root(self) -> Path:

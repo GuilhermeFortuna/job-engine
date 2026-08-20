@@ -24,7 +24,7 @@ from job_engine.domain.enums import (
     Seniority,
 )
 
-PROMPT_CONTRACT_VERSION = "1"
+PROMPT_CONTRACT_VERSION = "2"
 
 # Intents that may never be resolved by generative inference, regardless of
 # policy category. A provider call is structurally unreachable for these.
@@ -169,11 +169,6 @@ class AnswerDecision(FrozenModel):
                 raise ValueError(
                     f"{self.decision.value} requires at least one evidence reference"
                 )
-        if (
-            self.decision == AnswerDecisionType.AUTO_FILL_AND_SUBMIT
-            and self.confidence < 0.85
-        ):
-            raise ValueError("AUTO_FILL_AND_SUBMIT requires confidence >= 0.85")
         if self.decision in {
             AnswerDecisionType.REVIEW_REQUIRED,
             AnswerDecisionType.ABSTAIN,
@@ -258,17 +253,44 @@ class GroundedContext(FrozenModel):
     job_evidence: JobEvidence
 
 
+class ClaimWireSchema(FrozenModel):
+    text: str
+    evidence_sources: tuple[str, ...] = ()
+
+
+class StructuredAnswerResponse(FrozenModel):
+    claims: tuple[ClaimWireSchema, ...]
+    confidence: float = 1.0
+
+
 class ProviderResultClaim(FrozenModel):
     text: str
     evidence: tuple[EvidenceReference, ...]
 
+    @field_validator("text")
+    @classmethod
+    def validate_text_non_empty(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("claim text must be non-empty")
+        return cleaned
+
+    @field_validator("evidence")
+    @classmethod
+    def validate_evidence_non_empty(
+        cls, value: tuple[EvidenceReference, ...]
+    ) -> tuple[EvidenceReference, ...]:
+        if not value:
+            raise ValueError("claim must carry at least one evidence reference")
+        return value
+
 
 class ProviderResult(FrozenModel):
-    answer: str
     confidence: float
-    claims: tuple[ProviderResultClaim, ...] = ()
+    claims: tuple[ProviderResultClaim, ...]
     provider: str
     model: str
+    prompt_contract_version: str = PROMPT_CONTRACT_VERSION
 
     @field_validator("confidence")
     @classmethod
@@ -277,12 +299,36 @@ class ProviderResult(FrozenModel):
             raise ValueError("confidence must be between 0.0 and 1.0")
         return value
 
-    @field_validator("answer")
+    @field_validator("claims")
     @classmethod
-    def validate_answer_non_empty(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("answer must be non-empty")
+    def validate_claims_non_empty(
+        cls, value: tuple[ProviderResultClaim, ...]
+    ) -> tuple[ProviderResultClaim, ...]:
+        if not value:
+            raise ValueError("claims must be non-empty")
         return value
+
+
+# Evaluated (provider_name, model_name, prompt_contract_version) tuples
+# accepted by the owner for automatic submission (AUTO_FILL_AND_SUBMIT).
+# This set is intentionally empty on initial delivery. Only an explicit
+# owner decision following an independently reviewed evaluation run may
+# add an accepted revision tuple here.
+ACCEPTED_AUTO_SUBMIT_REVISIONS: frozenset[tuple[str, str, str]] = frozenset()
+
+
+def is_evaluation_accepted(
+    provider: str,
+    model: str,
+    prompt_version: str,
+    accepted_revisions: frozenset[tuple[str, str, str]] | None = None,
+) -> bool:
+    revisions = (
+        accepted_revisions
+        if accepted_revisions is not None
+        else ACCEPTED_AUTO_SUBMIT_REVISIONS
+    )
+    return (provider, model, prompt_version) in revisions
 
 
 class ProviderTimeoutError(Exception):
@@ -344,7 +390,14 @@ _INTENT_PATTERNS: tuple[tuple[QuestionIntent, tuple[str, ...]], ...] = (
             r"why (are you interested|do you want|this role|this company)",
             r"what makes you (a |an )?(good|great|strong) fit",
             r"describe your .{0,80}(experience|background|qualifications)",
-            r"por que (voc[eê] quer|tem interesse)",
+            (
+                r"por que ((voc[eê] )?(quer|tem interesse)|"
+                r"esta vaga|este cargo|esta oportunidade|esta empresa)"
+            ),
+            (
+                r"descreva (sua|seu) .{0,80}"
+                r"(experi[eê]ncia|trajet[oó]ria|qualifica[cç][oõ]es|qualifica[cç][aã]o|hist[oó]rico)"
+            ),
         ),
     ),
     (
@@ -434,6 +487,8 @@ _INTENT_PATTERNS: tuple[tuple[QuestionIntent, tuple[str, ...]], ...] = (
             r"under penalty of perjury",
             r"terms and conditions",
             r"declaro que",
+            r"termos e condi[cç][oõ]es",
+            r"aceito os termos",
         ),
     ),
     (

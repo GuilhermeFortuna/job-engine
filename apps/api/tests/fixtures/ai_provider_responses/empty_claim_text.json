@@ -1,0 +1,9 @@
+{
+  "claims": [
+    {
+      "text": "",
+      "evidence_sources": ["profile:skills"]
+    }
+  ],
+  "confidence": 0.95
+}

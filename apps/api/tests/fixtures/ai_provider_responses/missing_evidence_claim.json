@@ -1,0 +1,9 @@
+{
+  "claims": [
+    {
+      "text": "I have 10 years of Kubernetes and Rust experience.",
+      "evidence_sources": ["profile:unlisted_skill"]
+    }
+  ],
+  "confidence": 0.99
+}

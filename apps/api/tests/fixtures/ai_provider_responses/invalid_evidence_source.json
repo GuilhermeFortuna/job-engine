@@ -1,0 +1,9 @@
+{
+  "claims": [
+    {
+      "text": "Valid text statement.",
+      "evidence_sources": ["invalid_source_format_no_colon"]
+    }
+  ],
+  "confidence": 0.95
+}

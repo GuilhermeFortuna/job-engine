@@ -1,0 +1,13 @@
+{
+  "claims": [
+    {
+      "text": "I bring extensive experience in backend Python engineering.",
+      "evidence_sources": ["profile:skills"]
+    },
+    {
+      "text": "I have worked as a Senior Backend Engineer building distributed systems.",
+      "evidence_sources": ["profile:headline", "profile:summary"]
+    }
+  ],
+  "confidence": 0.95
+}

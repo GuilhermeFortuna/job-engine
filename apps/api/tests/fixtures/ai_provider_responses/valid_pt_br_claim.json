@@ -1,0 +1,9 @@
+{
+  "claims": [
+    {
+      "text": "Tenho sólida experiência em engenharia de software backend com Python.",
+      "evidence_sources": ["profile:skills"]
+    }
+  ],
+  "confidence": 0.92
+}

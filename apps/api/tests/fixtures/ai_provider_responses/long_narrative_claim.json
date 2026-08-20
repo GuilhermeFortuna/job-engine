@@ -1,0 +1,9 @@
+{
+  "claims": [
+    {
+      "text": "This is a very long generated answer clause that repeats itself to exceed the maximum character limit set for the observation. This is a very long generated answer clause that repeats itself to exceed the maximum character limit set for the observation. This is a very long generated answer clause that repeats itself to exceed the maximum character limit set for the observation. This is a very long generated answer clause that repeats itself to exceed the maximum character limit set for the observation.",
+      "evidence_sources": ["profile:summary"]
+    }
+  ],
+  "confidence": 0.95
+}

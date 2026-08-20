@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -38,6 +37,7 @@ from job_engine.domain.application_answers import (
     ReasonCode,
     classify_question,
     evaluate_policy,
+    is_evaluation_accepted,
     validate_control_compatibility,
 )
 from job_engine.domain.applications import (
@@ -51,7 +51,6 @@ from job_engine.domain.applications import (
 from job_engine.domain.jobs import JobGroup
 from job_engine.services.answer_providers import (
     AnswerProvider,
-    build_fallback_provider,
     build_provider,
 )
 
@@ -311,6 +310,9 @@ class _CachedAnswer:
     answer: str
     confidence: float
     evidence: tuple[EvidenceReference, ...]
+    provider: str
+    model: str
+    prompt_contract_version: str
 
 
 class ApplicationAnswerService:
@@ -318,19 +320,15 @@ class ApplicationAnswerService:
         self,
         settings: Settings,
         provider: AnswerProvider | None = None,
-        fallback_provider: AnswerProvider | None = None,
         budget_reserver: Callable[[UUID, Decimal], Awaitable[bool]] | None = None,
+        accepted_auto_submit_revisions: frozenset[tuple[str, str, str]] | None = None,
     ) -> None:
         self._settings = settings
         self._provider = provider if provider is not None else build_provider(settings)
-        self._fallback_provider = (
-            fallback_provider
-            if fallback_provider is not None
-            else build_fallback_provider(settings)
-        )
         self._cache: dict[_CacheKey, _CachedAnswer] = {}
         self._run_call_counts: dict[UUID, int] = {}
         self._budget_reserver = budget_reserver
+        self._accepted_revisions = accepted_auto_submit_revisions
 
     async def _reserve_provider_call(self, run_id: UUID) -> bool:
         estimated_cost = self._settings.answer_provider_estimated_cost_per_call_usd
@@ -579,6 +577,28 @@ class ApplicationAnswerService:
             reason_code=reason_code,
         )
 
+    def _derive_decision_type(
+        self,
+        context: AuthorizedRunAnswerContext,
+        provider: str,
+        model: str,
+        prompt_version: str,
+    ) -> AnswerDecisionType:
+        """Derive final decision type on the server for a valid grounded answer.
+
+        Automatic submission (AUTO_FILL_AND_SUBMIT) is strictly derived:
+        - Run must be FULL_AUTO and carry automatic_submission_authorized (BACK-012)
+        - Provider, model, and prompt revision must be accepted by the evaluation gate
+        If unaccepted or unauthorized on FULL_AUTO, returns AUTO_FILL presenting
+        candidate for review. On SEMI_AUTO, returns AUTO_FILL for review.
+        """
+        if context.run.automatic_submission_authorized and is_evaluation_accepted(
+            provider, model, prompt_version, self._accepted_revisions
+        ):
+            return AnswerDecisionType.AUTO_FILL_AND_SUBMIT
+
+        return AnswerDecisionType.AUTO_FILL
+
     async def _generate(
         self,
         observation: QuestionObservation,
@@ -591,12 +611,22 @@ class ApplicationAnswerService:
         if cached is not None:
             mismatch = validate_control_compatibility(observation, cached.answer)
             if mismatch is None:
-                decision_type = (
-                    AnswerDecisionType.AUTO_FILL_AND_SUBMIT
-                    if automation_mode == AutomationMode.FULL_AUTO
-                    and cached.confidence
-                    >= self._settings.answer_auto_submit_confidence_threshold
-                    else AnswerDecisionType.AUTO_FILL
+                if (
+                    cached.confidence
+                    < self._settings.answer_auto_submit_confidence_threshold
+                ):
+                    return AnswerDecision(
+                        field_fingerprint=observation.field_fingerprint,
+                        decision=AnswerDecisionType.REVIEW_REQUIRED,
+                        policy_category=PolicyCategory.GROUNDED_GENERATED,
+                        confidence=cached.confidence,
+                        reason_code=ReasonCode.PROVIDER_LOW_CONFIDENCE,
+                    )
+                decision_type = self._derive_decision_type(
+                    context,
+                    cached.provider,
+                    cached.model,
+                    cached.prompt_contract_version,
                 )
                 return AnswerDecision(
                     field_fingerprint=observation.field_fingerprint,
@@ -639,8 +669,6 @@ class ApplicationAnswerService:
             job_evidence=context.job_evidence,
         )
 
-        reason: ReasonCode
-        fallback_result: ProviderResult | None
         try:
             result = await self._provider.generate(
                 grounded_context,
@@ -648,21 +676,9 @@ class ApplicationAnswerService:
                 timeout_seconds=self._settings.answer_provider_timeout_seconds,
             )
         except ProviderTimeoutError:
-            reason = ReasonCode.PROVIDER_TIMEOUT
-            fallback_result = await self._try_fallback(grounded_context, context.run.id)
-            if fallback_result is None:
-                return self._abstain(observation, reason)
-            result = fallback_result
+            return self._abstain(observation, ReasonCode.PROVIDER_TIMEOUT)
         except (ProviderUnavailableError, PrivacyGateClosedError):
-            reason = ReasonCode.PROVIDER_UNAVAILABLE
-            fallback_result = await self._try_fallback(grounded_context, context.run.id)
-            if fallback_result is None:
-                return (
-                    self._abstaim(observation, reason)
-                    if hasattr(self, "_abstaim")
-                    else self._abstain(observation, reason)
-                )
-            result = fallback_result
+            return self._abstain(observation, ReasonCode.PROVIDER_UNAVAILABLE)
         except ProviderInvalidStructureError:
             return self._abstain(observation, ReasonCode.PROVIDER_INVALID_STRUCTURE)
         except ProviderBudgetExhaustedError:
@@ -671,42 +687,50 @@ class ApplicationAnswerService:
         evidence = self._validate_grounded_claims(result, context)
         if evidence is None:
             return self._abstain(observation, ReasonCode.UNSUPPORTED_CLAIM_REJECTED)
+
+        derived_answer = " ".join(claim.text.strip() for claim in result.claims)
+
         max_length = grounded_context.max_length or _ANSWER_MAX_LENGTH_DEFAULT
-        if len(result.answer) > max_length:
+        if len(derived_answer) > max_length:
             return self._abstain(observation, ReasonCode.CHARACTER_LIMIT_EXCEEDED)
 
-        mismatch = validate_control_compatibility(observation, result.answer)
+        mismatch = validate_control_compatibility(observation, derived_answer)
         if mismatch is not None:
             return self._abstain(observation, mismatch)
 
         threshold = self._settings.answer_auto_submit_confidence_threshold
         if result.confidence < threshold:
-            decision_type = AnswerDecisionType.REVIEW_REQUIRED
-            answer_text: str | None = None
-            evidence = ()
-        else:
-            decision_type = (
-                AnswerDecisionType.AUTO_FILL_AND_SUBMIT
-                if automation_mode == AutomationMode.FULL_AUTO
-                else AnswerDecisionType.AUTO_FILL
+            return AnswerDecision(
+                field_fingerprint=observation.field_fingerprint,
+                decision=AnswerDecisionType.REVIEW_REQUIRED,
+                policy_category=PolicyCategory.GROUNDED_GENERATED,
+                confidence=result.confidence,
+                reason_code=ReasonCode.PROVIDER_LOW_CONFIDENCE,
             )
-            answer_text = result.answer
-            self._cache[cache_key] = _CachedAnswer(
-                answer=result.answer, confidence=result.confidence, evidence=evidence
-            )
+
+        decision_type = self._derive_decision_type(
+            context,
+            result.provider,
+            result.model,
+            result.prompt_contract_version,
+        )
+        self._cache[cache_key] = _CachedAnswer(
+            answer=derived_answer,
+            confidence=result.confidence,
+            evidence=evidence,
+            provider=result.provider,
+            model=result.model,
+            prompt_contract_version=result.prompt_contract_version,
+        )
 
         return AnswerDecision(
             field_fingerprint=observation.field_fingerprint,
             decision=decision_type,
-            answer=answer_text,
+            answer=derived_answer,
             policy_category=PolicyCategory.GROUNDED_GENERATED,
             confidence=result.confidence,
             evidence=evidence,
-            reason_code=(
-                ReasonCode.GROUNDED_GENERATED
-                if decision_type != AnswerDecisionType.REVIEW_REQUIRED
-                else ReasonCode.PROVIDER_LOW_CONFIDENCE
-            ),
+            reason_code=ReasonCode.GROUNDED_GENERATED,
         )
 
     def _validate_grounded_claims(
@@ -728,47 +752,23 @@ class ApplicationAnswerService:
             allowed.add(
                 EvidenceReference(source="profile", reference="employment_history")
             )
-        answer_normalized = " ".join(result.answer.casefold().split())
+
         evidence: set[EvidenceReference] = set()
+        seen_texts: set[str] = set()
+
         for claim in result.claims:
-            claim_normalized = " ".join(claim.text.casefold().split())
-            if not claim_normalized or claim_normalized not in answer_normalized:
+            text_norm = " ".join(claim.text.casefold().split())
+            if not text_norm:
                 return None
+            if text_norm in seen_texts:
+                return None
+            seen_texts.add(text_norm)
+
             if not claim.evidence or any(ref not in allowed for ref in claim.evidence):
                 return None
             evidence.update(claim.evidence)
 
-        # Require every non-empty sentence-like factual clause to be represented
-        # by at least one provider claim instead of accepting one token claim for
-        # an otherwise unsupported paragraph.
-        clauses = [
-            " ".join(part.casefold().split())
-            for part in re.split(r"[.!?;]+", result.answer)
-            if part.strip()
-        ]
-        claim_texts = [" ".join(c.text.casefold().split()) for c in result.claims]
-        if any(
-            not any(claim in clause or clause in claim for claim in claim_texts)
-            for clause in clauses
-        ):
-            return None
         return tuple(sorted(evidence, key=lambda ref: (ref.source, ref.reference)))
-
-    async def _try_fallback(
-        self, grounded_context: GroundedContext, run_id: UUID
-    ) -> ProviderResult | None:
-        if self._fallback_provider is None:
-            return None
-        if not await self._reserve_provider_call(run_id):
-            return None
-        try:
-            return await self._fallback_provider.generate(
-                grounded_context,
-                max_output_tokens=self._settings.answer_provider_max_output_tokens,
-                timeout_seconds=self._settings.answer_provider_timeout_seconds,
-            )
-        except Exception:
-            return None
 
     def _abstain(
         self, observation: QuestionObservation, reason_code: ReasonCode

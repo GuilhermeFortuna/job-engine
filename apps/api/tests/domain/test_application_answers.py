@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from job_engine.domain.applicant import PolicyCategory, QuestionIntent
 from job_engine.domain.application_answers import (
+    ACCEPTED_AUTO_SUBMIT_REVISIONS,
     NEVER_GENERATIVE_INTENTS,
     AnswerDecision,
     AnswerDecisionType,
@@ -17,10 +18,13 @@ from job_engine.domain.application_answers import (
     EvidenceReference,
     IntentClassification,
     ObservationValidationConstraints,
+    ProviderResult,
+    ProviderResultClaim,
     QuestionObservation,
     ReasonCode,
     classify_question,
     evaluate_policy,
+    is_evaluation_accepted,
     validate_control_compatibility,
 )
 
@@ -338,17 +342,18 @@ def test_auto_fill_requires_answer_and_evidence() -> None:
         )
 
 
-def test_auto_fill_and_submit_requires_high_confidence() -> None:
-    with pytest.raises(ValidationError):
-        AnswerDecision(
-            field_fingerprint="fp",
-            decision=AnswerDecisionType.AUTO_FILL_AND_SUBMIT,
-            answer="x",
-            policy_category=PolicyCategory.GROUNDED_GENERATED,
-            confidence=0.5,
-            evidence=(EvidenceReference(source="job", reference="j1"),),
-            reason_code=ReasonCode.GROUNDED_GENERATED,
-        )
+def test_auto_fill_and_submit_requires_answer_and_evidence() -> None:
+    decision = AnswerDecision(
+        field_fingerprint="fp",
+        decision=AnswerDecisionType.AUTO_FILL_AND_SUBMIT,
+        answer="Valid answer text",
+        policy_category=PolicyCategory.GROUNDED_GENERATED,
+        confidence=0.5,  # Valid float; confidence does not block model construction
+        evidence=(EvidenceReference(source="job", reference="j1"),),
+        reason_code=ReasonCode.GROUNDED_GENERATED,
+    )
+    assert decision.decision == AnswerDecisionType.AUTO_FILL_AND_SUBMIT
+    assert decision.confidence == 0.5
 
 
 def test_review_required_must_not_carry_answer() -> None:
@@ -372,3 +377,77 @@ def test_confidence_must_be_bounded() -> None:
             confidence=1.5,
             reason_code=ReasonCode.PROVIDER_UNAVAILABLE,
         )
+    with pytest.raises(ValidationError):
+        AnswerDecision(
+            field_fingerprint="fp",
+            decision=AnswerDecisionType.ABSTAIN,
+            policy_category=PolicyCategory.REVIEW_REQUIRED,
+            confidence=-0.1,
+            reason_code=ReasonCode.PROVIDER_UNAVAILABLE,
+        )
+
+
+def test_provider_result_claim_validation() -> None:
+    # Non-empty text and non-empty evidence
+    claim = ProviderResultClaim(
+        text="Valid statement",
+        evidence=(EvidenceReference(source="profile", reference="skills"),),
+    )
+    assert claim.text == "Valid statement"
+
+    # Empty text fails
+    with pytest.raises(ValidationError):
+        ProviderResultClaim(
+            text="   ",
+            evidence=(EvidenceReference(source="profile", reference="skills"),),
+        )
+
+    # Empty evidence fails
+    with pytest.raises(ValidationError):
+        ProviderResultClaim(text="Valid statement", evidence=())
+
+
+def test_provider_result_validation() -> None:
+    claim = ProviderResultClaim(
+        text="Valid statement",
+        evidence=(EvidenceReference(source="profile", reference="skills"),),
+    )
+    result = ProviderResult(
+        confidence=0.95,
+        claims=(claim,),
+        provider="local",
+        model="llama3",
+    )
+    assert result.confidence == 0.95
+    assert len(result.claims) == 1
+    assert result.prompt_contract_version == "2"
+
+    # Empty claims fails
+    with pytest.raises(ValidationError):
+        ProviderResult(
+            confidence=0.95,
+            claims=(),
+            provider="local",
+            model="llama3",
+        )
+
+
+def test_shipped_accepted_auto_submit_revisions_is_empty() -> None:
+    assert ACCEPTED_AUTO_SUBMIT_REVISIONS == frozenset()
+    assert is_evaluation_accepted("local", "any-model", "2") is False
+    assert is_evaluation_accepted("gemini", "gemini-2.5-flash", "2") is False
+
+    # Test-local set evaluates correctly
+    test_revisions = frozenset({("gemini", "gemini-2.5-flash", "2")})
+    assert (
+        is_evaluation_accepted(
+            "gemini", "gemini-2.5-flash", "2", accepted_revisions=test_revisions
+        )
+        is True
+    )
+    assert (
+        is_evaluation_accepted(
+            "local", "any-model", "2", accepted_revisions=test_revisions
+        )
+        is False
+    )

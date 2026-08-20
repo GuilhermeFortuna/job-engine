@@ -1,0 +1,9 @@
+{
+  "claims": [
+    {
+      "text": "I might have some relevant experience.",
+      "evidence_sources": ["profile:summary"]
+    }
+  ],
+  "confidence": 0.40
+}
