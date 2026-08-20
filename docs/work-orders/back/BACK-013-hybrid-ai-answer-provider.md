@@ -8,7 +8,9 @@
 
 **Unblocks:** CROSS-014, CROSS-013
 
-**Product contract:** `docs/v2.1-auto-apply-outcome-contract.md` after CROSS-011 acceptance
+**Product contract:** [V2.1 Auto-Apply Owner Outcome Contract](../../v2.1-auto-apply-outcome-contract.md), section 6
+
+**CROSS-011 audit:** [Production-Wiring Audit](../../automation/production-wiring-audit.md), outcome 9
 
 ## Objective
 
@@ -65,6 +67,30 @@ Do not edit Electron, React, browser/form adapters, application-run authorizatio
 - The service may return `AUTO_FILL_AND_SUBMIT` for a generated answer only when all of these are true: permitted narrative intent; full-auto run authorization; strict schema validity; every answer clause maps to allowlisted frozen evidence; control/length validation passes; no prohibited or unresolved field remains; and the exact provider/model/prompt-contract revision is accepted by the evaluation gate.
 - Any failed condition returns `REVIEW_REQUIRED` or `ABSTAIN`. Semi-auto may present a schema-valid grounded candidate for review without making it submission-eligible.
 - Existing owner-authored sensitive/legal/demographic/authorization/consent/signature answers remain governed by deterministic policy and are never generated or paraphrased by a model.
+
+## CROSS-011 binding
+
+- `POST /api/v1/runner/runs/{run_id}/answer-decisions` remains the sole runner
+  answer interface. Its request continues to contain normalized observations;
+  provider selection, prompts, evidence, and eligibility remain backend-only.
+- The strict provider result contains provider/model/prompt-contract identity
+  and structured answer clauses whose evidence IDs are validated against the
+  frozen run context. The service constructs final answer text only from
+  validated clauses; raw provider prose never reaches the runner.
+- Deterministic owner/profile/answer-bank decisions bypass providers and retain
+  their existing precedence. Sensitive/legal/demographic/authorization,
+  consent, signature, unknown, or insufficiently grounded fields cannot enter
+  the generation path.
+- A generated `AUTO_FILL_AND_SUBMIT` decision requires BACK-012's derived
+  `automatic_submission_authorized`, an accepted provider/model/prompt revision,
+  and every schema/evidence/control/privacy gate. Provider confidence is recorded
+  only as diagnostic metadata and is removed from the authorization predicate.
+- Local transport is confined to the configured loopback URL; Gemini credentials
+  remain backend-only. Timeout, malformed output, unavailable credentials,
+  closed privacy gate, exhausted budget, prompt injection, or unsupported claim
+  yields a named review/abstention result independent of provider.
+- The focused pytest command and offline corpus below are the required contract
+  proof; live local/Gemini smoke tests remain opt-in and never substitute for it.
 
 ## Evaluation gate
 

@@ -19,4 +19,12 @@ Job Engine is a monorepo. `CROSS-` orders own root-level concerns spanning backe
 | [CROSS-013](CROSS-013-auto-apply-production-acceptance.md) | Auto-apply production-path acceptance | `BLOCKED` |
 | [CROSS-014](CROSS-014-broad-application-platform-coverage.md) | Broad application-platform coverage | `BLOCKED` |
 
+CROSS-011 produced the candidate
+[V2.1 Owner Outcome Contract](../../v2.1-auto-apply-outcome-contract.md) and
+[Production-Wiring Audit](../../automation/production-wiring-audit.md).
+CROSS-012 owns production Electron composition, CROSS-014 owns the frozen
+provider inventory and measured coverage, and CROSS-013 independently accepts
+the compiled production path plus owner-visible outcome. Their `BLOCKED`
+statuses remain authoritative until the owner changes them.
+
 The authoritative live status is the project-wide [Work Order Status](../STATUS.md).

@@ -78,6 +78,15 @@ Batch 03 does not authorize `FULL_AUTO`, background multi-job queues, autonomous
 
 Batch 04 repairs the gap between Batch 03's tested modules and the visible production desktop product. It restores explicitly authorized `FULL_AUTO` for owner-selected jobs, connects the automation runtime to the real Electron entrypoint, makes readiness/actions/status discoverable, and requires production-path plus owner-visible acceptance.
 
+The candidate [V2.1 Owner Outcome Contract](../v2.1-auto-apply-outcome-contract.md)
+freezes the exact routes, modes, authorization phrase, state and exception rules,
+AI boundary, coverage calculation, and evidence layers. The companion
+[Production-Wiring Audit](../automation/production-wiring-audit.md) records that
+the current production Electron entrypoint creates the secure visible browser
+surface but does not construct the automation runtime; current end-to-end
+runtime construction is fixture-only. These documents are technical bindings,
+not owner acceptance or production proof.
+
 - [`CROSS-011`](cross-repo/CROSS-011-auto-apply-outcome-lock.md): freeze the V2.1 outcome, audit production wiring, and bind downstream contracts
 - [`BACK-012`](back/BACK-012-full-auto-authorization.md): persist and enforce exact owner authorization for unattended submission
 - [`BACK-013`](back/BACK-013-hybrid-ai-answer-provider.md): add deterministic-first local/Gemini grounded narrative answers and an evaluation/privacy gate

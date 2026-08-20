@@ -8,7 +8,9 @@
 
 **Unblocks:** CROSS-013
 
-**Product contract:** `docs/v2.1-auto-apply-outcome-contract.md` after CROSS-011 acceptance
+**Product contract:** [V2.1 Auto-Apply Owner Outcome Contract](../../v2.1-auto-apply-outcome-contract.md), sections 3–5
+
+**CROSS-011 audit:** [Production-Wiring Audit](../../automation/production-wiring-audit.md), section 5 and outcomes 1–2, 7–8
 
 ## Objective
 
@@ -47,6 +49,33 @@ Do not edit Electron main/preload implementation, backend behavior, answer polic
 - Assisted mode explicitly creates `semi_auto_pause_before_submit`; mode is never inferred.
 - The control center shows mode, job, resume, created/updated time, progress, current exception, receipt, failure, and `SUBMISSION_UNKNOWN`. It provides no blind-retry action after a submit attempt.
 - Runtime/bridge failure is a visible degraded state. Loading the Next.js UI inside Electron is not displayed as automation-ready until the production runtime capability is confirmed.
+
+## CROSS-011 binding
+
+- Use exactly `/applications`, `/applications/settings`, and
+  `/applications/{run_id}/workspace`; add persistent **Jobs** and
+  **Applications** header destinations in both Electron and ordinary-browser
+  rendering.
+- Replace the current launcher `null` return with exactly one visible state for
+  every application URL: **Auto apply**, **Apply with assistance**, or
+  **Automation unavailable** followed by the backend/desktop reason.
+- Change the create client to accept explicit `job_group_ids`, `resume_id`, and
+  `automation_mode`. Full-auto additionally sends
+  `owner_confirmation: "Authorize automatic submission for these selected jobs"`;
+  semi-auto omits that authorization and sends
+  `semi_auto_pause_before_submit`. React never defaults or upgrades a mode.
+- Project BACK-012's `automatic_submission_authorized_at` and derived boolean,
+  plus CROSS-012's redacted runtime capability/progress. Group durable statuses
+  as queued/active, needs attention, and terminal while retaining the exact
+  backend status, checkpoint, mode, selected résumé, exception, audit event,
+  receipt, and uncertainty text.
+- Show `release-submit` only for a semi-auto run at `submit_armed` with no
+  blocking exception. A full-auto success has no routine final control, and a
+  run with `submit_attempted_at` or `submission_unknown` has no blind-retry
+  action.
+- Ordinary browser, broken bridge, missing runtime, non-HTTPS URL, incomplete
+  readiness, unsupported provider, auth/CAPTCHA, and drift states remain visible
+  and explanatory, with a safe external application link where permitted.
 
 ## Procedure
 

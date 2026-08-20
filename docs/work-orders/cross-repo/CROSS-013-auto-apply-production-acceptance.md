@@ -8,7 +8,9 @@
 
 **Unblocks:** Batch 04 completion
 
-**Product contract:** `docs/v2.1-auto-apply-outcome-contract.md` after CROSS-011 acceptance
+**Product contract:** [V2.1 Auto-Apply Owner Outcome Contract](../../v2.1-auto-apply-outcome-contract.md), all locked outcomes
+
+**CROSS-011 audit:** [Production-Wiring Audit](../../automation/production-wiring-audit.md), traceability matrix
 
 ## Objective
 
@@ -30,6 +32,27 @@ No product implementation, fixture expectation, selector, policy, personal data,
 - The compiled Electron production main entrypoint is used; test-only runtime composition is prohibited.
 - Desktop user data and evidence roots are disposable and outside the repository.
 - Any live ATS inspection or submission remains separately owner-authorized and subject to existing legal gates. Synthetic production-path acceptance must not be skipped when live access is unavailable.
+
+## CROSS-011 acceptance binding
+
+- Evaluate all ten numbered owner outcomes in the contract as separate report
+  rows. Each row records automated contract proof, production import/construction
+  proof, real-Electron behavior, owner-visible evidence, and verdict; one layer
+  cannot substitute for another.
+- Begin through the visible desktop UI and the compiled
+  `apps/desktop/src/main/index.ts`. Reject any scenario that imports a separate
+  fixture coordinator or constructs `RunnerClient`, `LeaseManager`,
+  `EvidenceRecorder`, `StepRunner`, or adapters only in the test process.
+- Capture the exact `POST /api/v1/application-runs` full-auto payload, persisted
+  authorization timestamp/projection, targeted production claim, monotonic
+  checkpoints, one submit activation, evidence hash, terminal event, and receipt
+  against the same run ID. Repeat the mode proof for semi-auto `release-submit`.
+- Use CROSS-014's frozen numerator, denominator, exclusions, and family evidence;
+  recalculate the percentage rather than copying its conclusion. Unsupported
+  providers must remain visible and cannot count toward success.
+- The final `GO`, `CONDITIONAL_GO`, or `NO_GO` report names one clean commit and
+  preserves legal/privacy/live-test gates independently from synthetic
+  production-path acceptance. Owner visual acceptance remains mandatory.
 
 ## Acceptance scenarios
 

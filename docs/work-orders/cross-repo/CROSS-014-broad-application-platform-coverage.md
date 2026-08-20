@@ -8,7 +8,9 @@
 
 **Unblocks:** CROSS-013
 
-**Product contract:** `docs/v2.1-auto-apply-outcome-contract.md` after CROSS-011 acceptance
+**Product contract:** [V2.1 Auto-Apply Owner Outcome Contract](../../v2.1-auto-apply-outcome-contract.md), section 7
+
+**CROSS-011 audit:** [Production-Wiring Audit](../../automation/production-wiring-audit.md), outcome 10
 
 ## Objective
 
@@ -59,6 +61,29 @@ Do not edit job-source ingestion behavior, applicant/answer policy, full-auto au
 - Demonstrate `AUTO_SUPPORTED` for application-platform families accounting for at least 95% of eligible URLs in the frozen inventory, with a documented plan for every remaining family. The stretch target is 100%; do not weaken safety rules to reach it.
 - A provider counts toward the percentage only after production-entrypoint evidence passes. A unit adapter test or manual page inspection alone does not count.
 - Any authentication, CAPTCHA, inaccessible custom control, legal restriction, or unverified live drift is excluded from automatic completion only with a visible, stable reason and retained assisted/manual path.
+
+## CROSS-011 binding
+
+- Freeze a metadata-only inventory containing every distinct application URL in
+  the representative Himalayas, Jobicy, and Remote OK catalog sample. Strip
+  query/fragment data and record source, normalized host/path family, provider,
+  count/share, eligibility, support tier, stable reason, and evidence revision.
+- Classify every inventory row as `AUTO_SUPPORTED`, `ASSISTED_SUPPORTED`, or
+  `UNSUPPORTED`. Unknown providers are not placeholders: they receive
+  `UNSUPPORTED` with a stable missing-evidence reason until proven otherwise.
+- Resolve adapters in fixed order: exact proven provider adapter, then proven
+  generic standard-form fallback, otherwise no automation. Greenhouse, Lever,
+  generic, Ashby, SmartRecruiters, Workday, every additional inventoried family,
+  and hostile lookalikes each require a recorded decision.
+- The eligible denominator excludes only a documented auth, CAPTCHA,
+  inaccessible-control, legal, or verified drift condition with a visible
+  assisted/manual reason. The numerator includes only families proven through
+  CROSS-012's compiled production entrypoint. Publish both counts, the percentage,
+  every exclusion, and the 100% stretch gap.
+- Acceptance requires 100% classification, 100% of committed standard-form
+  scenarios, and auto-supported families covering at least 95% of eligible
+  inventory URLs. Neither fixture-only construction nor an unauthorized live
+  submission counts.
 
 ## Procedure
 

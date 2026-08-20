@@ -8,7 +8,9 @@
 
 **Unblocks:** CROSS-014, CROSS-013
 
-**Product contract:** `docs/v2.1-auto-apply-outcome-contract.md` after CROSS-011 acceptance
+**Product contract:** [V2.1 Auto-Apply Owner Outcome Contract](../../v2.1-auto-apply-outcome-contract.md), sections 3–5
+
+**CROSS-011 audit:** [Production-Wiring Audit](../../automation/production-wiring-audit.md), sections 2–3 and outcomes 4–5
 
 ## Objective
 
@@ -44,6 +46,35 @@ Do not edit backend semantics, React UI, source ingestion, unrelated Electron se
 - A final submit control is activated at most once. After any attempt, restart/reclaim reconciles receipt or `SUBMISSION_UNKNOWN` and never clicks again.
 - Close, route change, logout/auth pause, renderer crash, desktop restart, lease loss, and network failure release or preserve state according to the backend contract without orphaned work.
 - Runtime progress and actionable failures are sent to the trusted renderer through typed, redacted state; the UI never receives lease/runner/grant tokens.
+
+## CROSS-011 binding
+
+- The audited production entrypoint currently constructs only configuration,
+  session, `ApplicationViewManager`, IPC, and the main window. This order must
+  make `apps/desktop/src/main/index.ts` the explicit owner of one coordinator
+  that constructs `RunnerClient`, `LeaseManager`, `EvidenceRecorder`,
+  `StepRunner`, isolated-world transport, résumé loader, and
+  `createDefaultAdapterRegistry()`; fixture imports are forbidden.
+- The only automatic start/resume triggers are an owner-opened exact run ID, a
+  trusted full-auto run created by the owner and dequeued when the single visible
+  view becomes available, or explicit owner resolution/resume. The coordinator
+  never performs discovery or chooses a job.
+- Before mutation, claim the exact run and validate visible URL, mode, lease,
+  frozen authorization, and adapter capability. Bind the adapter to the same
+  `WebContentsView` exposed by `ApplicationViewManager`; no hidden browser or
+  second automation page may be introduced.
+- Map missing answers/validation/unsupported controls to `needs_input`, auth and
+  CAPTCHA to `paused_auth`, pre-submit transient failures to the existing retry
+  contract, and post-attempt ambiguity to terminal `submission_unknown`.
+- At `submit_armed`, semi-auto waits for `release-submit`; authorized full-auto
+  records `submitting` and activates the final control once. Receipt evidence is
+  reconciled before `submitted`, and restart/reclaim never repeats activation
+  after `submit_attempted_at` or `submitting`.
+- Extend typed IPC only with redacted runtime health, capability, run progress,
+  and exception reason codes consumed by FRONT-006. Do not expose runner secret,
+  lease/grant token, cookies, raw answers, résumé path, or remote-page data.
+- `test:production` must launch the compiled real main entrypoint, create the run
+  through the public contract, and fail if production construction is removed.
 
 ## Procedure
 

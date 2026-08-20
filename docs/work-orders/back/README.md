@@ -18,4 +18,11 @@ Backend orders own Python/FastAPI domain behavior, source ingestion, PostgreSQL 
 | [BACK-012](BACK-012-full-auto-authorization.md) | Explicit full-auto authorization and audit semantics | `BLOCKED` |
 | [BACK-013](BACK-013-hybrid-ai-answer-provider.md) | Hybrid local/Gemini grounded answer provider | `BLOCKED` |
 
+Batch 04 backend orders are bound to the candidate
+[V2.1 Owner Outcome Contract](../../v2.1-auto-apply-outcome-contract.md) and the
+[CROSS-011 Production-Wiring Audit](../../automation/production-wiring-audit.md).
+BACK-012 owns exact full-auto authorization and durable state; BACK-013 owns the
+deterministic-first provider schema and evaluation gate. Neither order may begin
+until its live status changes from `BLOCKED`.
+
 The authoritative live status is the project-wide [Work Order Status](../STATUS.md).

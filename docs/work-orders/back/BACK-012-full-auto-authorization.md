@@ -8,7 +8,9 @@
 
 **Unblocks:** CROSS-012, FRONT-006, CROSS-013
 
-**Product contract:** `docs/v2.1-auto-apply-outcome-contract.md` after CROSS-011 acceptance
+**Product contract:** [V2.1 Auto-Apply Owner Outcome Contract](../../v2.1-auto-apply-outcome-contract.md), sections 4–5
+
+**CROSS-011 audit:** [Production-Wiring Audit](../../automation/production-wiring-audit.md), outcomes 3 and 6
 
 ## Objective
 
@@ -41,6 +43,29 @@ Do not edit Electron, React, applicant-profile/answer-policy behavior, source ad
 - A full-auto run with valid frozen authorization may progress from ready-for-review to `SUBMITTING` without `release-submit` only after every required field is verified and no pending blocking exception exists.
 - `submit_attempted_at`, monotonic checkpoints, one-shot activation, receipt reconciliation, `SUBMISSION_UNKNOWN`, duplicate protection, lease validation, and no-retry-after-attempt remain mandatory.
 - `release-submit` rejects `FULL_AUTO`; it remains a semi-auto-only endpoint.
+
+## CROSS-011 binding
+
+- Extend `ApplicationRunCreateRequest` with
+  `owner_confirmation: str | None = None`; validate the exact full-auto phrase
+  before `ApplicationService.create_runs` opens a transaction or persists any
+  member of a multi-job request.
+- Extend domain, persistence, owner read, and `RunnerClaimResponse.run` with
+  `automatic_submission_authorized_at: datetime | None` and the derived
+  `automatic_submission_authorized: bool`. The boolean is true only when the
+  timestamp exists on a `full_auto` run; it is never writable by a client.
+- Preserve the existing status vocabulary. The full-auto path uses
+  `queued -> claimed -> running`, monotonic checkpoints through `submit_armed`,
+  then `submitting` immediately before the one allowed activation, followed by
+  `submitted`, `submission_unknown`, or a truthful failure. Semi-auto returns to
+  `queued` at `submit_armed` only through the existing `release-submit` flow.
+- Treat missing authorization, stale frozen data, a pending blocking exception,
+  lost lease, prior `submit_attempted_at`, or a non-monotonic checkpoint as a
+  hard submission denial. No denial may be repaired by changing modes or
+  synthesizing confirmation server-side.
+- The focused acceptance path is the exact pytest command below; CROSS-012 and
+  FRONT-006 must consume the resulting schema rather than predicting field
+  names locally.
 
 ## Procedure
 
