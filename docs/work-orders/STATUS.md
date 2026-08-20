@@ -1,6 +1,6 @@
 # Job Engine Work Order Status
 
-**Scope authorities:** [Job Engine V1 Product Specification](../v1-product-spec.md) for Batch 01–02; [V2 Embedded Assisted Apply Specification](../v2-assisted-apply-spec.md) for Batch 03.
+**Scope authorities:** [Job Engine V1 Product Specification](../v1-product-spec.md) for Batch 01–02; [V2 Embedded Assisted Apply Specification](../v2-assisted-apply-spec.md) for Batch 03; [CROSS-011](cross-repo/CROSS-011-auto-apply-outcome-lock.md) freezes the V2.1 owner outcome before Batch 04 implementation.
 
 **Registry:** [Work Order Registry](README.md)
 
@@ -63,6 +63,11 @@ then continue. A stale placeholder is not an owner-approval request.
 | [CROSS-008](cross-repo/CROSS-008-second-platform-automation.md)       | Cross    | `DONE`   | CROSS-010                                                                           | Lever embedded assisted-apply adapter                                     |
 | [FRONT-005](front/FRONT-005-application-automation-control-center.md) | Frontend | `DONE`   | CROSS-010                                                                           | Embedded application workspace and review UI                              |
 | [CROSS-009](cross-repo/CROSS-009-automated-application-acceptance.md) | Cross    | `REVIEW` | BACK-009, BACK-010, BACK-011, CROSS-006, CROSS-010, CROSS-007, CROSS-008, FRONT-005 | Batch 03 embedded assisted-apply acceptance                               |
+| [CROSS-011](cross-repo/CROSS-011-auto-apply-outcome-lock.md)          | Cross    | `READY`  | CROSS-009 evidence                                                                  | V2.1 outcome lock, drift reconciliation, and production-wiring audit      |
+| [BACK-012](back/BACK-012-full-auto-authorization.md)                  | Backend  | `BLOCKED` | CROSS-011                                                                          | Explicit full-auto authorization and durable audit semantics              |
+| [CROSS-012](cross-repo/CROSS-012-production-runtime-integration.md)   | Cross    | `BLOCKED` | CROSS-011, BACK-012                                                                | Production Electron automation runtime integration                        |
+| [FRONT-006](front/FRONT-006-visible-automation-control-center.md)     | Frontend | `BLOCKED` | CROSS-011, BACK-012                                                                | Visible automation control center, readiness, and launch UI                |
+| [CROSS-013](cross-repo/CROSS-013-auto-apply-production-acceptance.md) | Cross    | `BLOCKED` | BACK-012, CROSS-012, FRONT-006                                                     | Production-path auto-apply acceptance and owner-visible proof             |
 
 
 
@@ -93,17 +98,24 @@ CROSS-010 -> CROSS-007
 BACK-009 + BACK-010 + BACK-011 + CROSS-006 + CROSS-010
     + CROSS-007 + CROSS-008 + FRONT-005
     -> CROSS-009 (Batch 03 Acceptance)
+
+CROSS-009 evidence -> CROSS-011 (Batch 04 Outcome Lock)
+CROSS-011 -> BACK-012
+CROSS-011 + BACK-012 -> CROSS-012
+                         -> FRONT-006
+BACK-012 + CROSS-012 + FRONT-006 -> CROSS-013 (Batch 04 Acceptance)
 ```
 
 `BACK-005`, `BACK-006`, and `BACK-007` may proceed in parallel after their prerequisites are `DONE`. Documentation research in `CROSS-002` may proceed in parallel with `CROSS-001`.
 
-For the remaining Batch 03 work, `CROSS-006` is the only `READY` order. It creates the secure Electron/browser foundation without form automation. After `CROSS-006` is `DONE`, `CROSS-010` adds the generic assisted runtime. `CROSS-007`, `CROSS-008`, and `FRONT-005` may then proceed in parallel.
+For Batch 04, `CROSS-011` is the only `READY` order. It freezes the owner-visible outcome and binds production-path evidence before more implementation. After owner acceptance makes `CROSS-011` `DONE`, `BACK-012` may proceed. `CROSS-012` and `FRONT-006` may proceed in parallel only after `BACK-012` is `DONE` and their statuses are explicitly changed to `READY`.
 
 ### Batch completion rule
 
 - Batch 01 is complete only when `CROSS-003` is `DONE`.
 - Batch 02 is complete only when `CROSS-004` is `DONE`.
 - Batch 03 is complete only when `CROSS-009` is `DONE`.
+- Batch 04 is complete only when `CROSS-013` is `DONE` after owner-visible acceptance against the named production commit.
 - Backend or frontend automated checks do not independently establish product acceptance.
 
 
@@ -147,7 +159,9 @@ For the remaining Batch 03 work, `CROSS-006` is the only `READY` order. It creat
 | 2026-08-17 | CROSS-005 | Batch 03 targets automatic completion and final submission for owner-selected jobs on supported platforms; routine success has no second review click, while genuine exceptions pause for owner input                                                                               | Project owner     |
 | 2026-08-17 | CROSS-005 | Bound [playwright@1.62.1](mailto:playwright@1.62.1), chromium, greenhouse (primary 1), lever (primary 2), ashby (backup 1), smartrecruiters (backup 2), 6-category answer policy, automation modes (FULL_AUTO, SEMI_AUTO), SUBMISSION_UNKNOWN state, retry stages, and LLM cost cap | Antigravity agent |
 | 2026-08-18 | Batch 03  | Owner superseded unattended-first presentation/runtime scope with an Electron embedded application workspace. Batch 03 exposes one visible `SEMI_AUTO_PAUSE_BEFORE_SUBMIT` run, requires explicit owner release, retains Playwright for testing, and defers `FULL_AUTO`.            | Project owner     |
+| 2026-08-19 | Batch 04  | Owner approved a remediation batch that restores visible, owner-selected supported-platform auto apply, removes the routine second submission click for authorized `FULL_AUTO`, requires production Electron wiring rather than fixture-only proof, and adds outcome-lock/change-control gates. | Project owner |
 
 
 | 2026-08-19 | CROSS-009 | Batch 03 acceptance executed against commit `e433810` on synthetic evidence only. Decision `CONDITIONAL_GO`: all nine acceptance criteria met except live-inspection evidence, which was not produced because `LEGAL-GATE-ATS-001` is OPEN and no owner authorization named a live target. Report: `/docs/evidence/embedded-assisted-apply-acceptance.md`. Status remains owner-controlled. | CROSS-009 agent |
-| 2026-08-19 | CROSS-009 | Defects reported to owning orders, not repaired in acceptance scope: D-1 `pnpm run check` fails on `catalog-backdrop.tsx:22` (`set-state-in-effect`); D-2 `pnpm run build` cannot pass from a clean checkout because `.env.example` ships an empty `JOB_ENGINE_RUNNER_SECRET` with no generation guidance; D-3 serious WCAG contrast regression (3.65:1) in `LiveSyncProgressModal.tsx:127`; D-4 documented `--` spec filter is inert for `web run test:e2e`; D-5 `reuseExistingServer` serves a stale bundle and produces false E2E failures; D-6 `next-env.d.ts` oscillates between build and dev. | CROSS-009 agent || 2026-08-19 | CROSS-009 | Owner-instructed post-acceptance remediation (after the `CONDITIONAL_GO`, explicitly authorizing the acceptance agent to repair code). Closed D-2 (api build target now `scripts/build_smoke.py` with injected settings; new `backend-build` CI job runs it with the secret unset; `.env.example`/`dev.sh`/`docs/development.md` gained generation guidance), D-5 residual (`reuseExistingServer` now opt-in via `E2E_REUSE_SERVER=1`), A-1 (`automation_mode` required and un-defaulted, 422 regression test), A-2 (committed PEM key replaced by in-process `node-forge` generation), A-3 (owner's real name removed from fixtures), G-1 (induced renderer-crash recovery case), G-2 (Greenhouse real-backend lifecycle driver, 12 cases, parity with Lever). Decision remains `CONDITIONAL_GO`: both gates still OPEN and scenario C.4 still not performed. | CROSS-009 agent |
+| 2026-08-19 | CROSS-009 | Defects reported to owning orders, not repaired in acceptance scope: D-1 `pnpm run check` fails on `catalog-backdrop.tsx:22` (`set-state-in-effect`); D-2 `pnpm run build` cannot pass from a clean checkout because `.env.example` ships an empty `JOB_ENGINE_RUNNER_SECRET` with no generation guidance; D-3 serious WCAG contrast regression (3.65:1) in `LiveSyncProgressModal.tsx:127`; D-4 documented `--` spec filter is inert for `web run test:e2e`; D-5 `reuseExistingServer` serves a stale bundle and produces false E2E failures; D-6 `next-env.d.ts` oscillates between build and dev. | CROSS-009 agent |
+| 2026-08-19 | CROSS-009 | Owner-instructed post-acceptance remediation (after the `CONDITIONAL_GO`, explicitly authorizing the acceptance agent to repair code). Closed D-2 (api build target now `scripts/build_smoke.py` with injected settings; new `backend-build` CI job runs it with the secret unset; `.env.example`/`dev.sh`/`docs/development.md` gained generation guidance), D-5 residual (`reuseExistingServer` now opt-in via `E2E_REUSE_SERVER=1`), A-1 (`automation_mode` required and un-defaulted, 422 regression test), A-2 (committed PEM key replaced by in-process `node-forge` generation), A-3 (owner's real name removed from fixtures), G-1 (induced renderer-crash recovery case), G-2 (Greenhouse real-backend lifecycle driver, 12 cases, parity with Lever). Decision remains `CONDITIONAL_GO`: both gates still OPEN and scenario C.4 still not performed. | CROSS-009 agent |

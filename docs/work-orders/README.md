@@ -1,6 +1,6 @@
 # Job Engine Work Order Registry
 
-This directory is the execution registry for Job Engine. Batch 01 and Batch 02 scope comes from [the V1 product specification](../v1-product-spec.md). Batch 03 scope comes from the owner-approved [V2 Embedded Assisted Apply specification](../v2-assisted-apply-spec.md); implementation orders must not silently change either accepted scope.
+This directory is the execution registry for Job Engine. Batch 01 and Batch 02 scope comes from [the V1 product specification](../v1-product-spec.md). Batch 03 scope comes from the owner-approved [V2 Embedded Assisted Apply specification](../v2-assisted-apply-spec.md). Batch 04 begins with [`CROSS-011`](cross-repo/CROSS-011-auto-apply-outcome-lock.md), which must freeze the V2.1 owner outcome before implementation orders proceed. Orders must not silently change an accepted scope or owner-visible outcome.
 
 ## Prefix and ownership rules
 
@@ -74,6 +74,18 @@ The accepted backend foundation remains in force. The 2026-08-18 owner pivot rep
 
 Batch 03 does not authorize `FULL_AUTO`, background multi-job queues, autonomous job selection, CAPTCHA/access-control bypass, unauthorized live test applications, or fabricated applicant facts. The retained backend enum is not product authorization.
 
+## Batch 04: Auto-Apply Production Remediation
+
+Batch 04 repairs the gap between Batch 03's tested modules and the visible production desktop product. It restores explicitly authorized `FULL_AUTO` for owner-selected jobs, connects the automation runtime to the real Electron entrypoint, makes readiness/actions/status discoverable, and requires production-path plus owner-visible acceptance.
+
+- [`CROSS-011`](cross-repo/CROSS-011-auto-apply-outcome-lock.md): freeze the V2.1 outcome, audit production wiring, and bind downstream contracts
+- [`BACK-012`](back/BACK-012-full-auto-authorization.md): persist and enforce exact owner authorization for unattended submission
+- [`CROSS-012`](cross-repo/CROSS-012-production-runtime-integration.md): compose the automation runtime from the production Electron main process
+- [`FRONT-006`](front/FRONT-006-visible-automation-control-center.md): expose Applications, readiness, explicit modes, actions, exceptions, and results
+- [`CROSS-013`](cross-repo/CROSS-013-auto-apply-production-acceptance.md): prove the real production path and obtain owner-visible acceptance
+
+Only `CROSS-011` begins `READY`. Later orders remain `BLOCKED` until the authoritative status board records their prerequisites and owner approval.
+
 ## Work Order contract
 
 Every order must define:
@@ -85,5 +97,9 @@ Every order must define:
 - Acceptance criteria and handoff evidence
 - Forbidden decisions and out-of-scope work
 - Dispatch and completion records
+
+Every batch that changes an owner-visible workflow must also define an **Owner Outcome Contract**. Any later proposal that changes a routine user action, automation level, visible destination, success condition, or intervention rule requires a before/after behavior table and explicit owner approval before downstream implementation proceeds. A decision-log sentence alone cannot silently supersede that contract.
+
+Acceptance must prove reachability from the production entrypoint. Unit tests, jsdom, mocked bridges, and fixture-only composition are supporting evidence, not proof that the visible product executes the feature. Frontend or cross-product acceptance remains `REVIEW` until the owner receives a named commit and visible walkthrough evidence.
 
 Changing an order's ID, path, dependency, or completion rule requires updating this registry, the relevant directory index, [`STATUS.md`](STATUS.md), and all affected links in the same change. Future batches must add sections to `STATUS.md`, never separate status-board files.
