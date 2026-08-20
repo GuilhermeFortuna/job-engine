@@ -167,3 +167,59 @@ describe("RuntimeCoordinator admission", () => {
     expect(coordinator.getState().reasonCode).toBe("RENDERER_CRASHED");
   });
 });
+
+describe("RuntimeCoordinator adapter selection", () => {
+  function selectFor(
+    run: Partial<ClaimResponse["run"]>,
+    visibleUrl: string,
+  ): string | null {
+    const coordinator = coordinatorOf(mockViewManager(), makeClient());
+    const select = (
+      coordinator as unknown as {
+        selectAdapter: (
+          run: ClaimResponse["run"],
+          visibleUrl: string,
+        ) => { adapterId: string } | null;
+      }
+    ).selectAdapter.bind(coordinator);
+    return select(makeClaim(run).run, visibleUrl)?.adapterId ?? null;
+  }
+
+  it("binds the platform adapter the visible host matches", () => {
+    expect(
+      selectFor(
+        { platform_adapter_id: "generic" },
+        "https://boards.greenhouse.io/acme/jobs/1",
+      ),
+    ).toBe("greenhouse");
+  });
+
+  it("falls back to the frozen canonical URL before the named adapter", () => {
+    expect(
+      selectFor(
+        {
+          platform_adapter_id: "lever",
+          canonical_application_url: "https://boards.greenhouse.io/acme/jobs/1",
+        },
+        "https://unknown.example.test/apply",
+      ),
+    ).toBe("greenhouse");
+  });
+
+  it("accepts the backend-named adapter only for a loopback page", () => {
+    expect(
+      selectFor({ platform_adapter_id: "greenhouse" }, "https://127.0.0.1:8443/greenhouse/standard"),
+    ).toBe("greenhouse");
+  });
+
+  it("never lets the named adapter override a public non-matching host", () => {
+    // A backend row naming greenhouse must not drive greenhouse selectors
+    // against a page whose host no platform adapter matches.
+    expect(
+      selectFor(
+        { platform_adapter_id: "greenhouse" },
+        "https://careers.unknown.example.test/apply",
+      ),
+    ).toBe("generic");
+  });
+});

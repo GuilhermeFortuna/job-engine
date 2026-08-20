@@ -43,6 +43,28 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Whether a URL points at this machine.
+ *
+ * Only the local fixture servers are loopback, so this marks the one case
+ * where the backend-named adapter may stand in for a host match. Parsed with
+ * `URL` and compared by exact hostname, never by substring: a public host that
+ * merely contains "localhost" is not local.
+ */
+function isLoopbackUrl(rawUrl: string): boolean {
+  try {
+    const host = new URL(rawUrl).hostname.toLowerCase();
+    return (
+      host === "localhost" ||
+      host === "::1" ||
+      host === "[::1]" ||
+      /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export class RuntimeCoordinator {
   private runtimeState: DesktopRuntimeState = { ...INITIAL_RUNTIME_STATE };
   private readonly stateListeners = new Set<
@@ -403,19 +425,38 @@ export class RuntimeCoordinator {
     return { success: true };
   }
 
+  /**
+   * Choose the adapter for the page that is actually on screen.
+   *
+   * The visible URL decides. It has already been checked against the run the
+   * backend resolved, so a platform match here is the page the owner opened.
+   *
+   * Two fallbacks follow, in order of how much they trust the page. The frozen
+   * canonical URL is consulted first: it is the real posting address, so
+   * resolving it is still a URL decision. Only a loopback page -- the local
+   * HTTPS fixture servers, which no platform adapter can match on host -- falls
+   * back to the adapter the backend named. Letting the named adapter win on a
+   * public host would drive platform selectors against a page that never
+   * matched them.
+   */
   private selectAdapter(run: RunnerRun, visibleUrl: string): FormAdapter | null {
     const { adapterRegistry } = this.deps;
     const visible = adapterRegistry.resolve(visibleUrl);
     if (visible && visible.adapterId !== "generic") {
       return visible;
     }
-    const named = adapterRegistry.adapterById(run.platform_adapter_id);
-    if (named) {
-      return named;
-    }
     const canonical = run.canonical_application_url
       ? adapterRegistry.resolve(run.canonical_application_url)
       : null;
+    if (canonical && canonical.adapterId !== "generic") {
+      return canonical;
+    }
+    if (isLoopbackUrl(visibleUrl)) {
+      const named = adapterRegistry.adapterById(run.platform_adapter_id);
+      if (named) {
+        return named;
+      }
+    }
     return canonical ?? visible;
   }
 
@@ -756,7 +797,7 @@ export class RuntimeCoordinator {
           runId,
           "step_error",
           { detail: "Retryable step failure" },
-          "LEASE_LOST",
+          "STEP_RETRYABLE",
           evidence,
         );
         return;
