@@ -58,6 +58,7 @@ from job_engine.db.repositories import (
     GrantExpiredError,
     LeaseExpiredOrInvalidError,
     ResourceNotFoundError,
+    SubmissionDeniedError,
     SubmitArmedRequirementError,
 )
 from job_engine.domain.applicant import LEGAL_CONSENT_INTENTS, QuestionIntent
@@ -310,6 +311,8 @@ def _map_run_read(run: ApplicationRun) -> ApplicationRunRead:
         answer_bank_snapshot=run.answer_bank_snapshot,
         answer_bank_hash=run.answer_bank_hash,
         automation_mode=run.automation_mode,
+        automatic_submission_authorized_at=(run.automatic_submission_authorized_at),
+        automatic_submission_authorized=run.automatic_submission_authorized,
         status=run.status,
         current_step=run.current_step,
         current_checkpoint=run.current_checkpoint,
@@ -767,6 +770,10 @@ async def post_runner_checkpoint(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
         ) from exc
+    except SubmissionDeniedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
 
 
 @runner_router.post(
@@ -837,6 +844,10 @@ async def complete_runner_run(
     except ApplicationRunNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    except SubmissionDeniedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc
     except ValueError as exc:
         raise HTTPException(

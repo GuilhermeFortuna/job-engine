@@ -14,14 +14,16 @@ from job_engine.db.repositories import (
     DuplicateApplicationError,
     GrantAlreadyConsumedError,
     LeaseExpiredOrInvalidError,
+    SubmissionDeniedError,
 )
-from job_engine.domain.applicant import ResumeAssetInput
+from job_engine.domain.applicant import ApplicantProfileInput, ResumeAssetInput
 from job_engine.domain.applications import (
     ApplicationRunStatus,
     AutomationMode,
     ExceptionType,
     ReceiptSummary,
     RunCheckpoint,
+    calculate_answer_bank_hash,
     calculate_token_hash,
 )
 from job_engine.domain.enums import EmploymentType, JobStatus, RemoteStatus, Seniority
@@ -59,6 +61,7 @@ async def _create_test_fixtures(session: AsyncSession) -> tuple[UUID, UUID]:
     )
 
     vault_repo = ApplicantVaultRepository(session)
+    await vault_repo.replace_profile(ApplicantProfileInput(), expected_version=None)
     resume = await vault_repo.create_resume(
         ResumeAssetInput(
             resume_id="res_test_default",
@@ -319,6 +322,7 @@ async def test_crash_safety_and_lease_expiry_reclaim(db_session: AsyncSession) -
     repo = ApplicationRepository(db_session)
 
     # --- Scenario A: Crash BEFORE submit click -> Reclaims to QUEUED ---
+    answer_bank_hash = calculate_answer_bank_hash({})
     run_a = await repo.create_run(
         ApplicationRunInput(
             job_group_id=job_id,
@@ -330,9 +334,15 @@ async def test_crash_safety_and_lease_expiry_reclaim(db_session: AsyncSession) -
             resume_sha256="a" * 64,
             applicant_profile_version=1,
             answer_bank_snapshot={},
-            answer_bank_hash="b" * 64,
+            answer_bank_hash=answer_bank_hash,
             automation_mode=AutomationMode.FULL_AUTO,
             idempotency_key="f" * 64,
+            automatic_submission_authorized_at=datetime.now(UTC),
+            policy_snapshot={
+                "profile_version": 1,
+                "resume_id": "res_test_default",
+                "answer_bank_hash": answer_bank_hash,
+            },
         )
     )
 
@@ -362,6 +372,12 @@ async def test_crash_safety_and_lease_expiry_reclaim(db_session: AsyncSession) -
         max_concurrency=1,
     )
     assert claim_b is not None
+    await repo.record_checkpoint(
+        run_a.id,
+        lease_token_hash=thash_a,
+        checkpoint=RunCheckpoint.SUBMIT_ARMED.value,
+        step_description="Application verified and armed",
+    )
     # Runner sets checkpoint to SUBMITTING immediately before click
     await repo.record_checkpoint(
         run_a.id,
@@ -388,6 +404,7 @@ async def test_single_use_resume_grant_and_receipt_completion(
     job_id, resume_id = await _create_test_fixtures(db_session)
     repo = ApplicationRepository(db_session)
 
+    answer_bank_hash = calculate_answer_bank_hash({})
     run = await repo.create_run(
         ApplicationRunInput(
             job_group_id=job_id,
@@ -399,9 +416,15 @@ async def test_single_use_resume_grant_and_receipt_completion(
             resume_sha256="a" * 64,
             applicant_profile_version=1,
             answer_bank_snapshot={},
-            answer_bank_hash="b" * 64,
+            answer_bank_hash=answer_bank_hash,
             automation_mode=AutomationMode.FULL_AUTO,
             idempotency_key="g" * 64,
+            automatic_submission_authorized_at=datetime.now(UTC),
+            policy_snapshot={
+                "profile_version": 1,
+                "resume_id": "res_test_default",
+                "answer_bank_hash": answer_bank_hash,
+            },
         )
     )
 
@@ -424,6 +447,17 @@ async def test_single_use_resume_grant_and_receipt_completion(
     # 2. Replay attempt -> Replay rejected with GrantAlreadyConsumedError
     with pytest.raises(GrantAlreadyConsumedError):
         await repo.consume_resume_grant(run.id, grant_hash)
+
+    await repo.record_checkpoint(
+        run.id,
+        lease_token_hash=thash,
+        checkpoint=RunCheckpoint.SUBMIT_ARMED.value,
+    )
+    await repo.record_checkpoint(
+        run.id,
+        lease_token_hash=thash,
+        checkpoint=RunCheckpoint.SUBMITTING.value,
+    )
 
     # 3. Complete run with verified receipt summary
     now = datetime.now(UTC)
@@ -450,6 +484,7 @@ async def test_single_use_resume_grant_and_receipt_completion(
 async def test_semi_auto_pause_and_release_submit(db_session: AsyncSession) -> None:
     job_id, resume_id = await _create_test_fixtures(db_session)
     repo = ApplicationRepository(db_session)
+    answer_bank_hash = calculate_answer_bank_hash({})
 
     run = await repo.create_run(
         ApplicationRunInput(
@@ -462,9 +497,14 @@ async def test_semi_auto_pause_and_release_submit(db_session: AsyncSession) -> N
             resume_sha256="a" * 64,
             applicant_profile_version=1,
             answer_bank_snapshot={},
-            answer_bank_hash="b" * 64,
+            answer_bank_hash=answer_bank_hash,
             automation_mode=AutomationMode.SEMI_AUTO_PAUSE_BEFORE_SUBMIT,
             idempotency_key="h" * 64,
+            policy_snapshot={
+                "profile_version": 1,
+                "resume_id": "res_test_default",
+                "answer_bank_hash": answer_bank_hash,
+            },
         )
     )
 
@@ -502,3 +542,125 @@ async def test_semi_auto_pause_and_release_submit(db_session: AsyncSession) -> N
         run.id, owner_confirmation="I confirm and approve submission"
     )
     assert released.status == ApplicationRunStatus.QUEUED
+    armed_exception = next(
+        item
+        for item in released.exceptions
+        if item.exception_type == ExceptionType.SEMI_AUTO_ARMED
+    )
+    assert armed_exception.status.value == "resolved"
+
+    released_claim = await repo.claim_next_run(
+        runner_id="runner_1",
+        lease_token_hash=thash,
+        lease_duration_seconds=60,
+        max_concurrency=1,
+        run_id=run.id,
+    )
+    assert released_claim is not None
+    submitting = await repo.record_checkpoint(
+        run.id,
+        lease_token_hash=thash,
+        checkpoint=RunCheckpoint.SUBMITTING.value,
+    )
+    assert submitting.submit_attempted_at is not None
+
+
+async def test_full_auto_submission_denies_missing_or_stale_authorization(
+    db_session: AsyncSession,
+) -> None:
+    job_id, resume_id = await _create_test_fixtures(db_session)
+    repo = ApplicationRepository(db_session)
+    answer_bank_hash = calculate_answer_bank_hash({})
+
+    unauthorized = await repo.create_run(
+        ApplicationRunInput(
+            job_group_id=job_id,
+            source_posting_id=None,
+            canonical_application_url="https://boards.greenhouse.io/acme/jobs/601",
+            application_url="https://boards.greenhouse.io/acme/jobs/601",
+            platform_adapter_id="greenhouse",
+            resume_asset_id=resume_id,
+            resume_sha256="a" * 64,
+            applicant_profile_version=1,
+            answer_bank_snapshot={},
+            answer_bank_hash=answer_bank_hash,
+            automation_mode=AutomationMode.FULL_AUTO,
+            idempotency_key="i" * 64,
+            policy_snapshot={
+                "profile_version": 1,
+                "resume_id": "res_test_default",
+                "answer_bank_hash": answer_bank_hash,
+            },
+        )
+    )
+    token_hash = calculate_token_hash("token_unauthorized")
+    assert (
+        await repo.claim_next_run(
+            runner_id="runner_1",
+            lease_token_hash=token_hash,
+            lease_duration_seconds=60,
+            max_concurrency=1,
+            run_id=unauthorized.id,
+        )
+        is not None
+    )
+    await repo.record_checkpoint(
+        unauthorized.id,
+        lease_token_hash=token_hash,
+        checkpoint=RunCheckpoint.SUBMIT_ARMED.value,
+    )
+    with pytest.raises(SubmissionDeniedError, match="lacks durable"):
+        await repo.record_checkpoint(
+            unauthorized.id,
+            lease_token_hash=token_hash,
+            checkpoint=RunCheckpoint.SUBMITTING.value,
+        )
+    await repo.cancel_run(unauthorized.id)
+
+    stale = await repo.create_run(
+        ApplicationRunInput(
+            job_group_id=job_id,
+            source_posting_id=None,
+            canonical_application_url="https://boards.greenhouse.io/acme/jobs/602",
+            application_url="https://boards.greenhouse.io/acme/jobs/602",
+            platform_adapter_id="greenhouse",
+            resume_asset_id=resume_id,
+            resume_sha256="a" * 64,
+            applicant_profile_version=1,
+            answer_bank_snapshot={},
+            answer_bank_hash=answer_bank_hash,
+            automation_mode=AutomationMode.FULL_AUTO,
+            idempotency_key="j" * 64,
+            automatic_submission_authorized_at=datetime.now(UTC),
+            policy_snapshot={
+                "profile_version": 1,
+                "resume_id": "res_test_default",
+                "answer_bank_hash": answer_bank_hash,
+            },
+        )
+    )
+    await ApplicantVaultRepository(db_session).replace_profile(
+        ApplicantProfileInput(), expected_version=1
+    )
+    stale_token_hash = calculate_token_hash("token_stale")
+    assert (
+        await repo.claim_next_run(
+            runner_id="runner_1",
+            lease_token_hash=stale_token_hash,
+            lease_duration_seconds=60,
+            max_concurrency=1,
+            run_id=stale.id,
+        )
+        is not None
+    )
+    await repo.record_checkpoint(
+        stale.id,
+        lease_token_hash=stale_token_hash,
+        checkpoint=RunCheckpoint.SUBMIT_ARMED.value,
+    )
+    with pytest.raises(SubmissionDeniedError, match="changed after authorization"):
+        await repo.record_checkpoint(
+            stale.id,
+            lease_token_hash=stale_token_hash,
+            checkpoint=RunCheckpoint.SUBMITTING.value,
+        )

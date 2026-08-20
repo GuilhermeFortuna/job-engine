@@ -471,6 +471,7 @@ class ApplicationRun(Base):
     answer_bank_snapshot: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False)
     answer_bank_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     automation_mode: Mapped[str] = mapped_column(Text, nullable=False)
+    automatic_submission_authorized_at: Mapped[datetime | None] = _optional_aware_dt()
     status: Mapped[str] = mapped_column(Text, nullable=False, default="queued")
     current_step: Mapped[str | None] = mapped_column(Text)
     current_checkpoint: Mapped[str | None] = mapped_column(Text)

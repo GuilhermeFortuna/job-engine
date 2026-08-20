@@ -46,6 +46,7 @@ from job_engine.domain.applications import (
     ApplicationRunEvent,
     ApplicationRunStatus,
     AuditEventType,
+    AutomationMode,
     EvidenceArtifact,
     EvidenceType,
     ExceptionStatus,
@@ -136,6 +137,11 @@ class ApplicationService:
     async def create_runs(
         self, request: ApplicationRunCreateRequest
     ) -> tuple[tuple[ApplicationRun, ...], tuple[ApplicationRunConflictItem, ...]]:
+        automatic_submission_authorized_at = (
+            datetime.now(UTC)
+            if request.automation_mode == AutomationMode.FULL_AUTO
+            else None
+        )
         async with self._session_factory() as session:
             vault_repo = ApplicantVaultRepository(session)
             catalog_repo = CatalogRepository(session)
@@ -253,6 +259,9 @@ class ApplicationService:
                     answer_bank_snapshot=snapshot,
                     answer_bank_hash=answer_bank_hash,
                     automation_mode=request.automation_mode,
+                    automatic_submission_authorized_at=(
+                        automatic_submission_authorized_at
+                    ),
                     idempotency_key=idempotency_key,
                     policy_snapshot={
                         "profile_version": profile.version,

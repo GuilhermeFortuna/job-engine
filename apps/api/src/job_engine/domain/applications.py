@@ -47,6 +47,9 @@ class AutomationMode(StrEnum):
     SEMI_AUTO_PAUSE_BEFORE_SUBMIT = "semi_auto_pause_before_submit"
 
 
+FULL_AUTO_OWNER_CONFIRMATION = "Authorize automatic submission for these selected jobs"
+
+
 class RunCheckpoint(StrEnum):
     FORM_DISCOVERED = "form_discovered"
     PROFILE_FILLED = "profile_filled"
@@ -90,6 +93,7 @@ class EvidenceType(StrEnum):
 
 class AuditEventType(StrEnum):
     RUN_CREATED = "run_created"
+    AUTOMATIC_SUBMISSION_AUTHORIZED = "automatic_submission_authorized"
     LEASE_CLAIMED = "lease_claimed"
     LEASE_EXTENDED = "lease_extended"
     LEASE_EXPIRED = "lease_expired"
@@ -320,6 +324,7 @@ class ApplicationRun(FrozenModel):
     answer_bank_snapshot: dict[str, int]
     answer_bank_hash: str
     automation_mode: AutomationMode
+    automatic_submission_authorized_at: datetime | None = None
     status: ApplicationRunStatus = ApplicationRunStatus.QUEUED
     current_step: str | None = None
     current_checkpoint: str | None = None
@@ -351,6 +356,7 @@ class ApplicationRun(FrozenModel):
         "started_at",
         "completed_at",
         "submit_attempted_at",
+        "automatic_submission_authorized_at",
         "lease_expires_at",
         "duplicate_override_confirmed_at",
     )
@@ -367,6 +373,13 @@ class ApplicationRun(FrozenModel):
 
     @model_validator(mode="after")
     def validate_terminal_invariants(self) -> Self:
+        if (
+            self.automation_mode != AutomationMode.FULL_AUTO
+            and self.automatic_submission_authorized_at is not None
+        ):
+            raise ValueError(
+                "Automatic-submission authorization is valid only for FULL_AUTO runs"
+            )
         if self.status == ApplicationRunStatus.SUBMITTED:
             if self.receipt_summary is None:
                 raise ValueError("SUBMITTED status requires receipt_summary")
@@ -377,6 +390,13 @@ class ApplicationRun(FrozenModel):
                 f"Terminal status {self.status.value} requires completed_at timestamp"
             )
         return self
+
+    @property
+    def automatic_submission_authorized(self) -> bool:
+        return (
+            self.automation_mode == AutomationMode.FULL_AUTO
+            and self.automatic_submission_authorized_at is not None
+        )
 
 
 class ApplicationRunEvent(FrozenModel):

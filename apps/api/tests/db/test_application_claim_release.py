@@ -16,13 +16,14 @@ from job_engine.db.repositories import (
     GrantAlreadyConsumedError,
     LeaseExpiredOrInvalidError,
 )
-from job_engine.domain.applicant import ResumeAssetInput
+from job_engine.domain.applicant import ApplicantProfileInput, ResumeAssetInput
 from job_engine.domain.applications import (
     ApplicationRunStatus,
     AutomationMode,
     EvidenceType,
     RunCheckpoint,
     RunnerReleaseReason,
+    calculate_answer_bank_hash,
     calculate_token_hash,
 )
 from job_engine.domain.enums import EmploymentType, JobStatus, RemoteStatus, Seniority
@@ -63,7 +64,9 @@ async def _create_job_group(session: AsyncSession, slug: str) -> UUID:
 
 
 async def _create_resume(session: AsyncSession) -> UUID:
-    resume = await ApplicantVaultRepository(session).create_resume(
+    vault_repo = ApplicantVaultRepository(session)
+    await vault_repo.replace_profile(ApplicantProfileInput(), expected_version=None)
+    resume = await vault_repo.create_resume(
         ResumeAssetInput(
             resume_id="res_test_default",
             label="Test Resume",
@@ -84,6 +87,7 @@ async def _make_run(
     slug: str,
     automation_mode: AutomationMode = AutomationMode.SEMI_AUTO_PAUSE_BEFORE_SUBMIT,
 ) -> UUID:
+    answer_bank_hash = calculate_answer_bank_hash({})
     run = await repo.create_run(
         ApplicationRunInput(
             job_group_id=job_group_id,
@@ -95,9 +99,19 @@ async def _make_run(
             resume_sha256="a" * 64,
             applicant_profile_version=1,
             answer_bank_snapshot={},
-            answer_bank_hash="b" * 64,
+            answer_bank_hash=answer_bank_hash,
             automation_mode=automation_mode,
             idempotency_key=slug.ljust(64, "0"),
+            automatic_submission_authorized_at=(
+                datetime.now(UTC)
+                if automation_mode == AutomationMode.FULL_AUTO
+                else None
+            ),
+            policy_snapshot={
+                "profile_version": 1,
+                "resume_id": "res_test_default",
+                "answer_bank_hash": answer_bank_hash,
+            },
         )
     )
     return run.id
@@ -283,7 +297,13 @@ async def test_release_refused_after_submit_attempt(db_session: AsyncSession) ->
     resume_id = await _create_resume(db_session)
     group = await _create_job_group(db_session, "sub")
     repo = ApplicationRepository(db_session)
-    run_id = await _make_run(repo, group, resume_id, "submitting")
+    run_id = await _make_run(
+        repo,
+        group,
+        resume_id,
+        "submitting",
+        automation_mode=AutomationMode.FULL_AUTO,
+    )
 
     thash = calculate_token_hash("token_submit")
     assert (
@@ -295,6 +315,11 @@ async def test_release_refused_after_submit_attempt(db_session: AsyncSession) ->
             run_id=run_id,
         )
         is not None
+    )
+    await repo.record_checkpoint(
+        run_id,
+        lease_token_hash=thash,
+        checkpoint=RunCheckpoint.SUBMIT_ARMED.value,
     )
     await repo.record_checkpoint(
         run_id,

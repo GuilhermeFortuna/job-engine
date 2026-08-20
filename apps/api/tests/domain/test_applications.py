@@ -205,6 +205,19 @@ def test_application_run_model_invariants() -> None:
         updated_at=now,
     )
     assert run.status == ApplicationRunStatus.QUEUED
+    assert run.automatic_submission_authorized is False
+
+    authorized_run = run.model_copy(update={"automatic_submission_authorized_at": now})
+    assert authorized_run.automatic_submission_authorized is True
+
+    with pytest.raises(ValueError, match="authorization is valid only for FULL_AUTO"):
+        ApplicationRun(
+            **run.model_dump(
+                exclude={"automation_mode", "automatic_submission_authorized_at"}
+            ),
+            automation_mode=AutomationMode.SEMI_AUTO_PAUSE_BEFORE_SUBMIT,
+            automatic_submission_authorized_at=now,
+        )
 
     # SUBMITTED status requires receipt_summary and completed_at
     with pytest.raises(ValueError, match="SUBMITTED status requires receipt_summary"):

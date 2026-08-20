@@ -9,7 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from job_engine.config import Settings
 from job_engine.db.repositories import CatalogRepository
-from job_engine.domain.applications import RunnerReleaseReason
+from job_engine.domain.applications import (
+    FULL_AUTO_OWNER_CONFIRMATION,
+    RunnerReleaseReason,
+)
 from job_engine.domain.enums import EmploymentType, JobStatus, RemoteStatus, Seniority
 from job_engine.domain.jobs import Compensation, JobGroupInput, SourcePostingInput
 from tests.api.test_applications import _setup_fixtures
@@ -87,9 +90,16 @@ async def _create_second_group(session: AsyncSession) -> UUID:
 
 
 async def _create_run(client: AsyncClient, group_id: UUID, mode: str) -> str:
+    payload = {
+        "job_group_ids": [str(group_id)],
+        "resume_id": "res_primary_pdf",
+        "automation_mode": mode,
+    }
+    if mode == "full_auto":
+        payload["owner_confirmation"] = FULL_AUTO_OWNER_CONFIRMATION
     resp = await client.post(
         "/api/v1/application-runs",
-        json={"job_group_ids": [str(group_id)], "automation_mode": mode},
+        json=payload,
     )
     assert resp.status_code == 201, resp.text
     return str(resp.json()["created_runs"][0]["id"])
@@ -286,6 +296,13 @@ async def test_release_refused_after_submit_checkpoint(
     run_id = await _create_run(client, group_id, "full_auto")
     claim = await _claim(client, settings, run_id=run_id)
     lease_token = str(claim["lease_token"])
+
+    armed = await client.post(
+        f"/api/v1/runner/runs/{run_id}/checkpoints",
+        headers=_runner_headers(settings, **{"X-Runner-Lease-Token": lease_token}),
+        json={"checkpoint": "submit_armed", "step_description": "Verified"},
+    )
+    assert armed.status_code == 200
 
     chk = await client.post(
         f"/api/v1/runner/runs/{run_id}/checkpoints",

@@ -19,6 +19,7 @@ from job_engine.domain.applicant import (
     ReusableAnswerInput,
     ValueState,
 )
+from job_engine.domain.applications import FULL_AUTO_OWNER_CONFIRMATION
 from job_engine.domain.enums import EmploymentType, JobStatus, RemoteStatus, Seniority
 from job_engine.domain.jobs import Compensation, JobGroupInput, SourcePostingInput
 
@@ -137,7 +138,12 @@ async def _create_and_claim_run(
 ) -> tuple[str, str]:
     create_resp = await client.post(
         "/api/v1/application-runs",
-        json={"job_group_ids": [group_id], "automation_mode": "full_auto"},
+        json={
+            "job_group_ids": [group_id],
+            "resume_id": "res_answers_primary",
+            "automation_mode": "full_auto",
+            "owner_confirmation": FULL_AUTO_OWNER_CONFIRMATION,
+        },
     )
     assert create_resp.status_code == 201
     run_id = create_resp.json()["created_runs"][0]["id"]

@@ -1,6 +1,6 @@
 # BACK-012: Explicit Full-Auto Authorization and Audit Semantics
 
-**Status:** `BLOCKED`
+**Status:** `READY` (per authoritative `docs/work-orders/STATUS.md`; implementation complete pending owner review)
 
 **Owner:** Unassigned
 
@@ -24,18 +24,21 @@ Make unattended final submission an explicit, durable, auditable backend capabil
 - `/apps/api/src/job_engine/services/applications.py`
 - `/apps/api/src/job_engine/db/models.py` (authorization persistence only)
 - `/apps/api/src/job_engine/db/repositories.py` (application-run authorization/state only)
-- `/apps/api/alembic/versions/*full_auto_authorization*.py` (new, if persistence changes)
+- `/apps/api/migrations/versions/*full_auto_authorization*.py` (new, if persistence changes)
 - `/apps/api/tests/domain/test_applications.py`
 - `/apps/api/tests/db/test_application_repositories.py`
 - `/apps/api/tests/db/test_application_claim_release.py`
 - `/apps/api/tests/services/test_full_auto_authorization.py` (new)
 - `/apps/api/tests/api/test_applications.py`
+- `/apps/api/tests/api/test_application_answers.py` (owner-approved contract update only)
+- `/apps/api/tests/api/test_runner_claim_release.py` (owner-approved contract update only)
 
 Do not edit Electron, React, applicant-profile/answer-policy behavior, source adapters, or acceptance fixtures.
 
 ## Fixed API and state contract
 
 - `POST /api/v1/application-runs` continues to require an explicit `automation_mode`; it never defaults to `FULL_AUTO`.
+- `FULL_AUTO` also requires an explicit `resume_id`; the default-resume fallback remains semi-auto-only.
 - When `automation_mode` is `full_auto`, the request must include `owner_confirmation` with the exact value `Authorize automatic submission for these selected jobs`. Missing or different confirmation returns `422` and creates no run.
 - The authorization applies only to the request's exact `job_group_ids`, chosen `resume_id`, frozen applicant-profile version, frozen answer-bank snapshot, and resulting run IDs. It cannot authorize later-added jobs or a changed resume/profile.
 - Persist server-generated `automatic_submission_authorized_at` for each full-auto run. Read models expose the timestamp and boolean authorization state; runner responses expose enough state to enforce it without exposing new secrets.
@@ -107,20 +110,41 @@ git diff --check
 
 ## Handoff evidence
 
-- Exact request/read schema and migration revision
-- State-transition and authorization matrix
-- Focused test transcript plus backend lint/type results
-- Upgrade/downgrade evidence if a migration is added
-- Downstream binding notes for CROSS-012 and FRONT-006
+- Request: `automation_mode` remains required;
+  `owner_confirmation: str | None = None` and `resume_id` are required together
+  for `full_auto`, with the exact confirmation phrase. Semi-auto rejects that
+  authorization field.
+- Read/claim projection: `automatic_submission_authorized_at: datetime | None`
+  plus server-derived `automatic_submission_authorized: bool`.
+- Migration: `0006_full_auto_authorization`, nullable timestamp with no legacy
+  backfill. Verified `0006 -> 0005 -> 0006`; current head is
+  `0006_full_auto_authorization`.
+- State/authorization matrix:
+
+  | Mode | Creation authorization | `submit_armed -> submitting` |
+  | --- | --- | --- |
+  | `full_auto` | Exact owner phrase, explicit résumé, server timestamp | Valid lease, monotonic checkpoint, consistent frozen scope, no pending exception, no prior attempt |
+  | `semi_auto_pause_before_submit` | No full-auto authorization | Same safety gates plus durable `release-submit`; the armed exception is resolved by release |
+  | Legacy full-auto without timestamp | Never inferred or backfilled | Denied |
+
+- Validation on 2026-08-19:
+  - Ruff check and format check: passed.
+  - Strict MyPy over `src tests`: passed (88 files).
+  - Focused BACK-012 suite: `46 passed`.
+  - Full backend suite: `327 passed, 3 skipped`.
+  - `git diff --check`: passed.
+- Downstream binding: CROSS-012 and FRONT-006 already name the exact timestamp,
+  derived boolean, explicit résumé, and confirmation phrase; no speculative
+  downstream schema edits were required.
 
 ## Dispatch record
 
-- Worker: Unassigned
+- Worker: Codex
 - Branch/worktree: `development` (shared working branch)
-- Dispatched at: Not dispatched
+- Dispatched at: `2026-08-19T23:13:13-03:00`
 
 ## Completion record
 
 - Commit: Pending
-- Evidence: Pending
+- Evidence: Implementation and validation recorded above against base `2712de4`
 - Independent reviewer: Pending

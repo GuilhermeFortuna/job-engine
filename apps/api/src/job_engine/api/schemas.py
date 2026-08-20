@@ -4,7 +4,14 @@ from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 from job_engine.domain.applicant import (
     FieldDiffStatus,
@@ -19,6 +26,7 @@ from job_engine.domain.application_answers import (
     ReasonCode,
 )
 from job_engine.domain.applications import (
+    FULL_AUTO_OWNER_CONFIRMATION,
     ApplicationRunStatus,
     AutomationMode,
     EvidenceType,
@@ -651,6 +659,20 @@ class ApplicationRunCreateRequest(BaseModel):
     # caller that simply omitted the field silently created an unattended run
     # (CROSS-009 advisory A-1). Callers must now state the mode they intend.
     automation_mode: AutomationMode
+    owner_confirmation: str | None = None
+
+    @model_validator(mode="after")
+    def validate_full_auto_authorization(self) -> "ApplicationRunCreateRequest":
+        if self.automation_mode == AutomationMode.FULL_AUTO:
+            if self.resume_id is None:
+                raise ValueError("resume_id is required for full_auto")
+            if self.owner_confirmation != FULL_AUTO_OWNER_CONFIRMATION:
+                raise ValueError(
+                    "owner_confirmation must exactly authorize automatic submission"
+                )
+        elif self.owner_confirmation is not None:
+            raise ValueError("owner_confirmation is only accepted for full_auto")
+        return self
 
 
 class ApplicationRunConflictItem(ApiModel):
@@ -734,6 +756,8 @@ class ApplicationRunRead(ApiModel):
     answer_bank_snapshot: dict[str, int]
     answer_bank_hash: str
     automation_mode: AutomationMode
+    automatic_submission_authorized_at: datetime | None = None
+    automatic_submission_authorized: bool
     status: ApplicationRunStatus
     current_step: str | None = None
     current_checkpoint: str | None = None

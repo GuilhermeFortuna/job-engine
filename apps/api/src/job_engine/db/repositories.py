@@ -63,6 +63,7 @@ from job_engine.domain.applications import (
     ReceiptSummary,
     ResumeAssetGrant,
     RunCheckpoint,
+    calculate_answer_bank_hash,
     calculate_token_hash,
     is_terminal_status,
     redact_audit_payload,
@@ -1446,6 +1447,10 @@ class SubmitArmedRequirementError(Exception):
     """Raised when release submit is called on a run not armed for submission."""
 
 
+class SubmissionDeniedError(Exception):
+    """Raised when durable run state does not authorize final submission."""
+
+
 class ClaimNotReleasableError(Exception):
     """Raised when a claimed run may not be returned to the queue.
 
@@ -1468,6 +1473,7 @@ class ApplicationRunInput:
     answer_bank_hash: str
     automation_mode: AutomationMode
     idempotency_key: str
+    automatic_submission_authorized_at: datetime | None = None
     policy_snapshot: dict[str, Any] | None = None
     duplicate_override_confirmed_at: datetime | None = None
     duplicate_override_reason: str | None = None
@@ -1613,6 +1619,7 @@ def _application_run_from_row(row: orm.ApplicationRun) -> ApplicationRun:
         answer_bank_snapshot=dict(row.answer_bank_snapshot),
         answer_bank_hash=row.answer_bank_hash,
         automation_mode=AutomationMode(row.automation_mode),
+        automatic_submission_authorized_at=row.automatic_submission_authorized_at,
         status=ApplicationRunStatus(row.status),
         current_step=row.current_step,
         current_checkpoint=row.current_checkpoint,
@@ -1717,6 +1724,9 @@ class ApplicationRepository:
             answer_bank_snapshot=input_data.answer_bank_snapshot,
             answer_bank_hash=input_data.answer_bank_hash,
             automation_mode=input_data.automation_mode.value,
+            automatic_submission_authorized_at=(
+                input_data.automatic_submission_authorized_at
+            ),
             status=ApplicationRunStatus.QUEUED.value,
             current_step="Run queued",
             current_checkpoint=None,
@@ -1757,6 +1767,26 @@ class ApplicationRepository:
             created_at=now,
         )
         self._session.add(event_row)
+        if input_data.automatic_submission_authorized_at is not None:
+            self._session.add(
+                orm.ApplicationRunEvent(
+                    id=uuid4(),
+                    run_id=run_id,
+                    attempt=1,
+                    sequence_num=2,
+                    event_type=AuditEventType.AUTOMATIC_SUBMISSION_AUTHORIZED.value,
+                    event_payload={
+                        "authorized_at": (
+                            input_data.automatic_submission_authorized_at.isoformat()
+                        ),
+                        "job_group_id": str(input_data.job_group_id),
+                        "resume_asset_id": str(input_data.resume_asset_id),
+                        "profile_version": input_data.applicant_profile_version,
+                        "answer_bank_hash": input_data.answer_bank_hash,
+                    },
+                    created_at=now,
+                )
+            )
         await self._session.flush()
 
         loaded = await self.get_run(run_id)
@@ -2187,15 +2217,43 @@ class ApplicationRepository:
         step_description: str | None = None,
     ) -> ApplicationRun:
         now = _utcnow()
-        row = await self._session.get(orm.ApplicationRun, run_id)
+        row = await self._session.scalar(
+            select(orm.ApplicationRun)
+            .where(orm.ApplicationRun.id == run_id)
+            .with_for_update()
+        )
         if row is None:
             raise ApplicationRunNotFoundError(f"Run {run_id} not found")
         self._verify_lease_token_hash(row, lease_token_hash, now)
 
-        row.current_checkpoint = checkpoint
+        try:
+            next_checkpoint = RunCheckpoint(checkpoint)
+        except ValueError as exc:
+            raise SubmissionDeniedError(f"Unknown checkpoint '{checkpoint}'") from exc
+
+        checkpoint_order = tuple(RunCheckpoint)
+        next_index = checkpoint_order.index(next_checkpoint)
+        if row.current_checkpoint is not None:
+            try:
+                current_checkpoint = RunCheckpoint(row.current_checkpoint)
+            except ValueError as exc:
+                raise SubmissionDeniedError(
+                    f"Stored checkpoint '{row.current_checkpoint}' is invalid"
+                ) from exc
+            current_index = checkpoint_order.index(current_checkpoint)
+            if next_index <= current_index:
+                raise SubmissionDeniedError(
+                    f"Checkpoint '{checkpoint}' is not monotonic after "
+                    f"'{row.current_checkpoint}'"
+                )
+
+        if next_checkpoint == RunCheckpoint.SUBMITTING:
+            await self._validate_submission_gate(row)
+
+        row.current_checkpoint = next_checkpoint.value
         if step_description:
             row.current_step = step_description
-        if checkpoint == RunCheckpoint.SUBMITTING.value:
+        if next_checkpoint == RunCheckpoint.SUBMITTING:
             row.submit_attempted_at = now
         if row.status == ApplicationRunStatus.CLAIMED.value:
             row.status = ApplicationRunStatus.RUNNING.value
@@ -2210,7 +2268,7 @@ class ApplicationRepository:
                 sequence_num=next_seq,
                 event_type=AuditEventType.CHECKPOINT_REACHED.value,
                 event_payload={
-                    "checkpoint": checkpoint,
+                    "checkpoint": next_checkpoint.value,
                     "step_description": step_description,
                 },
                 created_at=now,
@@ -2221,6 +2279,95 @@ class ApplicationRepository:
         if loaded is None:
             raise RuntimeError("Failed to reload updated run")
         return loaded
+
+    async def _validate_submission_gate(self, row: orm.ApplicationRun) -> None:
+        if row.current_checkpoint != RunCheckpoint.SUBMIT_ARMED.value:
+            raise SubmissionDeniedError(
+                "Submission requires the prior 'submit_armed' checkpoint"
+            )
+        if row.submit_attempted_at is not None:
+            raise SubmissionDeniedError("Final submission was already attempted")
+
+        pending_count = await self._session.scalar(
+            select(func.count())
+            .select_from(orm.ApplicationRunException)
+            .where(
+                orm.ApplicationRunException.run_id == row.id,
+                orm.ApplicationRunException.status == ExceptionStatus.PENDING.value,
+            )
+        )
+        if (pending_count or 0) > 0:
+            raise SubmissionDeniedError(
+                "Pending blocking exceptions must be resolved before submission"
+            )
+
+        snapshot = dict(row.answer_bank_snapshot)
+        if calculate_answer_bank_hash(snapshot) != row.answer_bank_hash:
+            raise SubmissionDeniedError("Frozen answer-bank snapshot is inconsistent")
+        policy_snapshot = row.policy_snapshot
+        if not isinstance(policy_snapshot, dict):
+            raise SubmissionDeniedError("Frozen policy snapshot is missing")
+        if policy_snapshot.get("profile_version") != row.applicant_profile_version:
+            raise SubmissionDeniedError("Frozen applicant-profile version is stale")
+        if policy_snapshot.get("answer_bank_hash") != row.answer_bank_hash:
+            raise SubmissionDeniedError("Frozen answer-bank binding is stale")
+
+        current_profile_version = await self._session.scalar(
+            select(orm.ApplicantProfile.version)
+        )
+        if current_profile_version != row.applicant_profile_version:
+            raise SubmissionDeniedError("Applicant profile changed after authorization")
+
+        if snapshot:
+            current_answer_versions = {
+                answer_id: version
+                for answer_id, version in (
+                    await self._session.execute(
+                        select(
+                            orm.ReusableAnswer.answer_id,
+                            orm.ReusableAnswer.version,
+                        ).where(orm.ReusableAnswer.answer_id.in_(snapshot))
+                    )
+                ).all()
+            }
+            if current_answer_versions != snapshot:
+                raise SubmissionDeniedError(
+                    "Answer bank changed after automatic-submission authorization"
+                )
+
+        resume = await self._session.get(orm.ResumeAsset, row.resume_asset_id)
+        if resume is None:
+            raise SubmissionDeniedError("Frozen resume asset no longer exists")
+        if (
+            policy_snapshot.get("resume_id") != resume.resume_id
+            or resume.sha256 != row.resume_sha256
+        ):
+            raise SubmissionDeniedError("Frozen resume binding is stale")
+
+        if row.automation_mode == AutomationMode.FULL_AUTO.value:
+            if row.automatic_submission_authorized_at is None:
+                raise SubmissionDeniedError(
+                    "Full-auto submission lacks durable owner authorization"
+                )
+            return
+        if row.automation_mode != AutomationMode.SEMI_AUTO_PAUSE_BEFORE_SUBMIT.value:
+            raise SubmissionDeniedError(
+                f"Unsupported automation mode '{row.automation_mode}'"
+            )
+
+        released = await self._session.scalar(
+            select(
+                exists().where(
+                    orm.ApplicationRunEvent.run_id == row.id,
+                    orm.ApplicationRunEvent.event_type
+                    == AuditEventType.SUBMIT_RELEASED.value,
+                )
+            )
+        )
+        if not released:
+            raise SubmissionDeniedError(
+                "Semi-auto submission requires release-submit authorization"
+            )
 
     async def raise_exception(
         self,
@@ -2358,6 +2505,31 @@ class ApplicationRepository:
             raise SubmitArmedRequirementError(
                 f"Run {run_id} status is '{row.status}', expected 'needs_input'"
             )
+
+        pending_rows = (
+            await self._session.scalars(
+                select(orm.ApplicationRunException)
+                .where(
+                    orm.ApplicationRunException.run_id == run_id,
+                    orm.ApplicationRunException.status == ExceptionStatus.PENDING.value,
+                )
+                .with_for_update()
+            )
+        ).all()
+        if (
+            len(pending_rows) != 1
+            or pending_rows[0].exception_type != ExceptionType.SEMI_AUTO_ARMED.value
+        ):
+            raise SubmitArmedRequirementError(
+                "release-submit requires only the pending semi-auto armed exception"
+            )
+
+        armed_exception = pending_rows[0]
+        armed_exception.status = ExceptionStatus.RESOLVED.value
+        armed_exception.resolution_payload = {
+            "released_for_submission": True,
+        }
+        armed_exception.resolved_at = now
 
         row.status = ApplicationRunStatus.QUEUED.value
         row.updated_at = now
@@ -2630,6 +2802,19 @@ class ApplicationRepository:
         if not is_terminal_status(terminal_status):
             raise ValueError(f"Status {terminal_status.value} is not a terminal status")
 
+        attempted_submission = (
+            row.submit_attempted_at is not None
+            or row.current_checkpoint == RunCheckpoint.SUBMITTING.value
+        )
+        if terminal_status in {
+            ApplicationRunStatus.SUBMITTED,
+            ApplicationRunStatus.SUBMISSION_UNKNOWN,
+        }:
+            if not attempted_submission:
+                raise SubmissionDeniedError(
+                    f"{terminal_status.value} requires a recorded submit attempt"
+                )
+            await self._validate_submission_gate_after_attempt(row)
         if terminal_status == ApplicationRunStatus.SUBMITTED:
             if receipt_summary is None:
                 raise ValueError(
@@ -2681,6 +2866,38 @@ class ApplicationRepository:
         if loaded is None:
             raise RuntimeError("Failed to reload completed run")
         return loaded
+
+    async def _validate_submission_gate_after_attempt(
+        self, row: orm.ApplicationRun
+    ) -> None:
+        if (
+            row.current_checkpoint != RunCheckpoint.SUBMITTING.value
+            or row.submit_attempted_at is None
+        ):
+            raise SubmissionDeniedError("Submit-attempt state is inconsistent")
+        if row.automation_mode == AutomationMode.FULL_AUTO.value:
+            if row.automatic_submission_authorized_at is None:
+                raise SubmissionDeniedError(
+                    "Full-auto submission lacks durable owner authorization"
+                )
+            return
+        if row.automation_mode != AutomationMode.SEMI_AUTO_PAUSE_BEFORE_SUBMIT.value:
+            raise SubmissionDeniedError(
+                f"Unsupported automation mode '{row.automation_mode}'"
+            )
+        released = await self._session.scalar(
+            select(
+                exists().where(
+                    orm.ApplicationRunEvent.run_id == row.id,
+                    orm.ApplicationRunEvent.event_type
+                    == AuditEventType.SUBMIT_RELEASED.value,
+                )
+            )
+        )
+        if not released:
+            raise SubmissionDeniedError(
+                "Semi-auto submission lacks release-submit authorization"
+            )
 
     async def consume_resume_grant(
         self, run_id: UUID, grant_token_hash: str

@@ -25,6 +25,7 @@ from job_engine.domain.applicant import (
     ValueState,
 )
 from job_engine.domain.applications import (
+    FULL_AUTO_OWNER_CONFIRMATION,
     ApplicationRunStatus,
     AutomationMode,
     EvidenceType,
@@ -38,7 +39,7 @@ from job_engine.services.applications import ApplicationService
 
 async def _setup_fixtures(
     session: AsyncSession, settings: Settings
-) -> tuple[UUID, UUID, str]:
+) -> tuple[UUID, str, str]:
     # 1. Profile
     vault_repo = ApplicantVaultRepository(session)
     now = datetime.now(UTC)
@@ -155,7 +156,16 @@ async def _setup_fixtures(
     await cat_repo.add_posting_to_group(group.id, posting.id)
 
     await session.commit()
-    return group.id, resume.id, pdf_sha256
+    return group.id, resume.resume_id, pdf_sha256
+
+
+def _full_auto_create_payload(group_id: UUID, resume_id: str) -> dict[str, object]:
+    return {
+        "job_group_ids": [str(group_id)],
+        "resume_id": resume_id,
+        "automation_mode": "full_auto",
+        "owner_confirmation": FULL_AUTO_OWNER_CONFIRMATION,
+    }
 
 
 async def test_create_run_requires_explicit_automation_mode(
@@ -186,6 +196,44 @@ async def test_create_run_requires_explicit_automation_mode(
         ApplicationRunCreateRequest(job_group_ids=[group_id])  # type: ignore[call-arg]
 
 
+async def test_full_auto_requires_explicit_resume_and_exact_authorization(
+    client: AsyncClient, session: AsyncSession, app: FastAPI
+) -> None:
+    settings: Settings = app.state.settings
+    group_id, resume_id, _sha256 = await _setup_fixtures(session, settings)
+
+    invalid_payloads = (
+        {
+            "job_group_ids": [str(group_id)],
+            "resume_id": resume_id,
+            "automation_mode": "full_auto",
+        },
+        {
+            "job_group_ids": [str(group_id)],
+            "resume_id": resume_id,
+            "automation_mode": "full_auto",
+            "owner_confirmation": "Authorize some automatic submissions",
+        },
+        {
+            "job_group_ids": [str(group_id)],
+            "automation_mode": "full_auto",
+            "owner_confirmation": FULL_AUTO_OWNER_CONFIRMATION,
+        },
+        {
+            "job_group_ids": [str(group_id)],
+            "automation_mode": "semi_auto_pause_before_submit",
+            "owner_confirmation": FULL_AUTO_OWNER_CONFIRMATION,
+        },
+    )
+    for payload in invalid_payloads:
+        response = await client.post("/api/v1/application-runs", json=payload)
+        assert response.status_code == 422, response.text
+
+    list_response = await client.get("/api/v1/application-runs")
+    assert list_response.status_code == 200
+    assert list_response.json()["total"] == 0
+
+
 async def test_create_application_runs_and_duplicate_handling(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
@@ -195,10 +243,7 @@ async def test_create_application_runs_and_duplicate_handling(
     # 1. Create run
     resp = await client.post(
         "/api/v1/application-runs",
-        json={
-            "job_group_ids": [str(group_id)],
-            "automation_mode": "full_auto",
-        },
+        json=_full_auto_create_payload(group_id, resume_id),
     )
     assert resp.status_code == 201
     data = resp.json()
@@ -206,18 +251,32 @@ async def test_create_application_runs_and_duplicate_handling(
     assert len(data["conflicts"]) == 0
     run_id = data["created_runs"][0]["id"]
     assert data["created_runs"][0]["status"] == "queued"
+    assert data["created_runs"][0]["automatic_submission_authorized"] is True
+    assert data["created_runs"][0]["automatic_submission_authorized_at"] is not None
     assert (
         data["created_runs"][0]["canonical_application_url"]
         == "https://boards.greenhouse.io/stripe/jobs/101"
     )
+    detail_response = await client.get(f"/api/v1/application-runs/{run_id}")
+    assert detail_response.status_code == 200
+    authorization_event = next(
+        event
+        for event in detail_response.json()["events"]
+        if event["event_type"] == "automatic_submission_authorized"
+    )
+    assert authorization_event["event_payload"]["authorized_at"]
+    assert "owner_confirmation" not in authorization_event["event_payload"]
+
+    release_full_auto = await client.post(
+        f"/api/v1/application-runs/{run_id}/release-submit",
+        json={"owner_confirmation": "Approved by user"},
+    )
+    assert release_full_auto.status_code == 400
 
     # 2. Duplicate submission without override -> 409 Conflict
     dup_resp = await client.post(
         "/api/v1/application-runs",
-        json={
-            "job_group_ids": [str(group_id)],
-            "automation_mode": "full_auto",
-        },
+        json=_full_auto_create_payload(group_id, resume_id),
     )
     assert dup_resp.status_code == 409
     dup_data = dup_resp.json()
@@ -241,10 +300,7 @@ async def test_create_application_runs_and_duplicate_handling(
     # 4. Only after the separate audited action may creation proceed.
     replacement_resp = await client.post(
         "/api/v1/application-runs",
-        json={
-            "job_group_ids": [str(group_id)],
-            "automation_mode": "full_auto",
-        },
+        json=_full_auto_create_payload(group_id, resume_id),
     )
     assert replacement_resp.status_code == 201
     replacement_data = replacement_resp.json()
@@ -268,10 +324,7 @@ async def test_runner_claim_heartbeat_evidence_and_single_use_grant(
     # Create run
     create_resp = await client.post(
         "/api/v1/application-runs",
-        json={
-            "job_group_ids": [str(group_id)],
-            "automation_mode": "full_auto",
-        },
+        json=_full_auto_create_payload(group_id, resume_id),
     )
     assert create_resp.status_code == 201
     run_id = create_resp.json()["created_runs"][0]["id"]
@@ -287,6 +340,8 @@ async def test_runner_claim_heartbeat_evidence_and_single_use_grant(
     claim_data = claim_resp.json()
     assert claim_data["run"]["id"] == run_id
     assert claim_data["run"]["status"] == "claimed"
+    assert claim_data["run"]["automatic_submission_authorized"] is True
+    assert claim_data["run"]["automatic_submission_authorized_at"] is not None
     grant_token = claim_data["grant_token"]
 
     # 2. Download resume asset using grant token
@@ -398,6 +453,13 @@ async def test_semi_auto_pause_and_release_submit(
     )
     assert rel_resp.status_code == 200
     assert rel_resp.json()["status"] == "queued"
+    assert rel_resp.json()["automatic_submission_authorized"] is False
+    armed_exception = next(
+        item
+        for item in rel_resp.json()["exceptions"]
+        if item["exception_type"] == "semi_auto_armed"
+    )
+    assert armed_exception["status"] == "resolved"
 
 
 async def test_anti_csrf_protection(
@@ -410,10 +472,7 @@ async def test_anti_csrf_protection(
     resp = await client.post(
         "/api/v1/application-runs",
         headers={"Sec-Fetch-Site": "cross-site"},
-        json={
-            "job_group_ids": [str(group_id)],
-            "automation_mode": "full_auto",
-        },
+        json=_full_auto_create_payload(group_id, resume_id),
     )
     assert resp.status_code == 403
     assert "Cross-site requests forbidden" in resp.json()["detail"]
@@ -421,10 +480,7 @@ async def test_anti_csrf_protection(
     foreign_origin = await client.post(
         "/api/v1/application-runs",
         headers={"Origin": "http://attacker.invalid"},
-        json={
-            "job_group_ids": [str(group_id)],
-            "automation_mode": "full_auto",
-        },
+        json=_full_auto_create_payload(group_id, resume_id),
     )
     assert foreign_origin.status_code == 403
 
@@ -437,10 +493,7 @@ async def test_evidence_storage_sanitization_and_retention(
 
     create_resp = await client.post(
         "/api/v1/application-runs",
-        json={
-            "job_group_ids": [str(group_id)],
-            "automation_mode": "full_auto",
-        },
+        json=_full_auto_create_payload(group_id, resume_id),
     )
     assert create_resp.status_code == 201
 
@@ -494,10 +547,7 @@ async def test_exception_resolve_answers_and_requeue(
 
     create_resp = await client.post(
         "/api/v1/application-runs",
-        json={
-            "job_group_ids": [str(group_id)],
-            "automation_mode": "full_auto",
-        },
+        json=_full_auto_create_payload(group_id, resume_id),
     )
     run_id = create_resp.json()["created_runs"][0]["id"]
 
@@ -674,10 +724,7 @@ async def test_cancel_run_flow(
 
     create_resp = await client.post(
         "/api/v1/application-runs",
-        json={
-            "job_group_ids": [str(group_id)],
-            "automation_mode": "full_auto",
-        },
+        json=_full_auto_create_payload(group_id, resume_id),
     )
     run_id = create_resp.json()["created_runs"][0]["id"]
 
@@ -708,7 +755,9 @@ async def test_evidence_cleanup_service(session: AsyncSession, app: FastAPI) -> 
     await svc.create_runs(
         ApplicationRunCreateRequest(
             job_group_ids=[group_id],
+            resume_id=resume_id,
             automation_mode=AutomationMode.FULL_AUTO,
+            owner_confirmation=FULL_AUTO_OWNER_CONFIRMATION,
         )
     )
 
