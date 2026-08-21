@@ -179,10 +179,10 @@ describe("RuntimeCoordinator adapter selection", () => {
         selectAdapter: (
           run: ClaimResponse["run"],
           visibleUrl: string,
-        ) => { adapterId: string } | null;
+        ) => { adapter: { adapterId: string } | null };
       }
     ).selectAdapter.bind(coordinator);
-    return select(makeClaim(run).run, visibleUrl)?.adapterId ?? null;
+    return select(makeClaim(run).run, visibleUrl).adapter?.adapterId ?? null;
   }
 
   it("binds the platform adapter the visible host matches", () => {

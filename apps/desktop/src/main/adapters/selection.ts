@@ -35,9 +35,8 @@ export function isLoopbackUrl(rawUrl: string): boolean {
  * A hard veto on the visible URL is unconditional and is never overridden by
  * canonical_application_url or the loopback platform_adapter_id override.
  *
- * Intended call site: `RuntimeCoordinator`'s private `selectAdapter` (CROSS-012).
- * Kept as a pure function in the adapters package so CROSS-012 can import it
- * without this Work Order owning `runtime/coordinator.ts`.
+ * RuntimeCoordinator's private `selectAdapter` delegates here so coverage
+ * veto/selection stays in the adapters package.
  */
 export function selectAdapter(
   registry: AdapterRegistry,
