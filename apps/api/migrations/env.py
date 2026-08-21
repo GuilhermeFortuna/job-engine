@@ -12,6 +12,8 @@ from job_engine.db.models import (  # noqa: F401
     JobGroupPosting,
     JobGroupRoleFamily,
     JobGroupTechnology,
+    LocalAiProfileProposal,
+    LocalAiSelfTest,
     SourcePosting,
 )
 from job_engine.db.session import to_sync_url

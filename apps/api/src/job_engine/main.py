@@ -18,9 +18,14 @@ from job_engine.api.applications import (
 )
 from job_engine.api.catalog import router as catalog_router
 from job_engine.api.jobs import router as jobs_router
+from job_engine.api.local_ai import router as local_ai_router
 from job_engine.api.sync import router as sync_router
 from job_engine.config import Settings
 from job_engine.db.session import create_engine, create_session_factory
+from job_engine.services.local_inference import (
+    LocalInferenceBroker,
+    create_local_http_client,
+)
 
 
 class HealthResponse(BaseModel):
@@ -45,6 +50,9 @@ def _get_allowed_origins(frontend_origin: str) -> list[str]:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
+    broker = getattr(app.state, "local_inference_broker", None)
+    if broker is not None:
+        await broker.aclose()
     engine: AsyncEngine = app.state.engine
     await engine.dispose()
 
@@ -63,6 +71,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = resolved
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
+
+    # Shared local inference client + broker (BACK-015). Always constructed so
+    # status/self-test/proposal routes can use the configured loopback endpoint
+    # even when answer_provider is deterministic.
+    local_client = create_local_http_client(
+        timeout_seconds=max(
+            resolved.local_inference_extraction_timeout_seconds,
+            resolved.local_inference_answer_timeout_seconds,
+            60.0,
+        )
+    )
+    local_broker = LocalInferenceBroker(
+        client=local_client,
+        base_url=resolved.local_provider_base_url,
+        concurrency_limit=resolved.local_inference_concurrency,
+        queue_limit=resolved.local_inference_queue_limit,
+        acquire_timeout_seconds=resolved.local_inference_acquire_timeout_seconds,
+    )
+    app.state.local_inference_broker = local_broker
 
     allowed_origins = _get_allowed_origins(resolved.frontend_origin)
     allowed_origins_set = set(allowed_origins)
@@ -109,4 +136,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(application_runs_router, prefix="/api/v1")
     app.include_router(runner_router, prefix="/api/v1")
     app.include_router(application_answers_router, prefix="/api/v1")
+    app.include_router(local_ai_router, prefix="/api/v1")
     return app

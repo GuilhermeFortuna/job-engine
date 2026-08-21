@@ -80,6 +80,15 @@ from job_engine.domain.enums import (
     RemoteStatus,
     Seniority,
 )
+from job_engine.domain.local_ai import (
+    LocalAiFailureCode,
+    LocalAiProposalStatus,
+    LocalAiSelfTestRecord,
+    ProposedField,
+    ResumeProfileProposal,
+    SourceSpan,
+)
+
 from job_engine.domain.jobs import (
     Compensation,
     EligibleLocation,
@@ -2078,6 +2087,230 @@ class ApplicantVaultRepository:
         loaded = await self.get_managed_asset(profile_id, asset_id)
         if loaded is None:
             raise RuntimeError("Failed to reload updated managed asset")
+        return loaded
+
+
+def _local_ai_self_test_from_row(row: orm.LocalAiSelfTest) -> LocalAiSelfTestRecord:
+    return LocalAiSelfTestRecord(
+        id=row.id,
+        passed=row.passed,
+        model=row.model,
+        schema_revision=row.schema_revision,
+        prompt_revision=row.prompt_revision,
+        latency_ms=row.latency_ms,
+        failure_code=(
+            LocalAiFailureCode(row.failure_code) if row.failure_code else None
+        ),
+        tested_at=row.tested_at,
+        updated_at=row.updated_at,
+    )
+
+
+def _local_ai_proposal_from_row(
+    row: orm.LocalAiProfileProposal,
+) -> ResumeProfileProposal:
+    payload = row.proposal_payload or {}
+    fields_raw = payload.get("fields", [])
+    fields: list[ProposedField] = []
+    if isinstance(fields_raw, list):
+        for item in fields_raw:
+            if not isinstance(item, dict):
+                continue
+            evidence_raw = item.get("evidence") or []
+            evidence: list[SourceSpan] = []
+            if isinstance(evidence_raw, list):
+                for span in evidence_raw:
+                    if isinstance(span, dict):
+                        evidence.append(
+                            SourceSpan(
+                                start=int(span["start"]),
+                                end=int(span["end"]),
+                                excerpt=str(span.get("excerpt") or ""),
+                            )
+                        )
+            try:
+                fields.append(
+                    ProposedField(
+                        field_path=str(item["field_path"]),
+                        value=item.get("value"),
+                        evidence=tuple(evidence),
+                        confidence=item.get("confidence"),
+                    )
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+
+    accepted = row.accepted_field_paths or []
+    return ResumeProfileProposal(
+        id=row.id,
+        profile_id=row.profile_id,
+        source_asset_id=row.source_asset_id,
+        source_asset_sha256=row.source_asset_sha256,
+        status=LocalAiProposalStatus(row.status),
+        schema_revision=row.schema_revision,
+        prompt_revision=row.prompt_revision,
+        model=row.model,
+        fields=tuple(fields),
+        failure_code=(
+            LocalAiFailureCode(row.failure_code) if row.failure_code else None
+        ),
+        deterministic_extraction_ok=row.deterministic_extraction_ok,
+        accepted_field_paths=tuple(str(p) for p in accepted),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+class LocalAiRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_self_test(self) -> LocalAiSelfTestRecord:
+        row = await self._session.get(orm.LocalAiSelfTest, 1)
+        if row is None:
+            now = _utcnow()
+            row = orm.LocalAiSelfTest(id=1, updated_at=now)
+            self._session.add(row)
+            await self._session.flush()
+        return _local_ai_self_test_from_row(row)
+
+    async def upsert_self_test(
+        self,
+        *,
+        passed: bool,
+        model: str | None,
+        schema_revision: str | None,
+        prompt_revision: str | None,
+        latency_ms: int | None,
+        failure_code: LocalAiFailureCode | None,
+        tested_at: datetime,
+    ) -> LocalAiSelfTestRecord:
+        now = _utcnow()
+        row = await self._session.get(orm.LocalAiSelfTest, 1)
+        if row is None:
+            row = orm.LocalAiSelfTest(id=1, updated_at=now)
+            self._session.add(row)
+        row.passed = passed
+        row.model = model
+        row.schema_revision = schema_revision
+        row.prompt_revision = prompt_revision
+        row.latency_ms = latency_ms
+        row.failure_code = failure_code.value if failure_code else None
+        row.tested_at = tested_at
+        row.updated_at = now
+        await self._session.flush()
+        return _local_ai_self_test_from_row(row)
+
+    async def create_proposal(
+        self, proposal: ResumeProfileProposal
+    ) -> ResumeProfileProposal:
+        payload = {
+            "fields": [
+                {
+                    "field_path": field.field_path,
+                    "value": field.value,
+                    "evidence": [
+                        {
+                            "start": span.start,
+                            "end": span.end,
+                            "excerpt": span.excerpt,
+                        }
+                        for span in field.evidence
+                    ],
+                    "confidence": field.confidence,
+                }
+                for field in proposal.fields
+            ]
+        }
+        row = orm.LocalAiProfileProposal(
+            id=proposal.id,
+            profile_id=proposal.profile_id,
+            source_asset_id=proposal.source_asset_id,
+            source_asset_sha256=proposal.source_asset_sha256,
+            status=proposal.status.value,
+            schema_revision=proposal.schema_revision,
+            prompt_revision=proposal.prompt_revision,
+            model=proposal.model,
+            proposal_payload=payload,
+            accepted_field_paths=list(proposal.accepted_field_paths),
+            failure_code=(
+                proposal.failure_code.value if proposal.failure_code else None
+            ),
+            deterministic_extraction_ok=proposal.deterministic_extraction_ok,
+            created_at=proposal.created_at,
+            updated_at=proposal.updated_at,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        loaded = await self.get_proposal(proposal.profile_id, proposal.id)
+        if loaded is None:
+            raise RuntimeError("Failed to load created local-AI proposal")
+        return loaded
+
+    async def get_proposal(
+        self, profile_id: UUID, proposal_id: UUID
+    ) -> ResumeProfileProposal | None:
+        stmt = select(orm.LocalAiProfileProposal).where(
+            orm.LocalAiProfileProposal.id == proposal_id,
+            orm.LocalAiProfileProposal.profile_id == profile_id,
+        )
+        row = await self._session.scalar(stmt)
+        if row is None:
+            return None
+        return _local_ai_proposal_from_row(row)
+
+    async def list_proposals(
+        self, profile_id: UUID, *, limit: int = 50
+    ) -> tuple[ResumeProfileProposal, ...]:
+        stmt = (
+            select(orm.LocalAiProfileProposal)
+            .where(orm.LocalAiProfileProposal.profile_id == profile_id)
+            .order_by(orm.LocalAiProfileProposal.created_at.desc())
+            .limit(limit)
+        )
+        rows = (await self._session.scalars(stmt)).all()
+        return tuple(_local_ai_proposal_from_row(row) for row in rows)
+
+    async def mark_proposal_reviewed(
+        self,
+        profile_id: UUID,
+        proposal_id: UUID,
+        *,
+        status: LocalAiProposalStatus,
+        accepted_field_paths: tuple[str, ...] = (),
+    ) -> ResumeProfileProposal:
+        now = _utcnow()
+        stmt = (
+            update(orm.LocalAiProfileProposal)
+            .where(
+                orm.LocalAiProfileProposal.id == proposal_id,
+                orm.LocalAiProfileProposal.profile_id == profile_id,
+                orm.LocalAiProfileProposal.status
+                == LocalAiProposalStatus.PENDING.value,
+            )
+            .values(
+                status=status.value,
+                accepted_field_paths=list(accepted_field_paths),
+                updated_at=now,
+            )
+            .returning(orm.LocalAiProfileProposal.id)
+        )
+        result = await self._session.execute(stmt)
+        if result.scalar() is None:
+            existing = await self.get_proposal(profile_id, proposal_id)
+            if existing is None:
+                raise ResourceNotFoundError(
+                    f"Local-AI proposal {proposal_id} not found for "
+                    f"profile {profile_id}"
+                )
+            raise OptimisticLockError(
+                f"Local-AI proposal {proposal_id} is not pending "
+                f"(status={existing.status.value})"
+            )
+        await self._session.flush()
+        loaded = await self.get_proposal(profile_id, proposal_id)
+        if loaded is None:
+            raise RuntimeError("Failed to reload local-AI proposal")
         return loaded
 
 

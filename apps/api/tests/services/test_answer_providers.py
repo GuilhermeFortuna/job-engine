@@ -311,7 +311,7 @@ def test_build_provider_local_bypasses_privacy_gate() -> None:
 def test_build_provider_local_fails_without_model() -> None:
     settings = Settings(
         answer_provider="local",
-        local_model=None,
+        local_model="   ",
     )
     with pytest.raises(
         ProviderUnavailableError, match="JOB_ENGINE_LOCAL_MODEL is not configured"

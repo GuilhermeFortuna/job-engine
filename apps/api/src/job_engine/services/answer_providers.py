@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import ipaddress
 import json
 from typing import Any, Protocol
-from urllib.parse import urlsplit
 
 import httpx
 
@@ -18,6 +16,18 @@ from job_engine.domain.application_answers import (
     ProviderResultClaim,
     ProviderTimeoutError,
     ProviderUnavailableError,
+)
+from job_engine.domain.local_ai import (
+    GROUNDED_ANSWER_SCHEMA_REVISION,
+    LocalAiError,
+    LocalAiFailureCode,
+    LocalAiTaskClass,
+)
+from job_engine.services.local_inference import (
+    LocalInferenceBroker,
+    LocalInferenceRequest,
+    parse_strict_json_object,
+    validate_loopback_base_url,
 )
 
 _RESPONSE_SCHEMA_INSTRUCTIONS = (
@@ -236,47 +246,39 @@ class DeterministicProvider:
         )
 
 
+def _map_local_error(exc: LocalAiError) -> Exception:
+    if exc.code == LocalAiFailureCode.TIMEOUT:
+        return ProviderTimeoutError(exc.message)
+    if exc.code == LocalAiFailureCode.INVALID_STRUCTURE:
+        return ProviderInvalidStructureError(exc.message)
+    if exc.code == LocalAiFailureCode.UNGROUNDED:
+        return ProviderInvalidStructureError(exc.message)
+    return ProviderUnavailableError(exc.message)
+
+
 class LocalProvider:
     provider_name = "local"
 
     def __init__(
-        self, model: str, *, base_url: str = "http://127.0.0.1:11434/v1"
+        self,
+        model: str,
+        *,
+        base_url: str = "http://127.0.0.1:11434/v1",
+        broker: LocalInferenceBroker | None = None,
+        max_input_tokens: int = 8192,
     ) -> None:
         self.model_name = model.strip() if model else ""
         if not self.model_name:
             raise ProviderUnavailableError(
                 "Local provider model name must be non-empty"
             )
-        self._base_url = self._validate_loopback_base_url(base_url)
+        self._base_url = validate_loopback_base_url(base_url)
+        self._broker = broker
+        self._max_input_tokens = max_input_tokens
 
     @staticmethod
     def _validate_loopback_base_url(base_url: str) -> str:
-        parsed = urlsplit(base_url)
-        if parsed.scheme not in {"http", "https"}:
-            raise ValueError("Local provider base_url must use http or https scheme")
-        if parsed.username or parsed.password:
-            raise ValueError(
-                "Local provider base_url must not contain embedded credentials"
-            )
-        host = parsed.hostname
-        if not host:
-            raise ValueError("Local provider base_url missing hostname")
-        host_lower = host.lower()
-        if host_lower == "localhost":
-            return base_url
-        try:
-            ip = ipaddress.ip_address(host_lower)
-            if not ip.is_loopback:
-                raise ValueError(
-                    f"Local provider base_url must point to loopback, got: {host}"
-                )
-        except ValueError as exc:
-            if "must point to loopback" in str(exc):
-                raise
-            raise ValueError(
-                f"Local provider base_url must point to loopback, got: {host}"
-            ) from exc
-        return base_url
+        return validate_loopback_base_url(base_url)
 
     async def generate(
         self,
@@ -286,6 +288,34 @@ class LocalProvider:
         timeout_seconds: float,
     ) -> ProviderResult:
         prompt = _build_prompt(context)
+        request = LocalInferenceRequest(
+            task_class=LocalAiTaskClass.APPLICATION_ANSWER,
+            model=self.model_name,
+            system_prompt=(
+                f"{_RESPONSE_SCHEMA_INSTRUCTIONS} "
+                f"schema_revision={GROUNDED_ANSWER_SCHEMA_REVISION}"
+            ),
+            user_prompt=prompt,
+            response_json_schema=STRUCTURED_RESPONSE_JSON_SCHEMA,
+            schema_name="structured_answer",
+            max_output_tokens=max_output_tokens,
+            timeout_seconds=timeout_seconds,
+            max_input_tokens=self._max_input_tokens,
+        )
+
+        if self._broker is not None:
+            try:
+                result = await self._broker.run(request)
+            except LocalAiError as exc:
+                raise _map_local_error(exc) from exc
+            # Re-parse through existing claim validator for evidence shape.
+            return _parse_structured_response(
+                json.dumps(result.content),
+                provider=self.provider_name,
+                model=result.model,
+            )
+
+        # Fallback for unit tests that construct LocalProvider without a broker.
         try:
             async with httpx.AsyncClient(
                 timeout=timeout_seconds, follow_redirects=False
@@ -296,6 +326,8 @@ class LocalProvider:
                         "model": self.model_name,
                         "temperature": 0.0,
                         "max_tokens": max_output_tokens,
+                        "think": False,
+                        "chat_template_kwargs": {"enable_thinking": False},
                         "response_format": {
                             "type": "json_schema",
                             "json_schema": {
@@ -307,7 +339,7 @@ class LocalProvider:
                         "messages": [
                             {
                                 "role": "system",
-                                "content": _RESPONSE_SCHEMA_INSTRUCTIONS,
+                                "content": request.system_prompt,
                             },
                             {"role": "user", "content": prompt},
                         ],
@@ -331,6 +363,9 @@ class LocalProvider:
         try:
             body = response.json()
             content = body["choices"][0]["message"]["content"]
+            parse_strict_json_object(content)
+        except LocalAiError as exc:
+            raise _map_local_error(exc) from exc
         except (KeyError, IndexError, ValueError) as exc:
             raise ProviderInvalidStructureError(
                 f"Unexpected local response shape: {exc}"
@@ -406,11 +441,15 @@ class GeminiProvider:
         )
 
 
-def build_provider(settings: Settings) -> AnswerProvider:
+def build_provider(
+    settings: Settings,
+    *,
+    broker: LocalInferenceBroker | None = None,
+) -> AnswerProvider:
     """Fail-closed factory.
 
     - Deterministic provider is zero-network and always available.
-    - Local provider is loopback-only for development and bypasses PROVIDER-PRIVACY-001.
+    - Local provider is loopback-only and bypasses PROVIDER-PRIVACY-001.
     - Gemini sends data externally and requires owner-accepted PROVIDER-PRIVACY-001.
     """
     if settings.answer_provider == "deterministic":
@@ -424,6 +463,8 @@ def build_provider(settings: Settings) -> AnswerProvider:
         return LocalProvider(
             model=settings.local_model,
             base_url=settings.local_provider_base_url,
+            broker=broker,
+            max_input_tokens=settings.local_inference_max_input_tokens,
         )
 
     if settings.answer_provider == "gemini":

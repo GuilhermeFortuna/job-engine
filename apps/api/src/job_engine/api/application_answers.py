@@ -27,6 +27,7 @@ from job_engine.domain.application_answers import (
     ObservationValidationConstraints,
     QuestionObservation,
 )
+from job_engine.services.answer_providers import build_provider
 from job_engine.services.application_answers import (
     ApplicationAnswerService,
     ApplicationRunNotFoundError,
@@ -48,8 +49,13 @@ def get_application_answer_service(
         return cast(ApplicationAnswerService, existing)
 
     session_factory = request.app.state.session_factory
+    broker = getattr(request.app.state, "local_inference_broker", None)
 
     async def reserve_budget(run_id: UUID, estimated_cost: Decimal) -> bool:
+        # Local inference has no dollar budget; callers still pass through
+        # for Gemini/cloud providers.
+        if settings.answer_provider == "local":
+            return True
         async with session_factory() as session:
             repo = ApplicationRepository(session)
             reserved = await repo.reserve_provider_budget(
@@ -62,7 +68,11 @@ def get_application_answer_service(
             await session.commit()
             return reserved
 
-    service = ApplicationAnswerService(settings, budget_reserver=reserve_budget)
+    service = ApplicationAnswerService(
+        settings,
+        provider=build_provider(settings, broker=broker),
+        budget_reserver=reserve_budget,
+    )
     request.app.state.application_answer_service = service
     return service
 

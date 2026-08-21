@@ -1114,3 +1114,94 @@ class AnswerDecisionSchema(ApiModel):
 
 class AnswerDecisionResponse(ApiModel):
     decisions: tuple[AnswerDecisionSchema, ...]
+
+
+# --- BACK-015 local-AI -------------------------------------------------------
+
+
+class LocalAiStatusRead(ApiModel):
+    configured: bool
+    endpoint_class: Literal["loopback_openai_compatible", "none"]
+    model: str | None
+    reachable: bool | None = None
+    model_available: bool | None = None
+    schema_revision: str
+    last_self_test_passed: bool | None = None
+    last_self_test_at: datetime | None = None
+    last_self_test_latency_ms: int | None = None
+    failure_code: str | None = None
+
+
+class LocalAiSelfTestRead(ApiModel):
+    passed: bool | None
+    model: str | None
+    schema_revision: str | None
+    prompt_revision: str | None
+    latency_ms: int | None
+    failure_code: str | None
+    tested_at: datetime | None
+
+
+class LocalAiReadinessRead(ApiModel):
+    local_ai_configured: bool
+    local_ai_ready: bool
+    local_ai_failure_code: str | None = None
+    model: str | None = None
+    last_self_test_passed: bool | None = None
+    exceptions: tuple[str, ...] = ()
+
+
+class SourceSpanSchema(ApiModel):
+    start: int
+    end: int
+    excerpt: str = ""
+
+
+class ProposedFieldSchema(ApiModel):
+    field_path: str
+    value: Any
+    evidence: tuple[SourceSpanSchema, ...] = ()
+    confidence: float | None = None
+
+
+class LocalAiProposalRead(ApiModel):
+    id: UUID
+    profile_id: UUID
+    source_asset_id: UUID
+    source_asset_sha256: str
+    status: str
+    schema_revision: str
+    prompt_revision: str
+    model: str
+    fields: tuple[ProposedFieldSchema, ...] = ()
+    failure_code: str | None = None
+    deterministic_extraction_ok: bool = True
+    accepted_field_paths: tuple[str, ...] = ()
+    created_at: datetime
+    updated_at: datetime
+
+
+class LocalAiProposalCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_asset_id: UUID
+
+
+class LocalAiProposalAcceptRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accepted_field_paths: tuple[str, ...] = ()
+    field_edits: dict[str, Any] | None = None
+    expected_profile_version: int
+    decline_remaining: bool = True
+
+
+class LocalAiProposalAcceptResponse(ApiModel):
+    proposal: LocalAiProposalRead
+    profile: ApplicantProfileRead
+
+
+class LocalAiProposalDeclineRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_profile_version: int

@@ -122,8 +122,8 @@ class Settings(BaseSettings):
     )
     evidence_retention_days: int = 30
 
-    # BACK-013: hybrid local and Gemini grounded answer provider.
-    # Deterministic by default; local is loopback-only for development;
+    # BACK-013 / BACK-015: hybrid local and Gemini grounded answer provider.
+    # Deterministic by default; local is loopback-only;
     # Gemini is fail-closed until PROVIDER-PRIVACY-001 is accepted.
     answer_provider: Literal["deterministic", "local", "gemini"] = Field(
         default="deterministic",
@@ -136,10 +136,19 @@ class Settings(BaseSettings):
             "local_provider_base_url",
         ),
     )
-    local_model: str | None = Field(
-        default=None,
+    local_model: str = Field(
+        default="qwen3:4b",
         validation_alias=AliasChoices("job_engine_local_model", "local_model"),
     )
+    local_inference_concurrency: int = Field(default=1, ge=1, le=8)
+    local_inference_queue_limit: int = Field(default=16, ge=1, le=256)
+    local_inference_acquire_timeout_seconds: float = Field(default=15.0, gt=0, le=300.0)
+    local_inference_answer_timeout_seconds: float = Field(default=15.0, gt=0, le=300.0)
+    local_inference_extraction_timeout_seconds: float = Field(
+        default=45.0, gt=0, le=600.0
+    )
+    local_inference_max_input_tokens: int = Field(default=8192, ge=256, le=131072)
+    local_inference_max_output_tokens: int = Field(default=500, ge=16, le=8192)
     gemini_model: str = Field(
         default="gemini-2.5-flash",
         validation_alias=AliasChoices("job_engine_gemini_model", "gemini_model"),

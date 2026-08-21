@@ -331,6 +331,14 @@ class ApplicationAnswerService:
         self._accepted_revisions = accepted_auto_submit_revisions
 
     async def _reserve_provider_call(self, run_id: UUID) -> bool:
+        # Local operation has no artificial dollar cap (BACK-015).
+        if self._provider.provider_name == "local":
+            used = self._run_call_counts.get(run_id, 0)
+            if used >= self._settings.answer_provider_max_calls_per_run:
+                return False
+            self._run_call_counts[run_id] = used + 1
+            return True
+
         estimated_cost = self._settings.answer_provider_estimated_cost_per_call_usd
         if self._budget_reserver is not None:
             return await self._budget_reserver(run_id, estimated_cost)
@@ -670,10 +678,20 @@ class ApplicationAnswerService:
         )
 
         try:
+            timeout_seconds = (
+                self._settings.local_inference_answer_timeout_seconds
+                if self._provider.provider_name == "local"
+                else self._settings.answer_provider_timeout_seconds
+            )
+            max_output_tokens = (
+                self._settings.local_inference_max_output_tokens
+                if self._provider.provider_name == "local"
+                else self._settings.answer_provider_max_output_tokens
+            )
             result = await self._provider.generate(
                 grounded_context,
-                max_output_tokens=self._settings.answer_provider_max_output_tokens,
-                timeout_seconds=self._settings.answer_provider_timeout_seconds,
+                max_output_tokens=max_output_tokens,
+                timeout_seconds=timeout_seconds,
             )
         except ProviderTimeoutError:
             return self._abstain(observation, ReasonCode.PROVIDER_TIMEOUT)

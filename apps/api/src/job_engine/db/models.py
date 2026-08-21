@@ -805,3 +805,69 @@ class ApplicationRunLeaseRelease(Base):
     )
 
     run: Mapped[ApplicationRun] = relationship(back_populates="lease_releases")
+
+
+class LocalAiSelfTest(Base):
+    """Singleton sanitized local-AI self-test diagnostics."""
+
+    __tablename__ = "local_ai_self_test"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_local_ai_self_test_singleton"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    passed: Mapped[bool | None] = mapped_column(Boolean)
+    model: Mapped[str | None] = mapped_column(Text)
+    schema_revision: Mapped[str | None] = mapped_column(Text)
+    prompt_revision: Mapped[str | None] = mapped_column(Text)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    failure_code: Mapped[str | None] = mapped_column(Text)
+    tested_at: Mapped[datetime | None] = _optional_aware_dt()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+
+class LocalAiProfileProposal(Base):
+    __tablename__ = "local_ai_profile_proposals"
+    __table_args__ = (
+        Index(
+            "ix_local_ai_profile_proposals_profile",
+            "profile_id",
+            "created_at",
+        ),
+        Index("ix_local_ai_profile_proposals_asset", "source_asset_id"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    profile_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("applicant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_asset_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("managed_assets.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    source_asset_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    schema_revision: Mapped[str] = mapped_column(Text, nullable=False)
+    prompt_revision: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(Text, nullable=False)
+    proposal_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    accepted_field_paths: Mapped[list[Any]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    failure_code: Mapped[str | None] = mapped_column(Text)
+    deterministic_extraction_ok: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
