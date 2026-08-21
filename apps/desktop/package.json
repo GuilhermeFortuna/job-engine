@@ -8,7 +8,6 @@
     "check": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run --project unit --project runtime --project forms",
     "test:fixtures": "tsc -p tsconfig.test.json && node scripts/run-fixtures.mjs",
-    "test:production": "tsc && tsc -p tsconfig.test.json && node scripts/run-production-smoke.mjs",
     "build": "tsc"
   },
   "dependencies": {

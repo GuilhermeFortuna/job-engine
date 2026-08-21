@@ -97,12 +97,46 @@ describe("AdapterRegistry", () => {
     expect(registry.resolve("https://jobicy.com/jobs/150001")).toBeNull();
   });
 
-  it("rejects ATS lookalike hosts that suffix-match without an exact adapter", () => {
+  it("labels unbound first-party Lever EU as missing evidence, not lookalike", () => {
     const registry = createDefaultAdapterRegistry();
     expect(
       registry.classify("https://jobs.eu.lever.co/acme/job/apply")?.reasonCode,
-    ).toBe("LOOKALIKE_HOST");
+    ).toBe("MISSING_ADAPTER_EVIDENCE");
     expect(registry.resolve("https://jobs.eu.lever.co/acme/job/apply")).toBeNull();
+  });
+
+  it("rejects hostile ATS lookalikes via suffix and infix checks", () => {
+    const registry = createDefaultAdapterRegistry();
+    expect(
+      registry.classify("https://evil.boards.greenhouse.io/acme/jobs/1")?.reasonCode,
+    ).toBe("LOOKALIKE_HOST");
+    expect(
+      registry.classify("https://boards.greenhouse.io.evil.test/acme/jobs/1")
+        ?.reasonCode,
+    ).toBe("LOOKALIKE_HOST");
+    expect(registry.resolve("https://evil.boards.greenhouse.io/x")).toBeNull();
+  });
+
+  it("falls approved Greenhouse hosts with unapproved paths to generic", () => {
+    const registry = createDefaultAdapterRegistry();
+    const result = registry.classify(
+      "https://boards.greenhouse.io/embed/job_app",
+    );
+    expect(result?.adapter?.adapterId).toBe("generic");
+    expect(result?.reasonCode).toBe("UNAPPROVED_ATS_PATH");
+  });
+
+  it("does not register Ashby or SmartRecruiters (generic keeps those hosts)", () => {
+    const registry = createDefaultAdapterRegistry();
+    expect(registry.registeredIds).toEqual(["greenhouse", "lever"]);
+    expect(
+      registry.resolve("https://jobs.ashbyhq.com/acme/role-1")?.adapterId,
+    ).toBe("generic");
+    expect(
+      registry.resolve(
+        "https://jobs.smartrecruiters.com/acme/abc/slug",
+      )?.adapterId,
+    ).toBe("generic");
   });
 
   it("never resolves a non-HTTPS or malformed URL", () => {

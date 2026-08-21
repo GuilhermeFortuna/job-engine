@@ -33,8 +33,11 @@ function isApprovedOrigin(url: URL): boolean {
 }
 
 /**
- * SmartRecruiters matcher. Production auto-support requires a passing
- * production-entrypoint smoke; until then exact matches are unsupported.
+ * SmartRecruiters host/path matcher module.
+ *
+ * Intentionally **not** registered in `createDefaultAdapterRegistry()` until a
+ * production-entrypoint smoke proves AUTO_SUPPORTED. Unregistered hosts fall
+ * through to the generic adapter.
  */
 export class SmartRecruitersFormAdapter implements FormAdapter {
   readonly adapterId = SMARTRECRUITERS_ADAPTER_ID;

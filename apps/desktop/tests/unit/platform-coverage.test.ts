@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { HARD_VETO_REASON_CODES } from "../../src/main/adapters/contract";
+import { HARD_VETO_REASON_CODES } from "../../src/main/adapters/coverage";
 
 const INVENTORY_PATH = path.resolve(
   __dirname,
@@ -27,6 +27,7 @@ interface InventoryFile {
   evidence_revision: string;
   owner_inventory_decision: string;
   total_distinct_application_urls: number;
+  total_source_url_count: number;
   resolvable_application_url_count: number;
   unresolvable_feed_listing_count: number;
   auto_supported_resolvable_count: number;
@@ -39,6 +40,8 @@ interface InventoryFile {
 function loadInventory(): InventoryFile {
   return JSON.parse(readFileSync(INVENTORY_PATH, "utf8")) as InventoryFile;
 }
+
+const SOFT_REASONS = new Set(["UNAPPROVED_ATS_PATH"]);
 
 describe("frozen application platform inventory", () => {
   const inventory = loadInventory();
@@ -56,13 +59,13 @@ describe("frozen application platform inventory", () => {
     }
   });
 
-  it("uses only approved hard-veto and runtime reason codes", () => {
+  it("uses only approved coverage reason codes", () => {
     const allowed = new Set<string>([
       ...HARD_VETO_REASON_CODES,
+      ...SOFT_REASONS,
       "AUTH_REQUIRED",
       "CAPTCHA_REQUIRED",
       "UNSUPPORTED_CONTROL",
-      null as unknown as string,
     ]);
     for (const row of inventory.rows) {
       if (row.reason) {
@@ -72,17 +75,44 @@ describe("frozen application platform inventory", () => {
   });
 
   it("matches summary arithmetic to row counts", () => {
+    const sourceTotal = inventory.rows.reduce((sum, row) => sum + row.count, 0);
+    expect(inventory.total_source_url_count).toBe(sourceTotal);
     expect(inventory.total_distinct_application_urls).toBe(inventory.rows.length);
-    const feedListing = inventory.rows.filter(
-      (row) => row.reason === "FEED_LISTING_UNRESOLVED",
-    ).length;
+
+    const feedListing = inventory.rows
+      .filter((row) => row.reason === "FEED_LISTING_UNRESOLVED")
+      .reduce((sum, row) => sum + row.count, 0);
     expect(inventory.unresolvable_feed_listing_count).toBe(feedListing);
     expect(inventory.resolvable_application_url_count).toBe(
-      inventory.total_distinct_application_urls - feedListing,
+      sourceTotal - feedListing,
     );
+
+    const autoSupported = inventory.rows
+      .filter(
+        (row) =>
+          row.reason !== "FEED_LISTING_UNRESOLVED" &&
+          row.support_tier === "AUTO_SUPPORTED",
+      )
+      .reduce((sum, row) => sum + row.count, 0);
+    expect(inventory.auto_supported_resolvable_count).toBe(autoSupported);
+
     if (inventory.resolvable_application_url_count === 0) {
       expect(inventory.pct_of_resolvable_application_urls).toBeNull();
       expect(inventory.measurability_verdict).toBe("option_c_escalation");
+    } else {
+      const expectedPct = Number(
+        (
+          (autoSupported / inventory.resolvable_application_url_count) *
+          100
+        ).toFixed(2),
+      );
+      expect(inventory.pct_of_resolvable_application_urls).toBe(expectedPct);
+    }
+  });
+
+  it("groups path families with templated segments", () => {
+    for (const row of inventory.rows) {
+      expect(row.path_family).not.toMatch(/\/\d+(\/|$)/);
     }
   });
 

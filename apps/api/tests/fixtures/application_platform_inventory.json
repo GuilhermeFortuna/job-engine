@@ -1,7 +1,9 @@
 {
-  "evidence_revision": "cross-014-v1",
+  "evidence_revision": "cross-014-v2",
   "owner_inventory_decision": "option_b_dual_number_reporting_with_vacuous_slice_fallback_to_c",
-  "total_distinct_application_urls": 9,
+  "owner_decision_source": "CROSS-014 planning session AskQuestion confirmation (2026-08-20)",
+  "total_distinct_application_urls": 3,
+  "total_source_url_count": 9,
   "resolvable_application_url_count": 0,
   "unresolvable_feed_listing_count": 9,
   "auto_supported_resolvable_count": 0,
@@ -12,27 +14,27 @@
     "generic_standard_html": {
       "support_tier": "AUTO_SUPPORTED",
       "reason": null,
-      "evidence": "fixture_corpus; production_entrypoint pending CROSS-012"
+      "evidence": "CROSS-010 fixture corpus; production-entrypoint smoke owned by CROSS-012 when landed"
     },
     "greenhouse": {
       "support_tier": "AUTO_SUPPORTED",
       "reason": null,
-      "evidence": "adapter_unit_and_fixture_corpus; production_entrypoint pending CROSS-012"
+      "evidence": "CROSS-007 unit + fixture corpus; production-entrypoint smoke owned by CROSS-012 when landed"
     },
     "lever": {
       "support_tier": "AUTO_SUPPORTED",
       "reason": null,
-      "evidence": "adapter_unit_and_fixture_corpus; production_entrypoint pending CROSS-012"
+      "evidence": "CROSS-008 unit + fixture corpus; production-entrypoint smoke owned by CROSS-012 when landed"
     },
     "ashby": {
       "support_tier": "UNSUPPORTED",
       "reason": "MISSING_ADAPTER_EVIDENCE",
-      "evidence": "exact_host_matcher_registered; no production smoke"
+      "evidence": "Matcher module present but unregistered — generic keeps handling until production smoke"
     },
     "smartrecruiters": {
       "support_tier": "UNSUPPORTED",
       "reason": "MISSING_ADAPTER_EVIDENCE",
-      "evidence": "exact_host_matcher_registered; no production smoke"
+      "evidence": "Matcher module present but unregistered — generic keeps handling until production smoke"
     },
     "workday": {
       "support_tier": "UNSUPPORTED",
@@ -49,111 +51,38 @@
     {
       "source_id": "himalayas",
       "normalized_host": "himalayas.app",
-      "path_family": "himalayas.app/companies/globex/jobs/python-engineer",
+      "path_family": "himalayas.app/companies/{slug}/jobs/{slug}",
       "provider": "feed_listing",
       "eligible": false,
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v1",
-      "count": 1,
-      "share": 0.1111111111111111
-    },
-    {
-      "source_id": "himalayas",
-      "normalized_host": "himalayas.app",
-      "path_family": "himalayas.app/companies/initech/jobs/backend-engineer",
-      "provider": "feed_listing",
-      "eligible": false,
-      "support_tier": "UNSUPPORTED",
-      "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v1",
-      "count": 1,
-      "share": 0.1111111111111111
-    },
-    {
-      "source_id": "himalayas",
-      "normalized_host": "himalayas.app",
-      "path_family": "himalayas.app/companies/acme/jobs/staff-engineer",
-      "provider": "feed_listing",
-      "eligible": false,
-      "support_tier": "UNSUPPORTED",
-      "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v1",
-      "count": 1,
-      "share": 0.1111111111111111
+      "evidence_revision": "cross-014-v2",
+      "count": 3,
+      "share": 0.333333
     },
     {
       "source_id": "jobicy",
       "normalized_host": "jobicy.com",
-      "path_family": "jobicy.com/jobs/150001-python-engineer-brazil",
+      "path_family": "jobicy.com/jobs/{id}-{slug}",
       "provider": "feed_listing",
       "eligible": false,
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v1",
-      "count": 1,
-      "share": 0.1111111111111111
-    },
-    {
-      "source_id": "jobicy",
-      "normalized_host": "jobicy.com",
-      "path_family": "jobicy.com/jobs/150002-backend-engineer-latam",
-      "provider": "feed_listing",
-      "eligible": false,
-      "support_tier": "UNSUPPORTED",
-      "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v1",
-      "count": 1,
-      "share": 0.1111111111111111
-    },
-    {
-      "source_id": "jobicy",
-      "normalized_host": "jobicy.com",
-      "path_family": "jobicy.com/jobs/150003-staff-engineer-anywhere",
-      "provider": "feed_listing",
-      "eligible": false,
-      "support_tier": "UNSUPPORTED",
-      "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v1",
-      "count": 1,
-      "share": 0.1111111111111111
+      "evidence_revision": "cross-014-v2",
+      "count": 3,
+      "share": 0.333333
     },
     {
       "source_id": "remoteok",
       "normalized_host": "remoteok.com",
-      "path_family": "remoteok.com/remote-jobs/200001-python-engineer",
+      "path_family": "remoteok.com/remote-jobs/{id}-{slug}",
       "provider": "feed_listing",
       "eligible": false,
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v1",
-      "count": 1,
-      "share": 0.1111111111111111
-    },
-    {
-      "source_id": "remoteok",
-      "normalized_host": "remoteok.com",
-      "path_family": "remoteok.com/remote-jobs/200002-backend-engineer",
-      "provider": "feed_listing",
-      "eligible": false,
-      "support_tier": "UNSUPPORTED",
-      "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v1",
-      "count": 1,
-      "share": 0.1111111111111111
-    },
-    {
-      "source_id": "remoteok",
-      "normalized_host": "remoteok.com",
-      "path_family": "remoteok.com/remote-jobs/200003-ops-editorial",
-      "provider": "feed_listing",
-      "eligible": false,
-      "support_tier": "UNSUPPORTED",
-      "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v1",
-      "count": 1,
-      "share": 0.1111111111111111
+      "evidence_revision": "cross-014-v2",
+      "count": 3,
+      "share": 0.333333
     }
-  ],
-  "source_row_total": 9
+  ]
 }

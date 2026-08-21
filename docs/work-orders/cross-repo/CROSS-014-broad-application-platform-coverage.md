@@ -152,4 +152,5 @@ git diff --check
 - Commit: Pending owner review
 - Evidence: [`docs/automation/application-platform-coverage.md`](../../automation/application-platform-coverage.md), [`apps/api/tests/fixtures/application_platform_inventory.json`](../../apps/api/tests/fixtures/application_platform_inventory.json)
 - Independent reviewer: Pending platform-coverage review
-- Measurability: Owner option (b) applied; vacuous resolvable slice triggers option (c) escalation — ≥95% not published
+- Measurability: Owner option (b) applied via planning AskQuestion; vacuous resolvable slice triggers option (c) escalation — ≥95% not published
+- Integration: `selectAdapter` lives in `adapters/selection.ts` for CROSS-012 `RuntimeCoordinator` to call (GitHub `development` HEAD `9a9378d` does not yet contain CROSS-012)

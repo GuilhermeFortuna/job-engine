@@ -33,8 +33,12 @@ function isApprovedOrigin(url: URL): boolean {
 }
 
 /**
- * Ashby matcher. Production auto-support requires a passing production-entrypoint
- * smoke; until then the registry classifies exact matches as unsupported.
+ * Ashby host/path matcher module.
+ *
+ * Intentionally **not** registered in `createDefaultAdapterRegistry()` until a
+ * production-entrypoint smoke proves AUTO_SUPPORTED. Unregistered hosts fall
+ * through to the generic adapter (CROSS-014: do not add speculative adapters
+ * that hard-veto coverage).
  */
 export class AshbyFormAdapter implements FormAdapter {
   readonly adapterId = ASHBY_ADAPTER_ID;
