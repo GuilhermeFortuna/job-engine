@@ -379,13 +379,13 @@ result=PASS cleanup=complete
 **Report:** [application-platform-coverage.md](application-platform-coverage.md)
 **Frozen inventory:** `apps/api/tests/fixtures/application_platform_inventory.json`
 **Registry:** `apps/desktop/src/main/adapters/registry.ts` (`classify`, hostile lookalike via suffix+infix)
-**Selection:** `apps/desktop/src/main/adapters/selection.ts` (`selectAdapter`, visible-URL veto; for CROSS-012 `RuntimeCoordinator` to call)
+**Selection:** `apps/desktop/src/main/adapters/selection.ts` (`selectAdapter`, visible-URL veto; called from `RuntimeCoordinator` private `selectAdapter`)
 
 | Adapter ID | CROSS-014 coverage tier | Notes |
 | --- | --- | --- |
-| `greenhouse` | `AUTO_SUPPORTED` | Exact-host matcher; production-entrypoint smoke owned by CROSS-012 |
-| `lever` | `AUTO_SUPPORTED` | Exact-host matcher; `/apply`-only detect |
-| `generic` | `AUTO_SUPPORTED` | HTTPS employer standard forms after platform matchers; also soft-fallback for `UNAPPROVED_ATS_PATH` |
+| `greenhouse` | `AUTO_SUPPORTED` | Exact-host matcher; `test:production` Greenhouse full-auto submitted |
+| `lever` | `AUTO_SUPPORTED` | Exact-host matcher; `/apply`-only detect; `test:production` Lever full-auto submitted |
+| `generic` | `AUTO_SUPPORTED` | HTTPS employer standard forms after platform matchers; also soft-fallback for `UNAPPROVED_ATS_PATH`; production full-auto + semi-auto |
 | `ashby` | `UNSUPPORTED` (`MISSING_ADAPTER_EVIDENCE`) | Matcher module present but **unregistered** — generic keeps handling |
 | `smartrecruiters` | `UNSUPPORTED` (`MISSING_ADAPTER_EVIDENCE`) | Matcher module present but **unregistered** — generic keeps handling |
 | `workday` | `UNSUPPORTED` (`LEGAL_GATE`) | Detector only; never generic fallback |
@@ -393,3 +393,5 @@ result=PASS cleanup=complete
 | feed listing hosts | `UNSUPPORTED` (`FEED_LISTING_UNRESOLVED`) | Catalog stores listing URLs, not ATS apply hosts |
 
 **Measurability (2026-08-20):** Committed source fixtures yield 0 resolvable / 9 feed-listing URLs (3 templated families). Owner option (b) dual-number reporting applies; ≥95% criterion escalates as unmeasurable (option c) until ingestion stores downstream apply URLs.
+
+**Production numerator (2026-08-21):** 3/3 standard-form families (generic, Greenhouse, Lever) auto-supported through `dist/main/index.js` (`test:production` 4 passed). See [application-platform-coverage.md](application-platform-coverage.md).

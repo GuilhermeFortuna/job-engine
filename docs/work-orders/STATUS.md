@@ -144,7 +144,7 @@ For Batch 04, `CROSS-011` is the only `READY` order. It freezes the owner-visibl
 | [CROSS-004](cross-repo/CROSS-004-live-search-acceptance.md)           | Antigravity agent | `development`                               | 2026-08-17T19:03:44-03:00 | Live search end-to-end integration and acceptance; GO decision in `/docs/evidence/live-search-acceptance.md`                                                            |
 | [CROSS-005](cross-repo/CROSS-005-high-automation-feasibility-spec.md) | Antigravity agent | `development`                               | 2026-08-17T23:30:13-03:00 | V2 specification, platform register, security model, and downstream Batch 03 bindings                                                                                   |
 | [CROSS-012](cross-repo/CROSS-012-production-runtime-integration.md)   | Cursor agent      | `development`                               | 2026-08-20T01:50:00-03:00 | Production Electron coordinator wired from `dist/main/index.js`; evidence in `/docs/evidence/cross-012-production-runtime.md`. Status remains owner-controlled `READY`. |
-| [CROSS-014](cross-repo/CROSS-014-broad-application-platform-coverage.md) | Cursor agent      | `cursor/cross-014-platform-coverage-833f`   | 2026-08-20T08:45:00+00:00 | Registry classify/selection library, lookalike fix, frozen inventory, option (c) escalation; wiring `selectAdapter` into RuntimeCoordinator after rebase onto CROSS-012 |
+| [CROSS-014](cross-repo/CROSS-014-broad-application-platform-coverage.md) | Cursor agent      | `cursor/cross-014-platform-coverage-833f`   | 2026-08-20T08:45:00+00:00 | Rebased onto CROSS-012 (`c3ebbb8`); `selectAdapter` wired into RuntimeCoordinator; `test:production` 4/4; coverage numerator 3/3 standard-form families |
 
 
 
