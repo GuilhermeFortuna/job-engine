@@ -60,7 +60,7 @@ from job_engine.services.application_answers import (
     authorize_run_for_answers,
 )
 
-_NOW = datetime.now(UTC)
+_UNSET: Any = object()
 _RAW_LEASE_TOKEN = "test-lease-token"
 _LEASE_HASH = calculate_token_hash(_RAW_LEASE_TOKEN)
 _RESUME_SHA = "a" * 64
@@ -113,12 +113,17 @@ class ScriptedProvider:
         return self._results.pop(0)
 
 
-def _confirmed_field(value: Any, *, policy: PolicyCategory) -> ConfirmedField[Any]:
+def _confirmed_field(
+    value: Any,
+    *,
+    policy: PolicyCategory,
+    last_confirmed_at: datetime | None = None,
+) -> ConfirmedField[Any]:
     return ConfirmedField[Any](
         state=ValueState.PROVIDED,
         value=value,
         source=FieldSource.OWNER,
-        last_confirmed_at=_NOW,
+        last_confirmed_at=last_confirmed_at or datetime.now(UTC),
         policy_category=policy,
     )
 
@@ -132,28 +137,37 @@ def make_profile(
     summary: str | None = "Builds reliable backend systems.",
     skills: tuple[str, ...] = ("Python", "PostgreSQL"),
 ) -> ApplicantProfile:
+    now = datetime.now(UTC)
     profile = ApplicantProfile(
         id=profile_id or _DEFAULT_PROFILE_ID,
         version=version,
-        created_at=_NOW,
-        updated_at=_NOW,
+        created_at=now,
+        updated_at=now,
     )
     updates: dict[str, Any] = {}
     if notice_period_days is not None:
         updates["notice_period_days"] = _confirmed_field(
-            notice_period_days, policy=PolicyCategory.VERIFIED_PROFILE
+            notice_period_days,
+            policy=PolicyCategory.VERIFIED_PROFILE,
+            last_confirmed_at=now,
         )
     if headline is not None:
         updates["headline"] = _confirmed_field(
-            headline, policy=PolicyCategory.VERIFIED_PROFILE
+            headline,
+            policy=PolicyCategory.VERIFIED_PROFILE,
+            last_confirmed_at=now,
         )
     if summary is not None:
         updates["summary"] = _confirmed_field(
-            summary, policy=PolicyCategory.VERIFIED_PROFILE
+            summary,
+            policy=PolicyCategory.VERIFIED_PROFILE,
+            last_confirmed_at=now,
         )
     if skills:
         updates["skills"] = _confirmed_field(
-            skills, policy=PolicyCategory.VERIFIED_PROFILE
+            skills,
+            policy=PolicyCategory.VERIFIED_PROFILE,
+            last_confirmed_at=now,
         )
     if updates:
         profile = profile.model_copy(update=updates)
@@ -161,6 +175,7 @@ def make_profile(
 
 
 def make_resume(*, version: int = 1, sha256: str = _RESUME_SHA) -> ResumeAsset:
+    now = datetime.now(UTC)
     return ResumeAsset(
         id=uuid4(),
         applicant_profile_id=_DEFAULT_PROFILE_ID,
@@ -170,8 +185,8 @@ def make_resume(*, version: int = 1, sha256: str = _RESUME_SHA) -> ResumeAsset:
         upload_pdf_path="resume.pdf",
         sha256=sha256,
         version=version,
-        created_at=_NOW,
-        updated_at=_NOW,
+        created_at=now,
+        updated_at=now,
     )
 
 
@@ -184,6 +199,7 @@ def make_answer_bank(
 def make_approved_answer(
     *, answer_id: str = "ans_1", intent: QuestionIntent, text: str, version: int = 1
 ) -> ReusableAnswer:
+    now = datetime.now(UTC)
     return ReusableAnswer(
         id=uuid4(),
         answer_id=answer_id,
@@ -191,10 +207,10 @@ def make_approved_answer(
         answer_text=text,
         policy_category=PolicyCategory.APPROVED_REUSABLE,
         provenance="owner_authored",
-        last_confirmed_at=_NOW,
+        last_confirmed_at=now,
         version=version,
-        created_at=_NOW,
-        updated_at=_NOW,
+        created_at=now,
+        updated_at=now,
     )
 
 
@@ -209,16 +225,20 @@ def make_run(
     lease_token_hash: str | None = _LEASE_HASH,
     lease_expires_at: datetime | None = None,
     automation_mode: AutomationMode = AutomationMode.FULL_AUTO,
-    automatic_submission_authorized_at: datetime | None = _NOW,
+    automatic_submission_authorized_at: datetime | None = _UNSET,
     platform_adapter_id: str = "greenhouse",
     exceptions: tuple[ApplicationException, ...] = (),
 ) -> ApplicationRun:
+    now = datetime.now(UTC)
     snapshot = answer_bank_snapshot if answer_bank_snapshot is not None else {}
-    auth_at = (
-        automatic_submission_authorized_at
-        if automation_mode == AutomationMode.FULL_AUTO
-        else None
-    )
+    if automatic_submission_authorized_at is _UNSET:
+        auth_at = now if automation_mode == AutomationMode.FULL_AUTO else None
+    else:
+        auth_at = (
+            automatic_submission_authorized_at
+            if automation_mode == AutomationMode.FULL_AUTO
+            else None
+        )
     profile_id = applicant_profile_id or _DEFAULT_PROFILE_ID
     return ApplicationRun(
         id=uuid4(),
@@ -243,10 +263,10 @@ def make_run(
         lease_expires_at=(
             lease_expires_at
             if lease_expires_at is not None
-            else _NOW + timedelta(seconds=60)
+            else now + timedelta(minutes=10)
         ),
-        created_at=_NOW,
-        updated_at=_NOW,
+        created_at=now,
+        updated_at=now,
         exceptions=exceptions,
     )
 
@@ -371,7 +391,7 @@ def test_authorize_run_for_answers_expired_lease() -> None:
     resume = make_resume()
     run = make_run(
         resume_asset_id=resume.id,
-        lease_expires_at=_NOW - timedelta(seconds=1),
+        lease_expires_at=datetime.now(UTC) - timedelta(seconds=1),
     )
     with pytest.raises(LeaseInvalidOrExpiredError):
         authorize_run_for_answers(
@@ -495,6 +515,7 @@ async def test_exact_owner_resolution_is_bound_to_run_field_and_identity() -> No
     service = ApplicationAnswerService(settings, provider=ExplodingProvider())
     resume = make_resume()
     run_id = uuid4()
+    now = datetime.now(UTC)
     exception = ApplicationException(
         id=uuid4(),
         run_id=run_id,
@@ -513,8 +534,8 @@ async def test_exact_owner_resolution_is_bound_to_run_field_and_identity() -> No
                 }
             ]
         },
-        created_at=_NOW,
-        resolved_at=_NOW,
+        created_at=now,
+        resolved_at=now,
     )
     run = make_run(
         resume_asset_id=resume.id,
