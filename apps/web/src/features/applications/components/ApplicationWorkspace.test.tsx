@@ -167,7 +167,11 @@ describe("ApplicationWorkspace", () => {
         version: 1,
       },
     ]);
-    getCapabilities.mockResolvedValue({ embeddedBrowser: true, platform: "linux" });
+    getCapabilities.mockResolvedValue({
+      embeddedBrowser: true,
+      platform: "linux",
+      productionRuntime: true,
+    });
     subscribeBrowserState.mockImplementation((listener: (state: DesktopBrowserState) => void) => {
       listener({
         runId: RUN_ID,
@@ -239,6 +243,25 @@ describe("ApplicationWorkspace", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    // unstubAllGlobals can remove the shared vitest.setup ResizeObserver polyfill.
+    if (typeof window.ResizeObserver !== "function") {
+      class ResizeObserverStub {
+        callback: ResizeObserverCallback;
+        constructor(callback: ResizeObserverCallback) {
+          this.callback = callback;
+        }
+        observe() {
+          this.callback([] as unknown as ResizeObserverEntry[], this);
+        }
+        disconnect() {}
+        unobserve() {}
+      }
+      Object.defineProperty(window, "ResizeObserver", {
+        writable: true,
+        configurable: true,
+        value: ResizeObserverStub,
+      });
+    }
   });
 
   it("subscribes, reports bounds, then opens by run ID and closes once on unmount", async () => {
