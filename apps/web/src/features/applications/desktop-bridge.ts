@@ -61,6 +61,12 @@ export type RuntimeReasonCode =
   | "NEEDS_INPUT"
   | "UNSUPPORTED_CONTROL"
   | "SUBMISSION_UNKNOWN"
+  | "LOOKALIKE_HOST"
+  | "AMBIGUOUS_DETECTION"
+  | "MISSING_ADAPTER_EVIDENCE"
+  | "LEGAL_GATE"
+  | "PLATFORM_DRIFT"
+  | "FEED_LISTING_UNRESOLVED"
   | null;
 
 export interface DesktopRuntimeState {

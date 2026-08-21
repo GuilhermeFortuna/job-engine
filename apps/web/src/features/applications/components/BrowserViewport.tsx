@@ -51,8 +51,11 @@ export function BrowserViewport({
       onBoundsRef.current(measureViewportBounds(frame));
     };
 
-    const observer = new ResizeObserver(() => report());
-    observer.observe(frame);
+    const observer =
+      typeof ResizeObserver === "function"
+        ? new ResizeObserver(() => report())
+        : null;
+    observer?.observe(frame);
     window.addEventListener("resize", report);
     window.addEventListener("scroll", report, true);
     window.visualViewport?.addEventListener("resize", report);
@@ -63,7 +66,7 @@ export function BrowserViewport({
 
     return () => {
       cancelled = true;
-      observer.disconnect();
+      observer?.disconnect();
       window.removeEventListener("resize", report);
       window.removeEventListener("scroll", report, true);
       window.visualViewport?.removeEventListener("resize", report);

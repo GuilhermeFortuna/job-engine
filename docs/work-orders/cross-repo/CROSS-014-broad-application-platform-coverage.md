@@ -1,6 +1,6 @@
 # CROSS-014: Broad Application-Platform Coverage
 
-**Status:** `BLOCKED`
+**Status:** `READY` (authoritative: [`docs/work-orders/STATUS.md`](../STATUS.md); any prior `BLOCKED` header text was stale)
 
 **Owner:** Unassigned
 
@@ -143,12 +143,16 @@ git diff --check
 
 ## Dispatch record
 
-- Worker: Unassigned
-- Branch/worktree: `development` (shared working branch)
-- Dispatched at: Not dispatched
+- Worker: Cursor agent
+- Branch/worktree: `cursor/cross-014-platform-coverage-833f`
+- Dispatched at: 2026-08-20T08:45:00+00:00
 
 ## Completion record
 
-- Commit: Pending
-- Evidence: Pending
+- Commit: Pending owner review (PR remains draft; CROSS-014 is **not** acceptance-complete)
+- Evidence: [`docs/automation/application-platform-coverage.md`](../../automation/application-platform-coverage.md) (`cross-014-v4`), [`apps/api/tests/fixtures/application_platform_inventory.json`](../../apps/api/tests/fixtures/application_platform_inventory.json)
 - Independent reviewer: Pending platform-coverage review
+- Measurability: Owner option (b) → vacuous resolvable slice → option (c); **9 distinct URLs / 3 path families / 0 resolvable**; ≥95% **not published**
+- Integration: `RuntimeCoordinator` retains embedded view on coverage/manual pauses; `selectAdapter` hard-vetoes Ashby/SmartRecruiters/Workday/lookalikes/feed listings/platform drift
+- Production numerator: 3/3 standard-form families via `test:production`; Ashby/SR/Workday excluded; feed inventory remains option (c)
+- Prerequisite blocker: downstream application URLs must be resolved/stored before measured catalog coverage can be accepted (out of CROSS-014 ingestion scope)

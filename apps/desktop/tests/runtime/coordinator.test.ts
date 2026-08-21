@@ -71,6 +71,10 @@ function makeClient(overrides: Partial<RunnerClient> = {}): RunnerClient {
     checkpoint: vi.fn(async () => undefined),
     raiseException: vi.fn(async () => undefined),
     getRun: vi.fn(async () => makeClaim().run),
+    fetchResume: vi.fn(async () => ({
+      bytes: Buffer.from("resume"),
+      sha256: "a".repeat(64),
+    })),
     ...overrides,
   } as unknown as RunnerClient;
 }
@@ -179,10 +183,10 @@ describe("RuntimeCoordinator adapter selection", () => {
         selectAdapter: (
           run: ClaimResponse["run"],
           visibleUrl: string,
-        ) => { adapterId: string } | null;
+        ) => { adapter: { adapterId: string } | null };
       }
     ).selectAdapter.bind(coordinator);
-    return select(makeClaim(run).run, visibleUrl)?.adapterId ?? null;
+    return select(makeClaim(run).run, visibleUrl).adapter?.adapterId ?? null;
   }
 
   it("binds the platform adapter the visible host matches", () => {
@@ -221,5 +225,91 @@ describe("RuntimeCoordinator adapter selection", () => {
         "https://careers.unknown.example.test/apply",
       ),
     ).toBe("generic");
+  });
+});
+
+describe("RuntimeCoordinator coverage pause retention", () => {
+  it("retains the embedded view on a coverage veto and does not dequeue", async () => {
+    const FEED_URL = "https://himalayas.app/companies/acme/jobs/staff";
+    const viewManager = mockViewManager({
+      getActiveView: () => mockView(FEED_URL),
+      getCurrentRunId: () => RUN_ID,
+    });
+    const client = makeClient({
+      claim: vi.fn(async () =>
+        makeClaim({
+          application_url: FEED_URL,
+          platform_adapter_id: "generic",
+        }),
+      ),
+    });
+    const coordinator = coordinatorOf(viewManager, client);
+
+    const result = await coordinator.openRun(RUN_ID, FEED_URL);
+    expect(result.success).toBe(false);
+    expect(coordinator.getState().phase).toBe("paused");
+    expect(coordinator.getState().reasonCode).toBe("FEED_LISTING_UNRESOLVED");
+    expect(coordinator.getState().runId).toBe(RUN_ID);
+    expect(viewManager.closeApplication).not.toHaveBeenCalled();
+    expect(client.raiseException).toHaveBeenCalled();
+    expect(viewManager.getCurrentRunId()).toBe(RUN_ID);
+    expect(viewManager.getActiveView()).not.toBeNull();
+  });
+
+  it("retains the view for Ashby MISSING_ADAPTER_EVIDENCE without observing the form", async () => {
+    const ASHBY_URL = "https://jobs.ashbyhq.com/acme/role-1";
+    const viewManager = mockViewManager({
+      getActiveView: () => mockView(ASHBY_URL),
+    });
+    const client = makeClient({
+      claim: vi.fn(async () =>
+        makeClaim({
+          application_url: ASHBY_URL,
+          platform_adapter_id: "generic",
+        }),
+      ),
+      fetchResume: vi.fn(async () => {
+        throw new Error("coverage veto must not fetch resume");
+      }),
+    });
+    const coordinator = coordinatorOf(viewManager, client);
+
+    const result = await coordinator.openRun(RUN_ID, ASHBY_URL);
+    expect(result.success).toBe(false);
+    expect(coordinator.getState().reasonCode).toBe("MISSING_ADAPTER_EVIDENCE");
+    expect(viewManager.closeApplication).not.toHaveBeenCalled();
+    expect(client.fetchResume).not.toHaveBeenCalled();
+  });
+
+  it("still closes the view on URL_MISMATCH", async () => {
+    const viewManager = mockViewManager({
+      getActiveView: () => mockView("https://jobs.example.test/other"),
+    });
+    const client = makeClient();
+    const coordinator = coordinatorOf(viewManager, client);
+
+    await coordinator.openRun(RUN_ID, APPLICATION_URL);
+    expect(coordinator.getState().reasonCode).toBe("URL_MISMATCH");
+    expect(viewManager.closeApplication).toHaveBeenCalled();
+  });
+
+  it("allows explicit close after a retained coverage pause", async () => {
+    const FEED_URL = "https://jobicy.com/jobs/150001-python-engineer-brazil";
+    const viewManager = mockViewManager({
+      getActiveView: () => mockView(FEED_URL),
+    });
+    const client = makeClient({
+      claim: vi.fn(async () =>
+        makeClaim({ application_url: FEED_URL }),
+      ),
+    });
+    const coordinator = coordinatorOf(viewManager, client);
+
+    await coordinator.openRun(RUN_ID, FEED_URL);
+    expect(viewManager.closeApplication).not.toHaveBeenCalled();
+
+    const closed = await coordinator.closeActive();
+    expect(closed.success).toBe(true);
+    expect(viewManager.closeApplication).toHaveBeenCalled();
   });
 });

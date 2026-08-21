@@ -6,6 +6,24 @@ import type {
   StepOutcome,
 } from "../forms/types";
 import type { PageScriptArgs } from "../forms/page-script";
+import type { PlatformCapability } from "./coverage";
+
+export type {
+  CoverageSupportTier,
+  PlatformCapability,
+  PlatformCoverageReasonCode,
+} from "./coverage";
+export {
+  HARD_VETO_REASON_CODES,
+  coverageReasonToRuntime,
+  isHardVetoReason,
+  isSoftCoverageReason,
+} from "./coverage";
+
+/** Classification result for a single application URL. */
+export interface PlatformClassification extends PlatformCapability {
+  readonly adapter: FormAdapter | null;
+}
 
 /**
  * Everything an adapter is allowed to do to a page.
@@ -63,6 +81,8 @@ export interface ReceiptCapture {
  */
 export interface FormAdapter {
   readonly adapterId: string;
+  /** Coverage metadata published in the platform inventory and registry. */
+  readonly capability: PlatformCapability;
 
   /**
    * Exact host/path matching. Implementations parse with `URL` and compare

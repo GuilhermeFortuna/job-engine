@@ -5,6 +5,7 @@ import {
   groupDurableStatus,
   inferViewAttached,
   resolveApplicationCapability,
+  runtimeReasonText,
   safeRunStatusPresentation,
   selectDurableRunAction,
 } from "./projections";
@@ -297,7 +298,7 @@ describe("runtime projections", () => {
     ["filling", true],
     ["armed", false],
     ["submitting", true],
-    ["paused", false],
+    ["paused", true],
     ["queued", false],
     ["terminal", false],
   ] satisfies Array<[RuntimePhase, boolean]>)(
@@ -306,4 +307,71 @@ describe("runtime projections", () => {
       expect(inferViewAttached(phase)).toBe(attached);
     },
   );
+
+  it.each([
+    [
+      "LOOKALIKE_HOST",
+      "Automation unavailable — the page host looks like a known ATS but is not an approved origin.",
+    ],
+    [
+      "AMBIGUOUS_DETECTION",
+      "Automation unavailable — more than one platform adapter matched this page.",
+    ],
+    [
+      "MISSING_ADAPTER_EVIDENCE",
+      "Automation unavailable — this application platform has no proven adapter evidence yet.",
+    ],
+    [
+      "LEGAL_GATE",
+      "Automation unavailable — this platform is blocked by a legal or policy gate.",
+    ],
+    [
+      "PLATFORM_DRIFT",
+      "Automation unavailable — the visible page no longer matches the expected application platform.",
+    ],
+    [
+      "FEED_LISTING_UNRESOLVED",
+      "Automation unavailable — this URL is a job-feed listing, not a resolved application form.",
+    ],
+  ] as const)(
+    "maps coverage reason %s to a stable owner-facing message without throwing",
+    (reasonCode, message) => {
+      expect(runtimeReasonText(reasonCode)).toBe(message);
+      expect(
+        selectDurableRunAction(run({ status: "needs_input" }), reasonCode),
+      ).toMatchObject({
+        action: "RESOLVE",
+        reasonCode,
+        reasonText: message,
+      });
+      expect(
+        applyRuntimeState(
+          run(),
+          runtime({ phase: "paused", reasonCode, status: "needs_input" }),
+        ),
+      ).toEqual({
+        runtimeState: runtime({
+          phase: "paused",
+          reasonCode,
+          status: "needs_input",
+        }),
+        viewAttached: true,
+      });
+    },
+  );
+
+  it("keeps existing operational reason mappings unchanged", () => {
+    expect(runtimeReasonText("AUTH_REQUIRED")).toBe(
+      "Authentication is required before this run can continue.",
+    );
+    expect(runtimeReasonText("CAPTCHA_REQUIRED")).toBe(
+      "A CAPTCHA must be completed before this run can continue.",
+    );
+    expect(runtimeReasonText("UNSUPPORTED_CONTROL")).toBe(
+      "The application contains a control that requires owner input.",
+    );
+    expect(runtimeReasonText("SUBMISSION_UNKNOWN")).toBe(
+      "Submission could not be confirmed; do not retry blindly.",
+    );
+  });
 });

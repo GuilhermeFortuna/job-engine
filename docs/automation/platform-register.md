@@ -371,3 +371,29 @@ result=PASS cleanup=complete
 3. **Browser Restart / Checkpoint Resume**: The first persistent context wrote `STEP_2_READY` and closed. A newly launched browser process recovered its cookie and checkpoint, resumed directly at step 2, and verified that the step-1 action appeared exactly once.
 4. **Confirmation Detection**: The resumed run activated submit once, observed the synthetic receipt, and verified the submit control was disabled.
 5. **Bounded Claim**: This proves local runtime primitives only. It does not prove live ATS permission, selector durability, production authentication, or platform submission support; those remain gated by platform Work Orders and `LEGAL-GATE-ATS-001`.
+
+---
+
+## 6. Batch 04 coverage evidence (CROSS-014)
+
+**Report:** [application-platform-coverage.md](application-platform-coverage.md)
+**Frozen inventory:** `apps/api/tests/fixtures/application_platform_inventory.json`
+**Registry:** `apps/desktop/src/main/adapters/registry.ts` (`classify`, hostile lookalike via suffix+infix)
+**Selection:** `apps/desktop/src/main/adapters/selection.ts` (`selectAdapter`, visible-URL veto; called from `RuntimeCoordinator` private `selectAdapter`)
+
+| Adapter ID | CROSS-014 coverage tier | Notes |
+| --- | --- | --- |
+| `greenhouse` | `AUTO_SUPPORTED` | Exact-host matcher; `test:production` Greenhouse full-auto submitted |
+| `lever` | `AUTO_SUPPORTED` | Exact-host matcher; `/apply`-only detect; `test:production` Lever full-auto submitted |
+| `generic` | `AUTO_SUPPORTED` | HTTPS employer standard forms after platform matchers; also soft-fallback for Greenhouse/Lever `UNAPPROVED_ATS_PATH`; production full-auto + semi-auto |
+| `ashby` | `UNSUPPORTED` (`MISSING_ADAPTER_EVIDENCE`) | Matcher module present but **unregistered**; exact `jobs.ashbyhq.com` hard-vetoed — does not fall through to generic; does not count toward auto-supported coverage |
+| `smartrecruiters` | `UNSUPPORTED` (`MISSING_ADAPTER_EVIDENCE`) | Matcher module present but **unregistered**; exact `jobs.smartrecruiters.com` hard-vetoed; does not count toward auto-supported coverage |
+| `workday` | `UNSUPPORTED` (`LEGAL_GATE`) | Detector only; never generic fallback; does not count toward auto-supported coverage |
+| unbound Lever EU | `UNSUPPORTED` (`MISSING_ADAPTER_EVIDENCE`) | `jobs.eu.lever.co` — not labelled lookalike |
+| feed listing hosts | `UNSUPPORTED` (`FEED_LISTING_UNRESOLVED`) | Catalog stores listing URLs, not ATS apply hosts |
+
+**Measurability (2026-08-20):** Committed source fixtures yield 0 resolvable / 9 feed-listing URLs (3 templated families). Owner option (b) dual-number reporting applies; ≥95% criterion escalates as unmeasurable (option c) until ingestion stores downstream apply URLs.
+
+**Inventory (option c):** 9 distinct feed-listing URLs / 3 path families / 0 resolvable; ≥95% unmeasurable. See [application-platform-coverage.md](application-platform-coverage.md) (`cross-014-v4`).
+
+**Production numerator:** 3/3 standard-form families (generic, Greenhouse, Lever) via `test:production`. Ashby/SmartRecruiters/Workday excluded. CROSS-014 is **not** acceptance-complete while resolvable catalog URLs remain absent.

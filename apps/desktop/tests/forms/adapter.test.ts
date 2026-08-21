@@ -18,6 +18,11 @@ function makeContext(url = "https://jobs.example.com/apply"): AdapterContext {
 function fakeAdapter(id: string, host: string): FormAdapter {
   return {
     adapterId: id,
+    capability: {
+      familyId: id,
+      supportTier: "AUTO_SUPPORTED",
+      reasonCode: null,
+    },
     matches: (url) => hostMatches(url, host),
   } as FormAdapter;
 }
@@ -80,6 +85,103 @@ describe("AdapterRegistry", () => {
     expect(
       registry.resolve("https://jobs.other.com/apply")?.adapterId,
     ).toBe("generic");
+  });
+
+  it("classifies feed listing hosts as FEED_LISTING_UNRESOLVED", () => {
+    const registry = createDefaultAdapterRegistry();
+    const result = registry.classify(
+      "https://jobicy.com/jobs/150001-python-engineer-brazil",
+    );
+    expect(result?.supportTier).toBe("UNSUPPORTED");
+    expect(result?.reasonCode).toBe("FEED_LISTING_UNRESOLVED");
+    expect(registry.resolve("https://jobicy.com/jobs/150001")).toBeNull();
+  });
+
+  it("labels unbound first-party Lever EU as missing evidence, not lookalike", () => {
+    const registry = createDefaultAdapterRegistry();
+    expect(
+      registry.classify("https://jobs.eu.lever.co/acme/job/apply")?.reasonCode,
+    ).toBe("MISSING_ADAPTER_EVIDENCE");
+    expect(registry.resolve("https://jobs.eu.lever.co/acme/job/apply")).toBeNull();
+  });
+
+  it("rejects hostile ATS lookalikes via suffix and infix checks", () => {
+    const registry = createDefaultAdapterRegistry();
+    expect(
+      registry.classify("https://evil.boards.greenhouse.io/acme/jobs/1")?.reasonCode,
+    ).toBe("LOOKALIKE_HOST");
+    expect(
+      registry.classify("https://boards.greenhouse.io.evil.test/acme/jobs/1")
+        ?.reasonCode,
+    ).toBe("LOOKALIKE_HOST");
+    expect(registry.resolve("https://evil.boards.greenhouse.io/x")).toBeNull();
+  });
+
+  it("classifies ambiguous multi-match as AMBIGUOUS_DETECTION", () => {
+    const twinA = fakeAdapter("twin-a", "boards.example.test");
+    const twinB = fakeAdapter("twin-b", "boards.example.test");
+    const registry = new AdapterRegistry([twinA, twinB], generic);
+    expect(
+      registry.classify("https://boards.example.test/apply")?.reasonCode,
+    ).toBe("AMBIGUOUS_DETECTION");
+    expect(registry.resolve("https://boards.example.test/apply")).toBeNull();
+  });
+
+  it("falls approved Greenhouse hosts with unapproved paths to generic", () => {
+    const registry = createDefaultAdapterRegistry();
+    const result = registry.classify(
+      "https://boards.greenhouse.io/embed/job_app",
+    );
+    expect(result?.adapter?.adapterId).toBe("generic");
+    expect(result?.reasonCode).toBe("UNAPPROVED_ATS_PATH");
+  });
+
+  it("hard-vetoes the loopback coverage-veto fixture path", () => {
+    const registry = createDefaultAdapterRegistry();
+    expect(
+      registry.classify(
+        "https://127.0.0.1:8443/__job-engine/coverage-veto/missing-adapter-evidence",
+      ),
+    ).toMatchObject({
+      familyId: "ashby",
+      supportTier: "UNSUPPORTED",
+      reasonCode: "MISSING_ADAPTER_EVIDENCE",
+      adapter: null,
+    });
+  });
+
+  it("hard-vetoes Ashby and SmartRecruiters without registering them", () => {
+    const registry = createDefaultAdapterRegistry();
+    expect(registry.registeredIds).toEqual(["greenhouse", "lever"]);
+    const ashby = registry.classify("https://jobs.ashbyhq.com/acme/role-1");
+    expect(ashby?.familyId).toBe("ashby");
+    expect(ashby?.supportTier).toBe("UNSUPPORTED");
+    expect(ashby?.reasonCode).toBe("MISSING_ADAPTER_EVIDENCE");
+    expect(ashby?.adapter).toBeNull();
+    expect(registry.resolve("https://jobs.ashbyhq.com/acme/role-1")).toBeNull();
+
+    const smart = registry.classify(
+      "https://jobs.smartrecruiters.com/acme/abc/slug",
+    );
+    expect(smart?.familyId).toBe("smartrecruiters");
+    expect(smart?.reasonCode).toBe("MISSING_ADAPTER_EVIDENCE");
+    expect(
+      registry.resolve("https://jobs.smartrecruiters.com/acme/abc/slug"),
+    ).toBeNull();
+  });
+
+  it("hard-vetoes Workday via LEGAL_GATE", () => {
+    const registry = createDefaultAdapterRegistry();
+    expect(
+      registry.classify(
+        "https://acme.myworkdayjobs.com/en-US/careers/job/Role",
+      )?.reasonCode,
+    ).toBe("LEGAL_GATE");
+    expect(
+      registry.resolve(
+        "https://acme.myworkdayjobs.com/en-US/careers/job/Role",
+      ),
+    ).toBeNull();
   });
 
   it("never resolves a non-HTTPS or malformed URL", () => {

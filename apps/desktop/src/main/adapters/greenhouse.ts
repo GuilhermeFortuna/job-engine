@@ -8,6 +8,7 @@ import {
   type AdapterContext,
   type AuthorizedFill,
   type FormAdapter,
+  type PlatformCapability,
   type ReceiptCapture,
 } from "./contract";
 import { GenericFormAdapter } from "./generic";
@@ -75,6 +76,11 @@ function isLegalOrAttestationField(field: RawField): boolean {
  */
 export class GreenhouseFormAdapter implements FormAdapter {
   readonly adapterId = GREENHOUSE_ADAPTER_ID;
+  readonly capability: PlatformCapability = {
+    familyId: "greenhouse",
+    supportTier: "AUTO_SUPPORTED",
+    reasonCode: null,
+  };
   private readonly generic = new GenericFormAdapter();
 
   /**

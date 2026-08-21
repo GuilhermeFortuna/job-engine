@@ -18,6 +18,22 @@ const SEED_SCRIPT = path.join(__dirname, "seed_catalog.py");
 export { FIXTURE_RUNNER_SECRET, startApi, teardownBackend };
 export type { RunningApi };
 
+function readJsonBody(req: import("node:http").IncomingMessage): Promise<Record<string, unknown>> {
+  return new Promise((resolve) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(body || "{}") as Record<string, unknown>);
+      } catch {
+        resolve({});
+      }
+    });
+  });
+}
+
 export interface SeededCatalog extends SeededBackend {
   jobGroupId: string;
   resumeId: string;
@@ -129,12 +145,75 @@ export class TrustedRendererServer {
   origin = "";
   private apiBaseUrl = "";
   private runId = "";
+  private mode: "submit" | "coverage_retain" = "submit";
+  lastProbe: Record<string, unknown> = {};
 
-  async start(runId: string, apiBaseUrl: string): Promise<string> {
+  async start(
+    runId: string,
+    apiBaseUrl: string,
+    mode: "submit" | "coverage_retain" = "submit",
+  ): Promise<string> {
     this.runId = runId;
     this.apiBaseUrl = apiBaseUrl;
+    this.mode = mode;
+    this.lastProbe = {};
     const port = 3200 + Math.floor(Math.random() * 400);
-    const html = `<!DOCTYPE html>
+    const html =
+      mode === "coverage_retain"
+        ? this.coverageRetainHtml(runId)
+        : this.submitHtml(runId);
+
+    this.server = createServer((req, res) => {
+      if (req.method === "GET" && req.url === "/__probe") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(this.lastProbe));
+        return;
+      }
+      if (req.method === "POST" && req.url === "/__probe") {
+        void readJsonBody(req).then((body) => {
+          this.lastProbe = body;
+          res.writeHead(204);
+          res.end();
+        });
+        return;
+      }
+      if (req.method === "POST" && req.url === "/__resolve") {
+        void this.resolvePendingQuestions().finally(() => {
+          res.writeHead(204);
+          res.end();
+        });
+        return;
+      }
+      if (req.method === "POST" && req.url === "/__release") {
+        void fetch(
+          `${this.apiBaseUrl}/api/v1/application-runs/${this.runId}/release-submit`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Origin: "http://localhost:3000",
+            },
+            body: JSON.stringify({ owner_confirmation: "Submit this application" }),
+          },
+        ).finally(() => {
+          res.writeHead(204);
+          res.end();
+        });
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(html);
+    });
+
+    await new Promise<void>((resolve) => {
+      this.server!.listen(port, "127.0.0.1", () => resolve());
+    });
+    this.origin = `http://127.0.0.1:${port}`;
+    return this.origin;
+  }
+
+  private submitHtml(runId: string): string {
+    return `<!DOCTYPE html>
 <html><head><title>Job Engine Smoke</title></head>
 <body>
 <p id="status">loading</p>
@@ -181,41 +260,65 @@ main().catch((err) => {
 });
 </script>
 </body></html>`;
+  }
 
-    this.server = createServer((req, res) => {
-      if (req.method === "POST" && req.url === "/__resolve") {
-        void this.resolvePendingQuestions().finally(() => {
-          res.writeHead(204);
-          res.end();
-        });
-        return;
-      }
-      if (req.method === "POST" && req.url === "/__release") {
-        void fetch(
-          `${this.apiBaseUrl}/api/v1/application-runs/${this.runId}/release-submit`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Origin: "http://localhost:3000",
-            },
-            body: JSON.stringify({ owner_confirmation: "Submit this application" }),
-          },
-        ).finally(() => {
-          res.writeHead(204);
-          res.end();
-        });
-        return;
-      }
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(html);
-    });
-
-    await new Promise<void>((resolve) => {
-      this.server!.listen(port, "127.0.0.1", () => resolve());
-    });
-    this.origin = `http://127.0.0.1:${port}`;
-    return this.origin;
+  private coverageRetainHtml(runId: string): string {
+    return `<!DOCTYPE html>
+<html><head><title>Job Engine Coverage Retain Smoke</title></head>
+<body>
+<p id="status">loading</p>
+<script>
+const runId = ${JSON.stringify(runId)};
+async function waitForBridge(attempts) {
+  for (let i = 0; i < attempts; i++) {
+    if (window.jobEngineDesktop) {
+      return window.jobEngineDesktop;
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return null;
+}
+async function report(probe) {
+  document.getElementById("status").textContent = JSON.stringify(probe);
+  await fetch("/__probe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(probe),
+  });
+}
+async function main() {
+  const api = await waitForBridge(50);
+  if (!api) {
+    await report({ ok: false, error: "no-bridge" });
+    return;
+  }
+  let browserRunId = null;
+  api.subscribeBrowserState((state) => {
+    browserRunId = state.runId;
+  });
+  const opened = await api.openApplication({ runId });
+  for (let i = 0; i < 60; i++) {
+    const state = await api.getRuntimeState();
+    if (state.phase === "paused") {
+      await report({
+        ok: true,
+        phase: state.phase,
+        reasonCode: state.reasonCode,
+        runtimeRunId: state.runId,
+        browserRunId,
+        openedSuccess: opened.success,
+      });
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  await report({ ok: false, error: "timeout", browserRunId });
+}
+main().catch(async (err) => {
+  await report({ ok: false, error: String(err) });
+});
+</script>
+</body></html>`;
   }
 
   private async resolvePendingQuestions(): Promise<void> {

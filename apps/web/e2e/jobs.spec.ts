@@ -120,12 +120,12 @@ test.describe("Job Search and Resilience", () => {
     const jobArticle = page.getByRole("article", {
       name: "Senior Backend Engineer",
     });
-    // JobCardShell replaces its server fallback with the interactive card
-    // after hydration. On slower CI runners, clicking the fallback link during
-    // that replacement can lose the click. The launcher status is rendered
-    // only after the client capability/readiness checks have completed.
+    // JobCardShell replaces its server fallback with the interactive card after
+    // hydration, and ApplicationLauncher first paints CHECKING_CAPABILITY with
+    // the same "Automation unavailable" heading. Wait for the settled reason so
+    // the click is not lost mid-remount on slower CI runners.
     await expect(jobArticle.getByRole("status")).toContainText(
-      "Automation unavailable",
+      "The production desktop runtime is unavailable.",
     );
     const jobTitleLink = jobArticle.getByRole("link", {
       name: "Senior Backend Engineer",
@@ -134,9 +134,10 @@ test.describe("Job Search and Resilience", () => {
       "href",
       `/jobs/${SAMPLE_JOB_ID}`,
     );
-    await jobTitleLink.click();
-
-    await expect(page).toHaveURL(`/jobs/${SAMPLE_JOB_ID}`);
+    await Promise.all([
+      page.waitForURL(`/jobs/${SAMPLE_JOB_ID}`),
+      jobTitleLink.click(),
+    ]);
 
     const backLink = page.getByRole("link", { name: /back to search/i });
     await expect(backLink).toBeVisible();

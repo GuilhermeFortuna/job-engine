@@ -1,5 +1,10 @@
 import type { AdapterContext, FormAdapter } from "../adapters/contract";
+import { retainsEmbeddedViewOnPause } from "../adapters/coverage";
 import type { AdapterRegistry } from "../adapters/registry";
+import {
+  selectAdapter as selectPlatformAdapter,
+  type AdapterSelectionResult,
+} from "../adapters/selection";
 import type { ApplicationViewManager } from "../application-view";
 import type { DesktopConfig } from "../config";
 import { IsolatedWorldSession } from "../forms/isolated-world";
@@ -41,28 +46,6 @@ interface QueuedOpen {
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Whether a URL points at this machine.
- *
- * Only the local fixture servers are loopback, so this marks the one case
- * where the backend-named adapter may stand in for a host match. Parsed with
- * `URL` and compared by exact hostname, never by substring: a public host that
- * merely contains "localhost" is not local.
- */
-function isLoopbackUrl(rawUrl: string): boolean {
-  try {
-    const host = new URL(rawUrl).hostname.toLowerCase();
-    return (
-      host === "localhost" ||
-      host === "::1" ||
-      host === "[::1]" ||
-      /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)
-    );
-  } catch {
-    return false;
-  }
 }
 
 export class RuntimeCoordinator {
@@ -331,16 +314,17 @@ export class RuntimeCoordinator {
       adapterId: claim.run.platform_adapter_id,
     });
 
-    const adapter = this.selectAdapter(claim.run, visibleUrl);
-    if (adapter === null) {
+    const selection = this.selectAdapter(claim.run, visibleUrl);
+    if (selection.adapter === null) {
       await this.raiseAndPause(
         runId,
         "step_error",
         { detail: "No adapter could drive this page" },
-        "ADAPTER_UNAVAILABLE",
+        selection.vetoReason ?? "ADAPTER_UNAVAILABLE",
       );
       return { success: false, error: "No adapter available for this application" };
     }
+    const adapter = selection.adapter;
     this.activeAdapter = adapter;
     this.publish({ adapterId: adapter.adapterId });
 
@@ -428,36 +412,15 @@ export class RuntimeCoordinator {
   /**
    * Choose the adapter for the page that is actually on screen.
    *
-   * The visible URL decides. It has already been checked against the run the
-   * backend resolved, so a platform match here is the page the owner opened.
-   *
-   * Two fallbacks follow, in order of how much they trust the page. The frozen
-   * canonical URL is consulted first: it is the real posting address, so
-   * resolving it is still a URL decision. Only a loopback page -- the local
-   * HTTPS fixture servers, which no platform adapter can match on host -- falls
-   * back to the adapter the backend named. Letting the named adapter win on a
-   * public host would drive platform selectors against a page that never
-   * matched them.
+   * Delegates to {@link selectPlatformAdapter}: visible-URL hard vetoes are
+   * unconditional; canonical URL is a URL decision; loopback may use the
+   * backend-named adapter but still respects capability hard vetoes.
    */
-  private selectAdapter(run: RunnerRun, visibleUrl: string): FormAdapter | null {
-    const { adapterRegistry } = this.deps;
-    const visible = adapterRegistry.resolve(visibleUrl);
-    if (visible && visible.adapterId !== "generic") {
-      return visible;
-    }
-    const canonical = run.canonical_application_url
-      ? adapterRegistry.resolve(run.canonical_application_url)
-      : null;
-    if (canonical && canonical.adapterId !== "generic") {
-      return canonical;
-    }
-    if (isLoopbackUrl(visibleUrl)) {
-      const named = adapterRegistry.adapterById(run.platform_adapter_id);
-      if (named) {
-        return named;
-      }
-    }
-    return canonical ?? visible;
+  private selectAdapter(
+    run: RunnerRun,
+    visibleUrl: string,
+  ): AdapterSelectionResult {
+    return selectPlatformAdapter(this.deps.adapterRegistry, run, visibleUrl);
   }
 
   private logicalUrl(
@@ -856,9 +819,17 @@ export class RuntimeCoordinator {
     }
     this.activeSession?.dispose();
     this.activeSession = null;
+    this.activeAdapter = null;
+    this.activeContext = null;
+    this.resumeBytes = null;
     this.busy = false;
     this.deps.viewManager.setReplacementBlocked(false);
-    this.deps.viewManager.closeApplication();
+
+    const retainView = retainsEmbeddedViewOnPause(reasonCode);
+    if (!retainView) {
+      this.deps.viewManager.closeApplication();
+    }
+
     this.publish({
       runId,
       phase: "paused",
@@ -868,6 +839,11 @@ export class RuntimeCoordinator {
           ? "paused_auth"
           : "needs_input",
     });
-    await this.dequeueIfIdle();
+
+    // Retained coverage/manual pauses must not auto-dequeue another run onto
+    // the still-visible page. Explicit owner open/close/replace still works.
+    if (!retainView) {
+      await this.dequeueIfIdle();
+    }
   }
 }
