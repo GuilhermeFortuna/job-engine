@@ -68,7 +68,7 @@ then continue. A stale placeholder is not an owner-approval request.
 | [BACK-013](back/BACK-013-hybrid-ai-answer-provider.md)                   | Backend  | `DONE`    | CROSS-011, BACK-011                                                                 | Hybrid local/Gemini grounded answer provider and evaluation gate          |
 | [CROSS-012](cross-repo/CROSS-012-production-runtime-integration.md)      | Cross    | `DONE`    | CROSS-011, BACK-012                                                                 | Production Electron automation runtime integration                        |
 | [CROSS-014](cross-repo/CROSS-014-broad-application-platform-coverage.md) | Cross    | `READY`   | CROSS-011, BACK-013, CROSS-012                                                      | Broad measured ATS and standard-form auto-apply coverage                  |
-| [FRONT-006](front/FRONT-006-visible-automation-control-center.md)        | Frontend | `READY`   | CROSS-011, BACK-012                                                                 | Visible automation control center, readiness, and launch UI               |
+| [FRONT-006](front/FRONT-006-visible-automation-control-center.md)        | Frontend | `REVIEW`  | CROSS-011, BACK-012                                                                 | Visible automation control center, readiness, and launch UI               |
 | [CROSS-013](cross-repo/CROSS-013-auto-apply-production-acceptance.md)    | Cross    | `BLOCKED` | BACK-012, BACK-013, CROSS-012, CROSS-014, FRONT-006                                 | Production-path auto-apply acceptance and owner-visible proof             |
 
 

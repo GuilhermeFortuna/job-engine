@@ -2,6 +2,7 @@ import hmac
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +27,21 @@ class HealthResponse(BaseModel):
     status: Literal["ok"]
 
 
+def _get_allowed_origins(frontend_origin: str) -> list[str]:
+    origins = {frontend_origin.rstrip("/")}
+    try:
+        parsed = urlsplit(frontend_origin)
+        port_suffix = f":{parsed.port}" if parsed.port else ""
+        scheme = parsed.scheme or "http"
+        if parsed.hostname in {"localhost", "127.0.0.1", "::1", "[::1]"}:
+            origins.add(f"{scheme}://localhost{port_suffix}")
+            origins.add(f"{scheme}://127.0.0.1{port_suffix}")
+            origins.add(f"{scheme}://[::1]{port_suffix}")
+    except Exception:
+        pass
+    return sorted(origins)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
@@ -46,9 +62,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
 
+    allowed_origins = _get_allowed_origins(resolved.frontend_origin)
+    allowed_origins_set = set(allowed_origins)
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[resolved.frontend_origin],
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -64,7 +83,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 authorization.removeprefix("Bearer "), resolved.runner_secret
             )
             if sec_fetch_site == "cross-site" or (
-                not is_runner and origin != resolved.frontend_origin
+                not is_runner and origin not in allowed_origins_set
             ):
                 return JSONResponse(
                     status_code=403,

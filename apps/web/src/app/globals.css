@@ -2715,8 +2715,11 @@ main:has(.application-workspace) {
 .application-settings-confirm {
   position: relative;
   width: min(28rem, 100%);
+  max-height: calc(100dvh - (2 * var(--space-4)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: grid;
-  place-content: center;
+  place-content: start stretch;
   padding: var(--space-4);
   border: 2px solid var(--color-focus);
   border-radius: var(--radius-md);

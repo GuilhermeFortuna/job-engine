@@ -9,6 +9,7 @@ const WORKSPACE_RUN_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const EXISTING_RUN_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const WORKSPACE_EXCEPTION_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 let workspaceMode = "armed";
+let workspaceAutomationMode = "semi_auto_pause_before_submit";
 let workspaceDuplicateOverride = false;
 let workspaceSequence = 1;
 
@@ -105,7 +106,7 @@ function workspaceRunDetail(runId = WORKSPACE_RUN_ID) {
     platform_adapter_id: "greenhouse",
     resume_asset_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
     resume_sha256: "cc".repeat(32),
-    automation_mode: "semi_auto_pause_before_submit",
+    automation_mode: workspaceAutomationMode,
     status: "queued",
     current_step: "Run queued",
     current_checkpoint: null,
@@ -568,6 +569,7 @@ const server = http.createServer((req, res) => {
       if (typeof parsed.mode === "string") {
         workspaceMode = parsed.mode;
       }
+      workspaceAutomationMode = "semi_auto_pause_before_submit";
       if (parsed.resetOverride) {
         workspaceDuplicateOverride = false;
       }
@@ -876,6 +878,12 @@ const server = http.createServer((req, res) => {
         );
         return;
       }
+      if (
+        parsed.automation_mode === "full_auto" ||
+        parsed.automation_mode === "semi_auto_pause_before_submit"
+      ) {
+        workspaceAutomationMode = parsed.automation_mode;
+      }
       workspaceMode = workspaceMode === "conflict" ? "armed" : workspaceMode;
       res.writeHead(201);
       res.end(
@@ -884,7 +892,6 @@ const server = http.createServer((req, res) => {
           conflicts: [],
         }),
       );
-      void parsed;
     });
     return;
   }

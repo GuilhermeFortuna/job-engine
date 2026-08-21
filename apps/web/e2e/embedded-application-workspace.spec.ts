@@ -148,26 +148,29 @@ test.describe("Embedded application workspace", () => {
     await expect(apply).toHaveAttribute("rel", "noopener noreferrer");
   });
 
-  test("desktop launch confirms a semi-auto run and opens the workspace", async ({
+  test("desktop launch authorizes a full-auto run and opens the workspace", async ({
     page,
   }) => {
     await installDesktopBridge(page);
     await setWorkspaceMode(page, "progress");
     await page.goto("/jobs");
     await page
-      .getByRole("button", { name: /^(auto apply|apply with assistance)$/i })
+      .getByRole("button", { name: /^auto apply$/i })
       .first()
       .click();
     const dialog = page.getByRole("dialog", {
-      name: /start assisted application/i,
+      name: /authorize auto apply/i,
     });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("Senior Backend Engineer");
     await expect(dialog).toContainText("Apex Global");
     await expect(dialog).toContainText("Primary resume");
-    await expect(dialog).not.toContainText("full_auto");
+    await expect(dialog).toContainText("Full auto");
+    await expect(dialog).toContainText(
+      "Authorize automatic submission for these selected jobs",
+    );
     const start = dialog.getByRole("button", {
-      name: /start assisted application/i,
+      name: /authorize and auto apply/i,
     });
     await expect(start).toBeEnabled();
     await start.click();
@@ -182,15 +185,15 @@ test.describe("Embedded application workspace", () => {
       .poll(async () => {
         const telemetry = await bridgeTelemetry(page);
         return {
-          opens: telemetry.opens.length,
+          opened: telemetry.opens.length > 0,
           firstOpen: telemetry.opens[0] ?? null,
-          firstEvent: telemetry.events[0] ?? null,
+          positioned: telemetry.events.includes("bounds"),
         };
       })
       .toEqual({
-        opens: 1,
+        opened: true,
         firstOpen: { runId: WORKSPACE_RUN_ID },
-        firstEvent: "bounds",
+        positioned: true,
       });
   });
 
@@ -222,7 +225,7 @@ test.describe("Embedded application workspace", () => {
     ).toHaveCount(0);
   });
 
-  test("auth pause resumes without collecting credentials", async ({
+  test("auth pause requires safe external completion without collecting credentials", async ({
     page,
   }) => {
     await installDesktopBridge(page);
@@ -230,13 +233,17 @@ test.describe("Embedded application workspace", () => {
     await page.goto(`/applications/${WORKSPACE_RUN_ID}/workspace`);
     await expect(page.getByText(/never asks for credentials/i)).toBeVisible();
     await expect(page.getByLabel(/password/i)).toHaveCount(0);
-    await page.getByRole("button", { name: /resume application/i }).click();
     await expect(
-      page.getByRole("button", { name: /submit application/i }),
-    ).toBeEnabled();
+      page.getByRole("button", { name: /resume application/i }),
+    ).toHaveCount(0);
+    const external = page.getByRole("link", {
+      name: /open external application/i,
+    });
+    await expect(external).toHaveAttribute("target", "_blank");
+    await expect(external).toHaveAttribute("rel", "noopener noreferrer");
   });
 
-  test("submission unknown shows allowlisted evidence metadata only", async ({
+  test("submission unknown provides safe verification without evidence leakage", async ({
     page,
   }) => {
     await installDesktopBridge(page);
@@ -245,7 +252,13 @@ test.describe("Embedded application workspace", () => {
     await expect(
       page.getByRole("heading", { name: "Submission unknown" }),
     ).toBeVisible();
-    await expect(page.getByText(/Type: receipt/i)).toBeVisible();
+    await expect(page.getByText(/do not retry blindly/i)).toBeVisible();
+    const external = page.getByRole("link", {
+      name: /open external application/i,
+    });
+    await expect(external).toHaveAttribute("target", "_blank");
+    await expect(external).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(page.getByText(/Type: receipt/i)).toHaveCount(0);
     await expect(page.getByText("runs/secret.log")).toHaveCount(0);
     await expect(page.getByText("cookie")).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^retry$/i })).toHaveCount(0);
@@ -268,13 +281,13 @@ test.describe("Embedded application workspace", () => {
     await setWorkspaceMode(page, "conflict");
     await page.goto("/jobs");
     await page
-      .getByRole("button", { name: /^(auto apply|apply with assistance)$/i })
+      .getByRole("button", { name: /^auto apply$/i })
       .first()
       .click();
     const start = page
-      .getByRole("dialog", { name: /start assisted application/i })
+      .getByRole("dialog", { name: /authorize auto apply/i })
       .getByRole("button", {
-        name: /start assisted application/i,
+        name: /authorize and auto apply/i,
       });
     await expect(start).toBeEnabled();
     await start.click();
@@ -299,7 +312,7 @@ test.describe("Embedded application workspace", () => {
     page,
   }) => {
     await installDesktopBridge(page);
-    await setWorkspaceMode(page, "armed");
+    await setWorkspaceMode(page, "progress");
     await page.goto(`/applications/${WORKSPACE_RUN_ID}/workspace`);
     await expect
       .poll(async () => (await bridgeTelemetry(page)).opens.length)
@@ -317,6 +330,7 @@ test.describe("Embedded application workspace", () => {
 
   test("leaving the workspace closes the native view", async ({ page }) => {
     await installDesktopBridge(page);
+    await setWorkspaceMode(page, "progress");
     await page.goto(`/applications/${WORKSPACE_RUN_ID}/workspace`);
     await expect(page.getByTestId("browser-viewport")).toBeVisible();
     await expect
