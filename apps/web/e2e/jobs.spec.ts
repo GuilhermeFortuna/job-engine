@@ -117,9 +117,19 @@ test.describe("Job Search and Resilience", () => {
 
   test("4. Return navigation from details back to search", async ({ page }) => {
     await page.goto("/jobs?q=backend");
-    const jobTitleLink = page
-      .getByRole("article", { name: "Senior Backend Engineer" })
-      .getByRole("link", { name: "Senior Backend Engineer" });
+    const jobArticle = page.getByRole("article", {
+      name: "Senior Backend Engineer",
+    });
+    // JobCardShell replaces its server fallback with the interactive card
+    // after hydration. On slower CI runners, clicking the fallback link during
+    // that replacement can lose the click. The launcher status is rendered
+    // only after the client capability/readiness checks have completed.
+    await expect(jobArticle.getByRole("status")).toContainText(
+      "Automation unavailable",
+    );
+    const jobTitleLink = jobArticle.getByRole("link", {
+      name: "Senior Backend Engineer",
+    });
     await expect(jobTitleLink).toHaveAttribute(
       "href",
       `/jobs/${SAMPLE_JOB_ID}`,
