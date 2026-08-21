@@ -253,10 +253,17 @@ export function JobCard({ job }: { job: JobListItem }) {
               ))}
             </div>
 
-            {job.primary_application_url && (
+            {(job.preferred_application_target.target_url ||
+              job.preferred_application_target.listing_url) && (
               <div className="flex flex-wrap items-center gap-2">
                 <ShimmerAnchor
-                  href={job.primary_application_url}
+                  href={
+                    job.preferred_application_target.status === "executable"
+                      ? (job.preferred_application_target.target_url ??
+                        job.preferred_application_target.listing_url!)
+                      : (job.preferred_application_target.listing_url ??
+                        job.preferred_application_target.target_url!)
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -264,13 +271,17 @@ export function JobCard({ job }: { job: JobListItem }) {
                   <span aria-hidden="true">↗</span>
                   <span className="sr-only"> (opens in new tab)</span>
                 </ShimmerAnchor>
-                <ApplicationLauncher
-                  jobGroupId={job.id}
-                  title={job.title}
-                  company={job.company}
-                  applicationUrl={job.primary_application_url}
-                  sourceName={job.sources[0]?.source_name ?? "Source"}
-                />
+                {job.preferred_application_target.status === "executable" &&
+                  job.preferred_application_target.id && (
+                    <ApplicationLauncher
+                      jobGroupId={job.id}
+                      applicationTargetId={job.preferred_application_target.id}
+                      title={job.title}
+                      company={job.company}
+                      applicationUrl={job.preferred_application_target.target_url}
+                      sourceName={job.sources[0]?.source_name ?? "Source"}
+                    />
+                  )}
               </div>
             )}
           </div>

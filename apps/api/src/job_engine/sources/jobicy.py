@@ -205,8 +205,8 @@ class JobicyAdapter:
             raise RecordValidationError("job is not an object")
         if _job_id(raw) is None:
             raise RecordValidationError("missing id")
-        application_url = raw.get("url")
-        if not isinstance(application_url, str) or not application_url.strip():
+        listing_url = raw.get("url")
+        if not isinstance(listing_url, str) or not listing_url.strip():
             raise RecordValidationError("missing url")
         title = raw.get("jobTitle")
         if not isinstance(title, str) or not title.strip():
@@ -265,7 +265,7 @@ class JobicyAdapter:
             source_id=self.source_id,
             source_posting_id=str(job_id),
             source_name=SOURCE_NAME,
-            application_url=str(parsed["url"]),
+            listing_url=str(parsed["url"]),
             title_original=str(parsed["jobTitle"]),
             company_original=str(parsed["companyName"]),
             description=description_text,

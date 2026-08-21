@@ -64,10 +64,41 @@ export interface Technology {
   source_text: string | null;
 }
 
+export type ApplicationTargetStatus =
+  | "executable"
+  | "assisted"
+  | "external"
+  | "unresolved";
+
+export interface ApplicationTargetSummary {
+  id: string;
+  target_url: string;
+  provider: string | null;
+  desktop_adapter_id: string | null;
+  status: ApplicationTargetStatus;
+  resolution_method: string;
+  verified_at: string | null;
+  assisted_reason: string | null;
+}
+
+export interface PreferredApplicationTarget {
+  id: string | null;
+  target_url: string | null;
+  listing_url: string | null;
+  provider: string | null;
+  desktop_adapter_id: string | null;
+  status: ApplicationTargetStatus;
+  resolution_method: string | null;
+  verified_at: string | null;
+  source_posting_id: string | null;
+  assisted_reason: string | null;
+}
+
 export interface SourceSummary {
   source_id: string;
   source_name: string;
-  application_url: string;
+  listing_url: string;
+  application_target: ApplicationTargetSummary | null;
 }
 
 export interface JobCardBase {
@@ -91,7 +122,7 @@ export interface JobCardBase {
   first_seen_at: string;
   last_seen_at: string;
   sources: SourceSummary[];
-  primary_application_url: string | null;
+  preferred_application_target: PreferredApplicationTarget;
 }
 
 export type JobStatus = "active" | "stale" | "closed" | "unknown";
@@ -112,7 +143,8 @@ export interface SourcePostingDetail {
   source_id: string;
   source_posting_id: string;
   source_name: string;
-  application_url: string;
+  listing_url: string;
+  application_target: ApplicationTargetSummary | null;
   title_original: string;
   company_original: string;
   description: string | null;

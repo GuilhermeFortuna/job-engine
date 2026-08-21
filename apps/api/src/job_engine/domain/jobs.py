@@ -116,8 +116,8 @@ class SourcePostingInput(FrozenModel):
     source_id: str
     source_posting_id: str
     source_name: str
-    application_url: str
-    application_url_canonical: str
+    listing_url: str
+    listing_url_canonical: str
     title_original: str
     company_original: str
     description: str | None = None
@@ -139,9 +139,9 @@ class SourcePostingInput(FrozenModel):
     adapter_version: str | None = None
     raw_source_metadata: dict[str, Any] | None = None
 
-    @field_validator("application_url", "application_url_canonical")
+    @field_validator("listing_url", "listing_url_canonical")
     @classmethod
-    def application_url_must_be_http(cls, value: str) -> str:
+    def listing_url_must_be_http(cls, value: str) -> str:
         return _require_http_url(value)
 
     @field_validator(

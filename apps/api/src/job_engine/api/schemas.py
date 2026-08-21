@@ -36,6 +36,7 @@ from job_engine.domain.applications import (
     RunnerReleaseReason,
 )
 from job_engine.domain.enums import (
+    ApplicationTargetStatus,
     EmploymentType,
     JobStatus,
     LocationEligibilityRegion,
@@ -117,7 +118,32 @@ class LocationEligibility(ApiModel):
 class SourceSummary(ApiModel):
     source_id: str
     source_name: str
-    application_url: str
+    listing_url: str
+    application_target: "ApplicationTargetSummary | None" = None
+
+
+class ApplicationTargetSummary(ApiModel):
+    id: UUID
+    target_url: str
+    provider: str | None = None
+    desktop_adapter_id: str | None = None
+    status: ApplicationTargetStatus
+    resolution_method: str
+    verified_at: datetime | None = None
+    assisted_reason: str | None = None
+
+
+class PreferredApplicationTarget(ApiModel):
+    id: UUID | None = None
+    target_url: str | None = None
+    listing_url: str | None = None
+    provider: str | None = None
+    desktop_adapter_id: str | None = None
+    status: ApplicationTargetStatus
+    resolution_method: str | None = None
+    verified_at: datetime | None = None
+    source_posting_id: UUID | None = None
+    assisted_reason: str | None = None
 
 
 class SourcePostingDetail(ApiModel):
@@ -125,7 +151,8 @@ class SourcePostingDetail(ApiModel):
     source_id: str
     source_posting_id: str
     source_name: str
-    application_url: str
+    listing_url: str
+    application_target: ApplicationTargetSummary | None = None
     title_original: str
     company_original: str
     description: str | None = None
@@ -168,7 +195,7 @@ class JobCardBase(ApiModel):
     first_seen_at: datetime
     last_seen_at: datetime
     sources: tuple[SourceSummary, ...] = ()
-    primary_application_url: str | None = None
+    preferred_application_target: PreferredApplicationTarget
 
 
 class JobListItem(JobCardBase):
@@ -818,7 +845,7 @@ class DuplicateOverrideInput(BaseModel):
 class ApplicationRunCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    job_group_ids: list[UUID] = Field(min_length=1, max_length=25)
+    application_target_ids: list[UUID] = Field(min_length=1, max_length=25)
     resume_id: str | None = None
     # Deliberately required and un-defaulted. A default of FULL_AUTO meant any
     # caller that simply omitted the field silently created an unattended run
@@ -842,9 +869,17 @@ class ApplicationRunCreateRequest(BaseModel):
 
 class ApplicationRunConflictItem(ApiModel):
     job_group_id: UUID
+    application_target_id: UUID | None = None
     canonical_application_url: str
     existing_run_id: UUID
     existing_status: ApplicationRunStatus
+    message: str
+    reason_code: str | None = None
+
+
+class ApplicationTargetRejectedItem(ApiModel):
+    application_target_id: UUID
+    reason_code: str
     message: str
 
 

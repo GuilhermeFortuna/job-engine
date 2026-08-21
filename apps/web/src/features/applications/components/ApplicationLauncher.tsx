@@ -22,6 +22,7 @@ import { ApplicationModal } from "./ApplicationModal";
 
 export interface ApplicationLauncherProps {
   jobGroupId: string;
+  applicationTargetId: string;
   title: string;
   company: string;
   applicationUrl: string | null | undefined;
@@ -57,6 +58,7 @@ function modeLabel(mode: AutomationMode): string {
 
 export function ApplicationLauncher({
   jobGroupId,
+  applicationTargetId,
   title,
   company,
   applicationUrl,
@@ -73,6 +75,7 @@ export function ApplicationLauncher({
     useApplicationCapability(applicationUrl, providerTier);
   const launch = useApplicationLaunch({
     jobGroupId,
+    applicationTargetId,
     refreshReadiness: readiness.refresh,
   });
   const { reset: resetLaunch } = launch;

@@ -18,15 +18,15 @@ async def test_details_include_grouped_postings_and_omit_raw_payload(
             source_posting_input(
                 source_id="himalayas",
                 source_posting_id="d-h",
-                application_url="https://himalayas.example/jobs/d-h",
-                application_url_canonical="https://himalayas.example/jobs/d-h",
+                listing_url="https://himalayas.example/jobs/d-h",
+                listing_url_canonical="https://himalayas.example/jobs/d-h",
                 raw_source_metadata={"secret": "nope"},
             ),
             source_posting_input(
                 source_id="jobicy",
                 source_posting_id="d-j",
-                application_url="https://jobicy.example/jobs/d-j",
-                application_url_canonical="https://jobicy.example/jobs/d-j",
+                listing_url="https://jobicy.example/jobs/d-j",
+                listing_url_canonical="https://jobicy.example/jobs/d-j",
             ),
         ],
     )
@@ -36,12 +36,15 @@ async def test_details_include_grouped_postings_and_omit_raw_payload(
     assert payload["id"] == str(group_id)
     assert payload["description"] == "Full text."
     assert "description_excerpt" not in payload
-    assert payload["primary_application_url"] == "https://himalayas.example/jobs/d-h"
+    assert payload["preferred_application_target"]["listing_url"] == (
+        "https://himalayas.example/jobs/d-h"
+    )
+    assert payload["preferred_application_target"]["status"] == "unresolved"
     postings = payload["source_postings"]
     assert [item["source_id"] for item in postings] == ["himalayas", "jobicy"]
     assert "linked_at" in postings[0]
     assert "raw_source_metadata" not in postings[0]
-    assert "application_url_canonical" not in postings[0]
+    assert "listing_url_canonical" not in postings[0]
     assert "ingestion_run_id" not in postings[0]
     assert "secret" not in response.text
 

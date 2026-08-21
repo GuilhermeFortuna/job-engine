@@ -28,6 +28,7 @@ export interface LaunchSelection {
 
 interface ApplicationLaunchOptions {
   jobGroupId: string;
+  applicationTargetId: string;
   refreshReadiness: () => Promise<void>;
 }
 
@@ -37,7 +38,7 @@ const READINESS_UNVERIFIED =
   "Unable to verify application readiness. Review readiness before launching.";
 
 export function useApplicationLaunch({
-  jobGroupId,
+  applicationTargetId,
   refreshReadiness,
 }: ApplicationLaunchOptions) {
   const router = useRouter();
@@ -87,7 +88,7 @@ export function useApplicationLaunch({
 
   const createVerifiedRun = async (candidate: LaunchSelection) => {
     const response = await createApplicationRun({
-      job_group_ids: [jobGroupId],
+      application_target_ids: [applicationTargetId],
       resume_id: candidate.resumeId,
       automation_mode: candidate.mode,
     });

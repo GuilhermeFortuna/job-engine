@@ -5,12 +5,12 @@
       "left": {
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
-        "application_url": "https://jobicy.com/jobs/abc-123"
+        "listing_url": "https://jobicy.com/jobs/abc-123"
       },
       "right": {
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
-        "application_url": "https://jobicy.com/jobs/abc-123?utm_source=retry"
+        "listing_url": "https://jobicy.com/jobs/abc-123?utm_source=retry"
       },
       "expect": {
         "kind": "same_posting",
@@ -22,12 +22,12 @@
       "left": {
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
-        "application_url": "https://company.example/jobs/role?utm_source=jobicy"
+        "listing_url": "https://company.example/jobs/role?utm_source=jobicy"
       },
       "right": {
         "source_id": "himalayas",
         "source_posting_id": "xyz-9",
-        "application_url": "https://company.example/jobs/role?utm_campaign=board"
+        "listing_url": "https://company.example/jobs/role?utm_campaign=board"
       },
       "expect": {
         "kind": "same_job_group",
@@ -39,7 +39,7 @@
       "left": {
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
-        "application_url": "https://jobicy.com/jobs/abc-123",
+        "listing_url": "https://jobicy.com/jobs/abc-123",
         "title_original": "Python Engineer",
         "company_original": "Acme Ltd.",
         "location_original": "São Paulo, Brazil",
@@ -48,7 +48,7 @@
       "right": {
         "source_id": "himalayas",
         "source_posting_id": "xyz-9",
-        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "listing_url": "https://himalayas.app/jobs/xyz-9",
         "title_original": "Python Engineer",
         "company_original": "Acme, Inc.",
         "location_original": "São Paulo, Brazil",
@@ -64,13 +64,13 @@
       "left": {
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
-        "application_url": "https://jobicy.com/jobs/abc-123",
+        "listing_url": "https://jobicy.com/jobs/abc-123",
         "employment_type_evidence": "full-time"
       },
       "right": {
         "source_id": "himalayas",
         "source_posting_id": "xyz-9",
-        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "listing_url": "https://himalayas.app/jobs/xyz-9",
         "employment_type_evidence": null
       },
       "expect": {
@@ -83,13 +83,13 @@
       "left": {
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
-        "application_url": "https://jobicy.com/jobs/abc-123",
+        "listing_url": "https://jobicy.com/jobs/abc-123",
         "employment_type_evidence": "full-time"
       },
       "right": {
         "source_id": "himalayas",
         "source_posting_id": "xyz-9",
-        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "listing_url": "https://himalayas.app/jobs/xyz-9",
         "employment_type_evidence": "contract"
       },
       "expect": {
@@ -102,13 +102,13 @@
       "left": {
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
-        "application_url": "https://jobicy.com/jobs/abc-123",
+        "listing_url": "https://jobicy.com/jobs/abc-123",
         "title_original": "Python Engineer"
       },
       "right": {
         "source_id": "himalayas",
         "source_posting_id": "xyz-9",
-        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "listing_url": "https://himalayas.app/jobs/xyz-9",
         "title_original": "Senior Python Engineer"
       },
       "expect": {
@@ -121,7 +121,7 @@
       "left": {
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
-        "application_url": "https://jobicy.com/jobs/abc-123",
+        "listing_url": "https://jobicy.com/jobs/abc-123",
         "location_original": null,
         "remote_evidence": "Remote",
         "location_eligibility_evidence": null
@@ -129,7 +129,7 @@
       "right": {
         "source_id": "himalayas",
         "source_posting_id": "xyz-9",
-        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "listing_url": "https://himalayas.app/jobs/xyz-9",
         "location_original": "Brazil",
         "remote_evidence": "Remote",
         "location_eligibility_evidence": "Open to Brazil"
@@ -144,13 +144,13 @@
       "left": {
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
-        "application_url": "https://jobicy.com/jobs/abc-123",
+        "listing_url": "https://jobicy.com/jobs/abc-123",
         "compensation_original_text": null
       },
       "right": {
         "source_id": "himalayas",
         "source_posting_id": "xyz-9",
-        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "listing_url": "https://himalayas.app/jobs/xyz-9",
         "compensation_original_text": "R$ 10k/mês",
         "compensation_currency": "BRL",
         "compensation_period": "month",
@@ -166,12 +166,12 @@
       "left": {
         "source_id": "jobicy",
         "source_posting_id": "post-1",
-        "application_url": "https://boards.example/jobs/role-1"
+        "listing_url": "https://boards.example/jobs/role-1"
       },
       "right": {
         "source_id": "himalayas",
         "source_posting_id": "post-2",
-        "application_url": "https://boards.example/jobs/role-1?utm_medium=feed"
+        "listing_url": "https://boards.example/jobs/role-1?utm_medium=feed"
       },
       "expect": {
         "kind": "same_job_group",
@@ -183,13 +183,13 @@
       "left": {
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
-        "application_url": "https://jobicy.com/jobs/abc-123",
+        "listing_url": "https://jobicy.com/jobs/abc-123",
         "location_original": null
       },
       "right": {
         "source_id": "himalayas",
         "source_posting_id": "xyz-9",
-        "application_url": "https://himalayas.app/jobs/xyz-9",
+        "listing_url": "https://himalayas.app/jobs/xyz-9",
         "location_original": null
       },
       "expect": {

@@ -46,8 +46,8 @@ def _valid_source_posting(**overrides: object) -> SourcePostingInput:
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
         "source_name": "Jobicy",
-        "application_url": "https://jobicy.com/jobs/abc-123",
-        "application_url_canonical": "https://jobicy.com/jobs/abc-123",
+        "listing_url": "https://jobicy.com/jobs/abc-123",
+        "listing_url_canonical": "https://jobicy.com/jobs/abc-123",
         "title_original": "Python Engineer",
         "company_original": "Acme Ltd",
         "description": "Build APIs.",
@@ -144,15 +144,15 @@ def test_unknown_is_a_first_class_enum_value() -> None:
 
 def test_application_url_rejects_non_http_schemes() -> None:
     with pytest.raises(ValidationError):
-        _valid_source_posting(application_url="ftp://jobs.example.com/abc")
+        _valid_source_posting(listing_url="ftp://jobs.example.com/abc")
 
 
 def test_application_url_accepts_http_and_https() -> None:
-    http = _valid_source_posting(application_url="http://jobs.example.com/abc")
-    https = _valid_source_posting(application_url="https://jobs.example.com/abc")
+    http = _valid_source_posting(listing_url="http://jobs.example.com/abc")
+    https = _valid_source_posting(listing_url="https://jobs.example.com/abc")
 
-    assert http.application_url == "http://jobs.example.com/abc"
-    assert https.application_url == "https://jobs.example.com/abc"
+    assert http.listing_url == "http://jobs.example.com/abc"
+    assert https.listing_url == "https://jobs.example.com/abc"
 
 
 def test_naive_datetimes_are_rejected() -> None:

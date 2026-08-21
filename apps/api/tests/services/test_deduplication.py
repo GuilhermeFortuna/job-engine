@@ -26,7 +26,7 @@ def _candidate(**overrides: object) -> NormalizationCandidate:
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
         "source_name": "Jobicy",
-        "application_url": "https://jobicy.com/jobs/abc-123",
+        "listing_url": "https://jobicy.com/jobs/abc-123",
         "title_original": "Python Engineer",
         "company_original": "Acme Ltd",
         "description": "Build APIs.",

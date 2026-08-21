@@ -6,6 +6,7 @@ from sqlalchemy import engine_from_config, pool
 from job_engine.config import Settings
 from job_engine.db.base import Base
 from job_engine.db.models import (  # noqa: F401
+    ApplicationTarget,
     IngestionRun,
     JobGroup,
     JobGroupEligibleLocation,

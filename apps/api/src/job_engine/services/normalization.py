@@ -122,7 +122,7 @@ class NormalizationCandidate(FrozenModel):
     source_id: str
     source_posting_id: str
     source_name: str
-    application_url: str
+    listing_url: str
     title_original: str
     company_original: str
     description: str | None = None
@@ -147,9 +147,9 @@ class NormalizationCandidate(FrozenModel):
     adapter_version: str | None = None
     raw_source_metadata: dict[str, Any] | None = None
 
-    @field_validator("application_url")
+    @field_validator("listing_url")
     @classmethod
-    def application_url_must_be_http(cls, value: str) -> str:
+    def listing_url_must_be_http(cls, value: str) -> str:
         return _require_http_url(value)
 
     @field_validator(
@@ -381,7 +381,7 @@ def normalize_candidate(candidate: NormalizationCandidate) -> NormalizedRecord:
         if candidate.location_original
         else ""
     )
-    canonical_url = canonicalize_url(candidate.application_url)
+    canonical_url = canonicalize_url(candidate.listing_url)
     remote = _normalize_remote(candidate.remote_evidence)
     employment = _normalize_employment(candidate.employment_type_evidence)
     seniority = _normalize_seniority(candidate.seniority_evidence)
@@ -398,8 +398,8 @@ def normalize_candidate(candidate: NormalizationCandidate) -> NormalizedRecord:
         source_id=candidate.source_id,
         source_posting_id=candidate.source_posting_id,
         source_name=candidate.source_name,
-        application_url=candidate.application_url,
-        application_url_canonical=canonical_url,
+        listing_url=candidate.listing_url,
+        listing_url_canonical=canonical_url,
         title_original=candidate.title_original,
         company_original=candidate.company_original,
         description=candidate.description,

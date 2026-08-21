@@ -44,3 +44,10 @@ class LocationEligibilityRegion(StrEnum):
     BRAZIL = "brazil"
     LATIN_AMERICA = "latin_america"
     WORLDWIDE = "worldwide"
+
+
+class ApplicationTargetStatus(StrEnum):
+    EXECUTABLE = "executable"
+    ASSISTED = "assisted"
+    EXTERNAL = "external"
+    UNRESOLVED = "unresolved"

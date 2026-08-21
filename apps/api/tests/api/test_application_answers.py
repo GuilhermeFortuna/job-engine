@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from job_engine.application_targets import ApplicationTargetInput
 from job_engine.config import Settings
 from job_engine.db.repositories import ApplicantVaultRepository, CatalogRepository
 from job_engine.domain.applicant import (
@@ -20,7 +21,13 @@ from job_engine.domain.applicant import (
     ValueState,
 )
 from job_engine.domain.applications import FULL_AUTO_OWNER_CONFIRMATION
-from job_engine.domain.enums import EmploymentType, JobStatus, RemoteStatus, Seniority
+from job_engine.domain.enums import (
+    ApplicationTargetStatus,
+    EmploymentType,
+    JobStatus,
+    RemoteStatus,
+    Seniority,
+)
 from job_engine.domain.jobs import Compensation, JobGroupInput, SourcePostingInput
 
 
@@ -110,11 +117,11 @@ async def _setup_fixtures(session: AsyncSession, settings: Settings) -> str:
     )
     posting = await cat_repo.upsert_source_posting(
         SourcePostingInput(
-            source_id="acme_greenhouse",
+            source_id="greenhouse",
             source_posting_id="202",
             source_name="Greenhouse",
-            application_url="https://boards.greenhouse.io/acme/jobs/202?gh_jid=202",
-            application_url_canonical="https://boards.greenhouse.io/acme/jobs/202",
+            listing_url="https://boards.greenhouse.io/acme/jobs/202",
+            listing_url_canonical="https://boards.greenhouse.io/acme/jobs/202",
             title_original="Senior Backend Engineer",
             company_original="Acme",
             description="Build payments infrastructure",
@@ -129,17 +136,30 @@ async def _setup_fixtures(session: AsyncSession, settings: Settings) -> str:
         )
     )
     await cat_repo.add_posting_to_group(group.id, posting.id)
+    target = await cat_repo.upsert_application_target(
+        ApplicationTargetInput(
+            source_posting_id=posting.id,
+            target_url="https://boards.greenhouse.io/acme/jobs/202",
+            target_url_canonical="https://boards.greenhouse.io/acme/jobs/202",
+            provider="greenhouse",
+            desktop_adapter_id="greenhouse",
+            status=ApplicationTargetStatus.EXECUTABLE,
+            resolution_method="ats_native_listing",
+            evidence={},
+            verified_at=now,
+        )
+    )
     await session.commit()
-    return str(group.id)
+    return str(target.id)
 
 
 async def _create_and_claim_run(
-    client: AsyncClient, settings: Settings, group_id: str
+    client: AsyncClient, settings: Settings, target_id: str
 ) -> tuple[str, str]:
     create_resp = await client.post(
         "/api/v1/application-runs",
         json={
-            "job_group_ids": [group_id],
+            "application_target_ids": [str(target_id)],
             "resume_id": "res_answers_primary",
             "automation_mode": "full_auto",
             "owner_confirmation": FULL_AUTO_OWNER_CONFIRMATION,

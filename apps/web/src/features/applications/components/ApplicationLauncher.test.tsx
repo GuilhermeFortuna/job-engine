@@ -110,6 +110,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -148,6 +149,7 @@ describe("ApplicationLauncher", () => {
     const view = renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -165,6 +167,7 @@ describe("ApplicationLauncher", () => {
     view.rerender(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -184,6 +187,7 @@ describe("ApplicationLauncher", () => {
     view.rerender(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -202,6 +206,7 @@ describe("ApplicationLauncher", () => {
     const view = renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -220,6 +225,7 @@ describe("ApplicationLauncher", () => {
     view.rerender(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -243,6 +249,7 @@ describe("ApplicationLauncher", () => {
     const view = renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -260,6 +267,7 @@ describe("ApplicationLauncher", () => {
     view.rerender(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="http://unsafe.example/jobs/1"
@@ -273,6 +281,7 @@ describe("ApplicationLauncher", () => {
     view.rerender(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://jobs.lever.co/apex/2"
@@ -296,6 +305,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -315,6 +325,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="http://boards.greenhouse.io/apex/jobs/1"
@@ -342,6 +353,7 @@ describe("ApplicationLauncher", () => {
     const { rerender } = renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -363,6 +375,7 @@ describe("ApplicationLauncher", () => {
     rerender(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -382,6 +395,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -407,7 +421,7 @@ describe("ApplicationLauncher", () => {
     fireEvent.click(screen.getByRole("button", { name: /authorize and auto apply/i }));
     await waitFor(() => {
       expect(createApplicationRun).toHaveBeenCalledWith({
-        job_group_ids: [JOB_ID],
+        application_target_ids: ["target-1"],
         resume_id: "res_primary_pdf",
         automation_mode: "full_auto",
       });
@@ -426,6 +440,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -450,7 +465,7 @@ describe("ApplicationLauncher", () => {
     );
     await waitFor(() => {
       expect(createApplicationRun).toHaveBeenCalledWith({
-        job_group_ids: [JOB_ID],
+        application_target_ids: ["target-1"],
         resume_id: "res_primary_pdf",
         automation_mode: "semi_auto_pause_before_submit",
       });
@@ -462,6 +477,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -486,6 +502,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -526,6 +543,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -572,7 +590,7 @@ describe("ApplicationLauncher", () => {
       });
       expect(createApplicationRun).toHaveBeenCalledTimes(2);
       expect(createApplicationRun).toHaveBeenLastCalledWith({
-        job_group_ids: [JOB_ID],
+        application_target_ids: ["target-1"],
         resume_id: "res_primary_pdf",
         automation_mode: "semi_auto_pause_before_submit",
       });
@@ -606,6 +624,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -650,6 +669,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -679,6 +699,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -720,6 +741,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"
@@ -741,6 +763,7 @@ describe("ApplicationLauncher", () => {
     renderWithProviders(
       <ApplicationLauncher
         jobGroupId={JOB_ID}
+        applicationTargetId="target-1"
         title="Staff Engineer"
         company="Apex"
         applicationUrl="https://boards.greenhouse.io/apex/jobs/1"

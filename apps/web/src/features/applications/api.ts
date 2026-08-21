@@ -318,7 +318,7 @@ export async function createApplicationRun(
 ): Promise<CreateApplicationRunResponse> {
   const url = `${getApiBaseUrl()}/api/v1/application-runs`;
   const requestBody = {
-    job_group_ids: input.job_group_ids,
+    application_target_ids: input.application_target_ids,
     resume_id: input.resume_id,
     automation_mode: input.automation_mode,
     ...(input.automation_mode === FULL_AUTO_MODE

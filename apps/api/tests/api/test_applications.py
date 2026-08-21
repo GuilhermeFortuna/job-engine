@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from job_engine.api.schemas import ApplicationRunCreateRequest
+from job_engine.application_targets import ApplicationTargetInput
 from job_engine.config import Settings
 from job_engine.db.repositories import (
     ApplicantVaultRepository,
@@ -32,14 +33,20 @@ from job_engine.domain.applications import (
     ExceptionType,
     RunCheckpoint,
 )
-from job_engine.domain.enums import EmploymentType, JobStatus, RemoteStatus, Seniority
+from job_engine.domain.enums import (
+    ApplicationTargetStatus,
+    EmploymentType,
+    JobStatus,
+    RemoteStatus,
+    Seniority,
+)
 from job_engine.domain.jobs import Compensation, JobGroupInput, SourcePostingInput
 from job_engine.services.applications import ApplicationService
 
 
 async def _setup_fixtures(
     session: AsyncSession, settings: Settings
-) -> tuple[UUID, str, str]:
+) -> tuple[UUID, UUID, str, str]:
     # 1. Profile
     vault_repo = ApplicantVaultRepository(session)
     now = datetime.now(UTC)
@@ -104,7 +111,7 @@ async def _setup_fixtures(
         sha256=pdf_sha256,
     )
 
-    # 4. Job group & Source Posting
+    # 4. Job group & Source Posting with executable target
     cat_repo = CatalogRepository(session)
     group = await cat_repo.create_job_group(
         JobGroupInput(
@@ -135,11 +142,11 @@ async def _setup_fixtures(
     )
     posting = await cat_repo.upsert_source_posting(
         SourcePostingInput(
-            source_id="stripe_greenhouse",
+            source_id="greenhouse",
             source_posting_id="101",
             source_name="Greenhouse",
-            application_url="https://boards.greenhouse.io/stripe/jobs/101?gh_jid=101",
-            application_url_canonical="https://boards.greenhouse.io/stripe/jobs/101",
+            listing_url="https://boards.greenhouse.io/acme/jobs/101",
+            listing_url_canonical="https://boards.greenhouse.io/acme/jobs/101",
             title_original="Senior Backend Engineer",
             company_original="Stripe",
             description="Build payments infrastructure",
@@ -154,14 +161,27 @@ async def _setup_fixtures(
         )
     )
     await cat_repo.add_posting_to_group(group.id, posting.id)
+    target = await cat_repo.upsert_application_target(
+        ApplicationTargetInput(
+            source_posting_id=posting.id,
+            target_url="https://boards.greenhouse.io/acme/jobs/101",
+            target_url_canonical="https://boards.greenhouse.io/acme/jobs/101",
+            provider="greenhouse",
+            desktop_adapter_id="greenhouse",
+            status=ApplicationTargetStatus.EXECUTABLE,
+            resolution_method="ats_native_listing",
+            evidence={"test": True},
+            verified_at=now,
+        )
+    )
 
     await session.commit()
-    return group.id, resume.resume_id, pdf_sha256
+    return group.id, target.id, resume.resume_id, pdf_sha256
 
 
-def _full_auto_create_payload(group_id: UUID, resume_id: str) -> dict[str, object]:
+def _full_auto_create_payload(target_id: UUID, resume_id: str) -> dict[str, object]:
     return {
-        "job_group_ids": [str(group_id)],
+        "application_target_ids": [str(target_id)],
         "resume_id": resume_id,
         "automation_mode": "full_auto",
         "owner_confirmation": FULL_AUTO_OWNER_CONFIRMATION,
@@ -177,11 +197,11 @@ async def test_create_run_requires_explicit_automation_mode(
     caller that forgot it created an unattended run.
     """
     settings: Settings = app.state.settings
-    group_id, _resume_id, _sha256 = await _setup_fixtures(session, settings)
+    group_id, target_id, _resume_id, _sha256 = await _setup_fixtures(session, settings)
 
     resp = await client.post(
         "/api/v1/application-runs",
-        json={"job_group_ids": [str(group_id)]},
+        json={"application_target_ids": [str(target_id)]},
     )
 
     assert resp.status_code == 422
@@ -193,34 +213,34 @@ async def test_create_run_requires_explicit_automation_mode(
     assert missing, resp.json()
 
     with pytest.raises(ValidationError):
-        ApplicationRunCreateRequest(job_group_ids=[group_id])  # type: ignore[call-arg]
+        ApplicationRunCreateRequest(application_target_ids=[target_id])  # type: ignore[call-arg]
 
 
 async def test_full_auto_requires_explicit_resume_and_exact_authorization(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, resume_id, _sha256 = await _setup_fixtures(session, settings)
+    group_id, target_id, resume_id, _sha256 = await _setup_fixtures(session, settings)
 
     invalid_payloads = (
         {
-            "job_group_ids": [str(group_id)],
+            "application_target_ids": [str(target_id)],
             "resume_id": resume_id,
             "automation_mode": "full_auto",
         },
         {
-            "job_group_ids": [str(group_id)],
+            "application_target_ids": [str(target_id)],
             "resume_id": resume_id,
             "automation_mode": "full_auto",
             "owner_confirmation": "Authorize some automatic submissions",
         },
         {
-            "job_group_ids": [str(group_id)],
+            "application_target_ids": [str(target_id)],
             "automation_mode": "full_auto",
             "owner_confirmation": FULL_AUTO_OWNER_CONFIRMATION,
         },
         {
-            "job_group_ids": [str(group_id)],
+            "application_target_ids": [str(target_id)],
             "automation_mode": "semi_auto_pause_before_submit",
             "owner_confirmation": FULL_AUTO_OWNER_CONFIRMATION,
         },
@@ -238,12 +258,12 @@ async def test_create_application_runs_and_duplicate_handling(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, resume_id, sha256 = await _setup_fixtures(session, settings)
+    group_id, target_id, resume_id, sha256 = await _setup_fixtures(session, settings)
 
     # 1. Create run
     resp = await client.post(
         "/api/v1/application-runs",
-        json=_full_auto_create_payload(group_id, resume_id),
+        json=_full_auto_create_payload(target_id, resume_id),
     )
     assert resp.status_code == 201
     data = resp.json()
@@ -255,7 +275,7 @@ async def test_create_application_runs_and_duplicate_handling(
     assert data["created_runs"][0]["automatic_submission_authorized_at"] is not None
     assert (
         data["created_runs"][0]["canonical_application_url"]
-        == "https://boards.greenhouse.io/stripe/jobs/101"
+        == "https://boards.greenhouse.io/acme/jobs/101"
     )
     detail_response = await client.get(f"/api/v1/application-runs/{run_id}")
     assert detail_response.status_code == 200
@@ -276,7 +296,7 @@ async def test_create_application_runs_and_duplicate_handling(
     # 2. Duplicate submission without override -> 409 Conflict
     dup_resp = await client.post(
         "/api/v1/application-runs",
-        json=_full_auto_create_payload(group_id, resume_id),
+        json=_full_auto_create_payload(target_id, resume_id),
     )
     assert dup_resp.status_code == 409
     dup_data = dup_resp.json()
@@ -300,7 +320,7 @@ async def test_create_application_runs_and_duplicate_handling(
     # 4. Only after the separate audited action may creation proceed.
     replacement_resp = await client.post(
         "/api/v1/application-runs",
-        json=_full_auto_create_payload(group_id, resume_id),
+        json=_full_auto_create_payload(target_id, resume_id),
     )
     assert replacement_resp.status_code == 201
     replacement_data = replacement_resp.json()
@@ -319,12 +339,12 @@ async def test_runner_claim_heartbeat_evidence_and_single_use_grant(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, resume_id, sha256 = await _setup_fixtures(session, settings)
+    group_id, target_id, resume_id, sha256 = await _setup_fixtures(session, settings)
 
     # Create run
     create_resp = await client.post(
         "/api/v1/application-runs",
-        json=_full_auto_create_payload(group_id, resume_id),
+        json=_full_auto_create_payload(target_id, resume_id),
     )
     assert create_resp.status_code == 201
     run_id = create_resp.json()["created_runs"][0]["id"]
@@ -396,13 +416,13 @@ async def test_semi_auto_pause_and_release_submit(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, resume_id, sha256 = await _setup_fixtures(session, settings)
+    group_id, target_id, resume_id, sha256 = await _setup_fixtures(session, settings)
 
     # Create run in semi-auto mode
     create_resp = await client.post(
         "/api/v1/application-runs",
         json={
-            "job_group_ids": [str(group_id)],
+            "application_target_ids": [str(target_id)],
             "automation_mode": "semi_auto_pause_before_submit",
         },
     )
@@ -466,13 +486,13 @@ async def test_anti_csrf_protection(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, resume_id, sha256 = await _setup_fixtures(session, settings)
+    group_id, target_id, resume_id, sha256 = await _setup_fixtures(session, settings)
 
     # Post with Sec-Fetch-Site: cross-site is rejected with 403
     resp = await client.post(
         "/api/v1/application-runs",
         headers={"Sec-Fetch-Site": "cross-site"},
-        json=_full_auto_create_payload(group_id, resume_id),
+        json=_full_auto_create_payload(target_id, resume_id),
     )
     assert resp.status_code == 403
     assert "Cross-site requests forbidden" in resp.json()["detail"]
@@ -480,7 +500,7 @@ async def test_anti_csrf_protection(
     foreign_origin = await client.post(
         "/api/v1/application-runs",
         headers={"Origin": "http://attacker.invalid"},
-        json=_full_auto_create_payload(group_id, resume_id),
+        json=_full_auto_create_payload(target_id, resume_id),
     )
     assert foreign_origin.status_code == 403
 
@@ -489,11 +509,11 @@ async def test_evidence_storage_sanitization_and_retention(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, resume_id, sha256 = await _setup_fixtures(session, settings)
+    group_id, target_id, resume_id, sha256 = await _setup_fixtures(session, settings)
 
     create_resp = await client.post(
         "/api/v1/application-runs",
-        json=_full_auto_create_payload(group_id, resume_id),
+        json=_full_auto_create_payload(target_id, resume_id),
     )
     assert create_resp.status_code == 201
 
@@ -543,11 +563,11 @@ async def test_exception_resolve_answers_and_requeue(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, resume_id, sha256 = await _setup_fixtures(session, settings)
+    group_id, target_id, resume_id, sha256 = await _setup_fixtures(session, settings)
 
     create_resp = await client.post(
         "/api/v1/application-runs",
-        json=_full_auto_create_payload(group_id, resume_id),
+        json=_full_auto_create_payload(target_id, resume_id),
     )
     run_id = create_resp.json()["created_runs"][0]["id"]
 
@@ -720,11 +740,11 @@ async def test_cancel_run_flow(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, resume_id, sha256 = await _setup_fixtures(session, settings)
+    group_id, target_id, resume_id, sha256 = await _setup_fixtures(session, settings)
 
     create_resp = await client.post(
         "/api/v1/application-runs",
-        json=_full_auto_create_payload(group_id, resume_id),
+        json=_full_auto_create_payload(target_id, resume_id),
     )
     run_id = create_resp.json()["created_runs"][0]["id"]
 
@@ -747,14 +767,14 @@ async def test_cancel_run_flow(
 
 async def test_evidence_cleanup_service(session: AsyncSession, app: FastAPI) -> None:
     settings: Settings = app.state.settings
-    group_id, resume_id, sha256 = await _setup_fixtures(session, settings)
+    group_id, target_id, resume_id, sha256 = await _setup_fixtures(session, settings)
 
     svc = ApplicationService(
         session_factory=app.state.session_factory, settings=settings
     )
     await svc.create_runs(
         ApplicationRunCreateRequest(
-            job_group_ids=[group_id],
+            application_target_ids=[target_id],
             resume_id=resume_id,
             automation_mode=AutomationMode.FULL_AUTO,
             owner_confirmation=FULL_AUTO_OWNER_CONFIRMATION,

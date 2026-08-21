@@ -74,10 +74,22 @@ const sampleJob: JobDetail = {
     {
       source_id: "himalayas",
       source_name: "Himalayas",
-      application_url: "https://himalayas.app/jobs/acme-senior-backend",
+      listing_url: "https://himalayas.app/jobs/acme-senior-backend",
+      application_target: null,
     },
   ],
-  primary_application_url: "https://himalayas.app/jobs/acme-senior-backend",
+  preferred_application_target: {
+    id: "target-1",
+    target_url: "https://boards.greenhouse.io/acme/jobs/101",
+    listing_url: "https://himalayas.app/jobs/acme-senior-backend",
+    provider: "greenhouse",
+    desktop_adapter_id: "greenhouse",
+    status: "executable",
+    resolution_method: "ats_native_listing",
+    verified_at: "2026-08-12T11:00:00Z",
+    source_posting_id: "sp-1",
+    assisted_reason: null,
+  },
   description:
     "We are looking for a Senior Backend Developer with strong Python skills.\n\nRequirements:\n- 5+ years experience\n- Strong SQL proficiency.",
   status: "active",
@@ -88,7 +100,8 @@ const sampleJob: JobDetail = {
       source_id: "himalayas",
       source_posting_id: "him-123",
       source_name: "Himalayas",
-      application_url: "https://himalayas.app/jobs/acme-senior-backend",
+      listing_url: "https://himalayas.app/jobs/acme-senior-backend",
+      application_target: null,
       title_original: "Senior Backend Developer (Python/FastAPI)",
       company_original: "Acme Corporation Ltd",
       description: "Himalayas description text",
@@ -156,7 +169,7 @@ describe("JobDetails", () => {
     // Primary Apply Button
     expect(
       screen.getAllByRole("link", { name: /apply on himalayas/i })[0],
-    ).toHaveAttribute("href", "https://himalayas.app/jobs/acme-senior-backend");
+    ).toHaveAttribute("href", "https://boards.greenhouse.io/acme/jobs/101");
 
     // Description text is safely rendered
     expect(
@@ -179,7 +192,18 @@ describe("JobDetails", () => {
         annual_usd_minimum: null,
         annual_usd_maximum: null,
       },
-      primary_application_url: null,
+      preferred_application_target: {
+    id: null,
+    target_url: null,
+    listing_url: null,
+    provider: null,
+    desktop_adapter_id: null,
+    status: "unresolved",
+    resolution_method: null,
+    verified_at: null,
+    source_posting_id: null,
+    assisted_reason: "No verified executable application target is available yet.",
+  },
       technologies: [],
     };
 
@@ -237,6 +261,6 @@ describe("JobDetails", () => {
     ).toBeInTheDocument();
     expect(
       screen.getAllByRole("link", { name: /apply on himalayas/i })[0],
-    ).toHaveAttribute("href", sampleJob.primary_application_url);
+    ).toHaveAttribute("href", sampleJob.preferred_application_target.target_url);
   });
 });

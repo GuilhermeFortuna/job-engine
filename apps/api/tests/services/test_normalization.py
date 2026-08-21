@@ -29,7 +29,7 @@ def _candidate(**overrides: object) -> NormalizationCandidate:
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
         "source_name": "Jobicy",
-        "application_url": "https://jobicy.com/jobs/abc-123",
+        "listing_url": "https://jobicy.com/jobs/abc-123",
         "title_original": "Python Engineer",
         "company_original": "Acme Ltd",
         "description": "Build APIs.",
@@ -170,8 +170,9 @@ def test_normalization_fixture_cases(case: dict[str, Any]) -> None:
     if "role_families" in expect:
         assert list(record.role_families) == expect["role_families"]
         assert list(group.role_families) == expect["role_families"]
-    if "application_url" in expect:
-        assert posting.application_url == expect["application_url"]
+    if "application_url" in expect or "listing_url" in expect:
+        expected_url = expect.get("listing_url", expect.get("application_url"))
+        assert posting.listing_url == expected_url
     if "canonical_url" in expect:
         assert record.canonical_url == expect["canonical_url"]
-        assert posting.application_url_canonical == expect["canonical_url"]
+        assert posting.listing_url_canonical == expect["canonical_url"]

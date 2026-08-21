@@ -27,7 +27,8 @@ vi.mock("@/features/jobs/api", () => ({
     id: "11111111-1111-4111-8111-111111111111",
     title: "Staff Engineer",
     company: "Apex",
-    sources: [{ source_id: "himalayas", source_name: "Himalayas", application_url: "https://example.com" }],
+    sources: [{ source_id: "himalayas", source_name: "Himalayas", listing_url: "https://example.com", application_target: null }],
+    application_target: null,
   }),
 }));
 

@@ -19,6 +19,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from job_engine.api.schemas import (
+    ApplicationTargetSummary,
     CatalogFilters,
     CatalogHealth,
     Compensation,
@@ -53,6 +54,7 @@ from job_engine.domain.enums import (
     Seniority,
 )
 from job_engine.domain.taxonomy import REQUIRED_ROLE_FAMILY_IDS
+from job_engine.services.preferred_target import select_preferred_application_target
 
 EXCERPT_LIMIT = 280
 _WHITESPACE_RE = re.compile(r"\s+")
@@ -157,6 +159,8 @@ SOURCE_LABELS = {
     "himalayas": "Himalayas",
     "jobicy": "Jobicy",
     "remoteok": "Remote OK",
+    "greenhouse": "Greenhouse",
+    "lever": "Lever",
 }
 
 
@@ -354,7 +358,7 @@ def _detail(record: JobGroupApiRecord) -> JobDetail:
 def _card(record: JobGroupApiRecord) -> JobCardBase:
     row = record.row
     sources = tuple(_source_summary(link) for link in record.links)
-    primary = sources[0].application_url if sources else None
+    preferred = select_preferred_application_target(record.links)
     return JobCardBase(
         id=row.id,
         title=row.title,
@@ -376,7 +380,7 @@ def _card(record: JobGroupApiRecord) -> JobCardBase:
         first_seen_at=row.first_seen_at,
         last_seen_at=row.last_seen_at,
         sources=sources,
-        primary_application_url=primary,
+        preferred_application_target=preferred,
     )
 
 
@@ -428,7 +432,29 @@ def _source_summary(link: LinkedSourcePosting) -> SourceSummary:
     return SourceSummary(
         source_id=link.row.source_id,
         source_name=link.row.source_name,
-        application_url=link.row.application_url,
+        listing_url=link.row.listing_url,
+        application_target=_target_summary(link),
+    )
+
+
+def _target_summary(link: LinkedSourcePosting) -> ApplicationTargetSummary | None:
+    target = link.target
+    if target is None:
+        return None
+    assisted = None
+    if target.status.value != "executable":
+        assisted = (
+            "Open the best known safe URL; Auto Apply requires an executable target."
+        )
+    return ApplicationTargetSummary(
+        id=target.id,
+        target_url=target.target_url,
+        provider=target.provider,
+        desktop_adapter_id=target.desktop_adapter_id,
+        status=target.status,
+        resolution_method=target.resolution_method,
+        verified_at=target.verified_at,
+        assisted_reason=assisted,
     )
 
 
@@ -439,7 +465,8 @@ def _source_posting_detail(link: LinkedSourcePosting) -> SourcePostingDetail:
         source_id=row.source_id,
         source_posting_id=row.source_posting_id,
         source_name=row.source_name,
-        application_url=row.application_url,
+        listing_url=row.listing_url,
+        application_target=_target_summary(link),
         title_original=row.title_original,
         company_original=row.company_original,
         description=html_to_plain_text(row.description),

@@ -55,9 +55,11 @@ Arbeitnow remains unfit: 0/100 sampled jobs had explicit Brazil/LATAM/worldwide 
 BACK-004 -> himalayas
 BACK-005 -> jobicy
 BACK-006 -> remoteok
+BACK-016 -> greenhouse, lever (ATS-native executable targets; see
+[`ats-native-source-register.md`](ats-native-source-register.md))
 ```
 
-Mapping order: richest paginated JSON contract first (`himalayas`), then a second JSON source with Brazil/LATAM filters (`jobicy`), then the ranked approved backup (`remoteok`). CROSS-002 left BACK-006 unbound because We Work Remotely stayed `PENDING_OWNER` (RSS-storage legal gate). BACK-006 bound `remoteok` from that approved-backup evidence after `STATUS.md` marked CROSS-002 `DONE` and BACK-006 `READY`. `weworkremotely` is not implemented.
+Mapping order: richest paginated JSON contract first (`himalayas`), then a second JSON source with Brazil/LATAM filters (`jobicy`), then the ranked approved backup (`remoteok`). CROSS-002 left BACK-006 unbound because We Work Remotely stayed `PENDING_OWNER` (RSS-storage legal gate). BACK-006 bound `remoteok` from that approved-backup evidence after `STATUS.md` marked CROSS-002 `DONE` and BACK-006 `READY`. `weworkremotely` is not implemented. BACK-016 adds Greenhouse Job Board and Lever Postings adapters from the owner-approved CROSS-015 register; aggregator listing URLs remain listing-only and are never treated as executable Auto Apply targets.
 
 ---
 

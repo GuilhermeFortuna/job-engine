@@ -15,6 +15,8 @@ from job_engine.sync import (
     sync_all_sources,
 )
 
+AGGREGATOR_SOURCES = ("himalayas", "jobicy", "remoteok")
+
 SUCCESS_COUNTS = {
     "fetched_count": 10,
     "accepted_count": 9,
@@ -43,7 +45,10 @@ async def test_sync_runs_all_enabled_sources_and_combines_summaries() -> None:
         called.append(source_id)
         return _success(source_id)
 
-    report = await sync_all_sources(Settings(), ingest_one=ingest_one)
+    report = await sync_all_sources(
+        Settings(enabled_sources=AGGREGATOR_SOURCES),
+        ingest_one=ingest_one,
+    )
 
     assert called == ["himalayas", "jobicy", "remoteok"]
     assert report["ok"] is True
@@ -66,7 +71,10 @@ async def test_sync_continues_after_one_source_raises(
         return _success(source_id)
 
     with caplog.at_level(logging.ERROR, logger="job_engine.sync"):
-        report = await sync_all_sources(Settings(), ingest_one=ingest_one)
+        report = await sync_all_sources(
+            Settings(enabled_sources=AGGREGATOR_SOURCES),
+            ingest_one=ingest_one,
+        )
 
     assert called == ["himalayas", "jobicy", "remoteok"]
     assert report["ok"] is False
@@ -100,7 +108,10 @@ async def test_sync_treats_ingestion_failure_status_as_failed_source() -> None:
             }
         return _success(source_id)
 
-    report = await sync_all_sources(Settings(), ingest_one=ingest_one)
+    report = await sync_all_sources(
+        Settings(enabled_sources=AGGREGATOR_SOURCES),
+        ingest_one=ingest_one,
+    )
 
     assert report["ok"] is False
     assert report["sources"][0]["source_id"] == "himalayas"
@@ -117,7 +128,10 @@ async def test_sync_partial_success_does_not_fail_the_run() -> None:
             summary["status"] = IngestionRunStatus.PARTIAL_SUCCESS.value
         return summary
 
-    report = await sync_all_sources(Settings(), ingest_one=ingest_one)
+    report = await sync_all_sources(
+        Settings(enabled_sources=AGGREGATOR_SOURCES),
+        ingest_one=ingest_one,
+    )
 
     assert report["ok"] is True
     assert report["sources"][2]["status"] == IngestionRunStatus.PARTIAL_SUCCESS.value
@@ -188,7 +202,7 @@ async def test_sync_emits_progress_as_each_source_runs() -> None:
         return _success(source_id)
 
     await sync_all_sources(
-        Settings(),
+        Settings(enabled_sources=AGGREGATOR_SOURCES),
         ingest_one=ingest_one,
         on_source_start=lambda source_id, index, total: events.append(
             ("start", f"{index}/{total}:{source_id}")
@@ -226,12 +240,14 @@ def test_main_prints_progress_and_final_report(
 
     assert exited.value.code == 0
     output = capsys.readouterr().out
-    assert "1/3" in output
+    assert "1/5" in output
     assert "himalayas" in output
     assert "jobicy" in output
     assert "remoteok" in output
-    assert "12 inserted" in output
-    assert "15 updated" in output
+    assert "greenhouse" in output
+    assert "lever" in output
+    assert "20 inserted" in output
+    assert "25 updated" in output
     assert "Catalog sync report" in output
 
 
@@ -253,6 +269,8 @@ def test_main_exits_nonzero_when_a_source_fails(
     assert exited.value.code == 1
     output = capsys.readouterr().out
     assert "remoteok" in output
+    assert "greenhouse" in output
+    assert "lever" in output
     assert "failure" in output
     assert "remoteok unavailable" in output
     assert "Catalog sync report" in output

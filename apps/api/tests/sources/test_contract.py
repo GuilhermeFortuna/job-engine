@@ -50,7 +50,7 @@ class _FakeAdapter:
             source_id=self.source_id,
             source_posting_id=str(parsed["id"]),
             source_name="Fake",
-            application_url="https://example.com/jobs/1",
+            listing_url="https://example.com/jobs/1",
             title_original="Engineer",
             company_original="Acme",
             first_seen_at=seen_at,

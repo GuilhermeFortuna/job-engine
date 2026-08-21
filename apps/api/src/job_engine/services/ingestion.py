@@ -15,6 +15,7 @@ from job_engine.domain.jobs import (
     IngestionRunCompletion,
     SourcePosting,
 )
+from job_engine.services.application_targets import sync_application_target_for_posting
 from job_engine.services.deduplication import apply_to_catalog
 from job_engine.services.normalization import normalize_candidate
 from job_engine.sources.base import (
@@ -24,6 +25,14 @@ from job_engine.sources.base import (
     redact_text,
 )
 from job_engine.sources.registry import get_adapter
+
+
+def _adapter_board_errors(adapter: SourceAdapter) -> tuple[ErrorSummary, ...]:
+    raw = getattr(adapter, "board_errors", ())
+    if not raw:
+        return ()
+    return tuple(raw)
+
 
 STATUS_PRECEDENCE = (
     JobStatus.ACTIVE,
@@ -177,6 +186,9 @@ async def run_ingestion(
                 if candidate.status is JobStatus.CLOSED:
                     marked_closed += 1
                 affected_groups.add(result.group.id)
+                await sync_application_target_for_posting(
+                    repo, result.posting, verified_at=observed_at
+                )
                 await nested.commit()
             except RecordValidationError as exc:
                 await nested.rollback()
@@ -189,6 +201,11 @@ async def run_ingestion(
         cursor = page.next_cursor
         if cursor is None:
             break
+
+    board_errors = _adapter_board_errors(resolved)
+    if board_errors:
+        errors.extend(board_errors)
+        fetch_failed = True
 
     status = _run_status(
         pages_ok=pages_ok, fetch_failed=fetch_failed, rejected=rejected

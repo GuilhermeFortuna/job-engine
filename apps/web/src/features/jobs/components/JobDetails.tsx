@@ -99,21 +99,32 @@ export function JobDetails({ job }: { job: JobDetail }) {
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {job.primary_application_url ? (
+          {job.preferred_application_target.target_url ||
+          job.preferred_application_target.listing_url ? (
             <>
               <ExternalApplyLink
-                url={job.primary_application_url}
+                url={
+                  job.preferred_application_target.status === "executable"
+                    ? (job.preferred_application_target.target_url ??
+                      job.preferred_application_target.listing_url!)
+                    : (job.preferred_application_target.listing_url ??
+                      job.preferred_application_target.target_url!)
+                }
                 sourceName={primarySource}
               >
                 Apply on {primarySource}
               </ExternalApplyLink>
-              <ApplicationLauncher
-                jobGroupId={job.id}
-                title={job.title}
-                company={job.company}
-                applicationUrl={job.primary_application_url}
-                sourceName={primarySource}
-              />
+              {job.preferred_application_target.status === "executable" &&
+                job.preferred_application_target.id && (
+                  <ApplicationLauncher
+                    jobGroupId={job.id}
+                    applicationTargetId={job.preferred_application_target.id}
+                    title={job.title}
+                    company={job.company}
+                    applicationUrl={job.preferred_application_target.target_url}
+                    sourceName={primarySource}
+                  />
+                )}
             </>
           ) : (
             <span

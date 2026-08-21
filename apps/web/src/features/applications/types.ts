@@ -227,7 +227,7 @@ export interface CreateApplicationRunResponse {
 }
 
 export interface CreateApplicationRunInput {
-  job_group_ids: string[];
+  application_target_ids: string[];
   resume_id: string;
   automation_mode: AutomationMode;
 }

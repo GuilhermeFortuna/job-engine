@@ -74,15 +74,28 @@ const baseJob: JobListItem = {
     {
       source_id: "himalayas",
       source_name: "Himalayas",
-      application_url: "https://himalayas.app/jobs/acme-backend",
+      listing_url: "https://himalayas.app/jobs/acme-backend",
+      application_target: null,
     },
     {
       source_id: "jobicy",
       source_name: "Jobicy",
-      application_url: "https://jobicy.com/jobs/acme-backend-2",
+      listing_url: "https://jobicy.com/jobs/acme-backend-2",
+      application_target: null,
     },
   ],
-  primary_application_url: "https://himalayas.app/jobs/acme-backend",
+  preferred_application_target: {
+    id: "target-1",
+    target_url: "https://boards.greenhouse.io/acme/jobs/101",
+    listing_url: "https://himalayas.app/jobs/acme-backend",
+    provider: "greenhouse",
+    desktop_adapter_id: "greenhouse",
+    status: "executable",
+    resolution_method: "ats_native_listing",
+    verified_at: "2026-08-16T12:00:00Z",
+    source_posting_id: "22222222-2222-4222-8222-222222222221",
+    assisted_reason: null,
+  },
   description_excerpt: "Build high-throughput Python backends with FastAPI.",
 };
 
@@ -235,7 +248,7 @@ describe("JobCard component", () => {
     });
     expect(applyBtn).toHaveAttribute(
       "href",
-      "https://himalayas.app/jobs/acme-backend",
+      "https://boards.greenhouse.io/acme/jobs/101",
     );
     expect(applyBtn).toHaveAttribute("target", "_blank");
     expect(applyBtn).toHaveAttribute("rel", "noopener noreferrer");
@@ -286,7 +299,18 @@ describe("JobCard component", () => {
       <JobCard
         job={{
           ...baseJob,
-          primary_application_url: "http://example.com/apply",
+          preferred_application_target: {
+            id: "target-1",
+            target_url: "http://example.com/apply",
+            listing_url: "http://example.com/apply",
+            provider: "greenhouse",
+            desktop_adapter_id: "greenhouse",
+            status: "executable",
+            resolution_method: "ats_native_listing",
+            verified_at: "2026-08-16T12:00:00Z",
+            source_posting_id: "22222222-2222-4222-8222-222222222221",
+            assisted_reason: null,
+          },
         }}
       />,
     );
@@ -308,6 +332,6 @@ describe("JobCard component", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /apply on himalayas/i }),
-    ).toHaveAttribute("href", baseJob.primary_application_url);
+    ).toHaveAttribute("href", baseJob.preferred_application_target?.target_url);
   });
 });

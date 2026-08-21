@@ -31,6 +31,7 @@ from job_engine.sources.base import (
 )
 from tests.db.conftest import alembic_config
 
+AGGREGATOR_SOURCES = ("himalayas", "jobicy", "remoteok")
 SEEN_AT = datetime(2026, 8, 17, 12, 0, tzinfo=UTC)
 
 
@@ -73,7 +74,7 @@ class FakeSourceAdapter:
             source_id=self.source_id,
             source_posting_id=posting_id,
             source_name=self.source_id.title(),
-            application_url=f"https://{self.source_id}.example/jobs/{posting_id}",
+            listing_url=f"https://{self.source_id}.example/jobs/{posting_id}",
             title_original=str(parsed["title"]),
             company_original=str(parsed["company"]),
             description="Build scalable software.",
@@ -121,7 +122,10 @@ async def test_live_sync_success_all_sources(disposable_database_url: str) -> No
     command.upgrade(alembic_config(disposable_database_url), "head")
     engine = create_async_engine_helper(disposable_database_url)
     factory = create_session_factory(engine)
-    settings = Settings(database_url=disposable_database_url)
+    settings = Settings(
+        database_url=disposable_database_url,
+        enabled_sources=("himalayas", "jobicy", "remoteok"),
+    )
     guard = LiveSyncGuard(cooldown_seconds=1.0)
     service = LiveSyncService(factory, settings, guard=guard)
 
@@ -187,7 +191,10 @@ async def test_live_sync_partial_source_failure(
     command.upgrade(alembic_config(disposable_database_url), "head")
     engine = create_async_engine_helper(disposable_database_url)
     factory = create_session_factory(engine)
-    settings = Settings(database_url=disposable_database_url)
+    settings = Settings(
+        database_url=disposable_database_url,
+        enabled_sources=("himalayas", "jobicy", "remoteok"),
+    )
     guard = LiveSyncGuard(cooldown_seconds=1.0)
     service = LiveSyncService(factory, settings, guard=guard)
 
@@ -230,7 +237,10 @@ async def test_live_sync_all_sources_failure(disposable_database_url: str) -> No
     command.upgrade(alembic_config(disposable_database_url), "head")
     engine = create_async_engine_helper(disposable_database_url)
     factory = create_session_factory(engine)
-    settings = Settings(database_url=disposable_database_url)
+    settings = Settings(
+        database_url=disposable_database_url,
+        enabled_sources=("himalayas", "jobicy", "remoteok"),
+    )
     guard = LiveSyncGuard(cooldown_seconds=1.0)
     service = LiveSyncService(factory, settings, guard=guard)
 
@@ -263,7 +273,10 @@ async def test_live_sync_cooldown_guard(disposable_database_url: str) -> None:
     command.upgrade(alembic_config(disposable_database_url), "head")
     engine = create_async_engine_helper(disposable_database_url)
     factory = create_session_factory(engine)
-    settings = Settings(database_url=disposable_database_url)
+    settings = Settings(
+        database_url=disposable_database_url,
+        enabled_sources=("himalayas", "jobicy", "remoteok"),
+    )
     guard = LiveSyncGuard(cooldown_seconds=30.0)
     service = LiveSyncService(factory, settings, guard=guard)
 
@@ -294,7 +307,10 @@ async def test_live_sync_cancellation_releases_guard(
     command.upgrade(alembic_config(disposable_database_url), "head")
     engine = create_async_engine_helper(disposable_database_url)
     factory = create_session_factory(engine)
-    settings = Settings(database_url=disposable_database_url)
+    settings = Settings(
+        database_url=disposable_database_url,
+        enabled_sources=("himalayas", "jobicy", "remoteok"),
+    )
     guard = LiveSyncGuard(cooldown_seconds=1.0)
     service = LiveSyncService(factory, settings, guard=guard)
 
@@ -326,7 +342,10 @@ async def test_live_sync_deduplication_across_sources(
     command.upgrade(alembic_config(disposable_database_url), "head")
     engine = create_async_engine_helper(disposable_database_url)
     factory = create_session_factory(engine)
-    settings = Settings(database_url=disposable_database_url)
+    settings = Settings(
+        database_url=disposable_database_url,
+        enabled_sources=("himalayas", "jobicy", "remoteok"),
+    )
     guard = LiveSyncGuard(cooldown_seconds=1.0)
     service = LiveSyncService(factory, settings, guard=guard)
 
@@ -344,7 +363,7 @@ async def test_live_sync_deduplication_across_sources(
                 source_id=self.source_id,
                 source_posting_id=posting_id,
                 source_name=self.source_id.title(),
-                application_url="https://company.example/jobs/123",
+                listing_url="https://company.example/jobs/123",
                 title_original="Staff Python Engineer",
                 company_original="GlobalCorp",
                 description="Build scalable software.",

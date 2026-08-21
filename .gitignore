@@ -37,6 +37,7 @@ out/
 .next/
 .turbo/
 *.tsbuildinfo
+.tmp/
 
 # Desktop & automation runtime data
 .job-engine/

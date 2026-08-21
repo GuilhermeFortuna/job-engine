@@ -7,13 +7,20 @@ from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from job_engine.application_targets import ApplicationTargetInput
 from job_engine.config import Settings
 from job_engine.db.repositories import CatalogRepository
 from job_engine.domain.applications import (
     FULL_AUTO_OWNER_CONFIRMATION,
     RunnerReleaseReason,
 )
-from job_engine.domain.enums import EmploymentType, JobStatus, RemoteStatus, Seniority
+from job_engine.domain.enums import (
+    ApplicationTargetStatus,
+    EmploymentType,
+    JobStatus,
+    RemoteStatus,
+    Seniority,
+)
 from job_engine.domain.jobs import Compensation, JobGroupInput, SourcePostingInput
 from tests.api.test_applications import _setup_fixtures
 
@@ -34,7 +41,7 @@ def _runner_headers(settings: Settings, **extra: str) -> dict[str, str]:
 
 
 async def _create_second_group(session: AsyncSession) -> UUID:
-    """A second job group, so a second run can exist alongside the first."""
+    """A second executable target, so a second run can exist alongside the first."""
     now = datetime.now(UTC)
     cat_repo = CatalogRepository(session)
     group = await cat_repo.create_job_group(
@@ -66,11 +73,11 @@ async def _create_second_group(session: AsyncSession) -> UUID:
     )
     posting = await cat_repo.upsert_source_posting(
         SourcePostingInput(
-            source_id="globex_greenhouse",
+            source_id="greenhouse",
             source_posting_id="202",
             source_name="Greenhouse",
-            application_url="https://boards.greenhouse.io/globex/jobs/202",
-            application_url_canonical="https://boards.greenhouse.io/globex/jobs/202",
+            listing_url="https://boards.greenhouse.io/globex/jobs/202",
+            listing_url_canonical="https://boards.greenhouse.io/globex/jobs/202",
             title_original="Staff Platform Engineer",
             company_original="Globex",
             description="Run the platform",
@@ -85,13 +92,26 @@ async def _create_second_group(session: AsyncSession) -> UUID:
         )
     )
     await cat_repo.add_posting_to_group(group.id, posting.id)
+    target = await cat_repo.upsert_application_target(
+        ApplicationTargetInput(
+            source_posting_id=posting.id,
+            target_url="https://boards.greenhouse.io/globex/jobs/202",
+            target_url_canonical="https://boards.greenhouse.io/globex/jobs/202",
+            provider="greenhouse",
+            desktop_adapter_id="greenhouse",
+            status=ApplicationTargetStatus.EXECUTABLE,
+            resolution_method="ats_native_listing",
+            evidence={},
+            verified_at=now,
+        )
+    )
     await session.commit()
-    return group.id
+    return target.id
 
 
-async def _create_run(client: AsyncClient, group_id: UUID, mode: str) -> str:
+async def _create_run(client: AsyncClient, target_id: UUID, mode: str) -> str:
     payload = {
-        "job_group_ids": [str(group_id)],
+        "application_target_ids": [str(target_id)],
         "resume_id": "res_primary_pdf",
         "automation_mode": mode,
     }
@@ -124,11 +144,11 @@ async def test_targeted_claim_takes_the_requested_run(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_a, _, _ = await _setup_fixtures(session, settings)
-    group_b = await _create_second_group(session)
+    group_a, target_a, _, _ = await _setup_fixtures(session, settings)
+    target_b = await _create_second_group(session)
 
-    first = await _create_run(client, group_a, "semi_auto_pause_before_submit")
-    second = await _create_run(client, group_b, "semi_auto_pause_before_submit")
+    first = await _create_run(client, target_a, "semi_auto_pause_before_submit")
+    second = await _create_run(client, target_b, "semi_auto_pause_before_submit")
 
     claim = await _claim(client, settings, run_id=second)
     run = claim["run"]
@@ -144,11 +164,11 @@ async def test_targeted_claim_of_unclaimable_run_returns_204(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_a, _, _ = await _setup_fixtures(session, settings)
-    group_b = await _create_second_group(session)
+    group_a, target_a, _, _ = await _setup_fixtures(session, settings)
+    target_b = await _create_second_group(session)
 
-    target = await _create_run(client, group_a, "semi_auto_pause_before_submit")
-    other = await _create_run(client, group_b, "semi_auto_pause_before_submit")
+    target = await _create_run(client, target_a, "semi_auto_pause_before_submit")
+    other = await _create_run(client, target_b, "semi_auto_pause_before_submit")
 
     # Take the target out of the queue without holding a lease, so nothing but
     # the targeting itself can explain the 204.
@@ -173,11 +193,11 @@ async def test_claim_without_body_preserves_fifo(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_a, _, _ = await _setup_fixtures(session, settings)
-    group_b = await _create_second_group(session)
+    group_a, target_a, _, _ = await _setup_fixtures(session, settings)
+    target_b = await _create_second_group(session)
 
-    first = await _create_run(client, group_a, "semi_auto_pause_before_submit")
-    await _create_run(client, group_b, "semi_auto_pause_before_submit")
+    first = await _create_run(client, target_a, "semi_auto_pause_before_submit")
+    await _create_run(client, target_b, "semi_auto_pause_before_submit")
 
     claim = await _claim(client, settings)
     run = claim["run"]
@@ -192,8 +212,8 @@ async def test_release_requeues_run_and_kills_grant(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, _, _ = await _setup_fixtures(session, settings)
-    run_id = await _create_run(client, group_id, "full_auto")
+    group_id, target_id, _, _ = await _setup_fixtures(session, settings)
+    run_id = await _create_run(client, target_id, "full_auto")
 
     claim = await _claim(client, settings, run_id=run_id)
     lease_token = str(claim["lease_token"])
@@ -233,8 +253,8 @@ async def test_release_requires_idempotency_key(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, _, _ = await _setup_fixtures(session, settings)
-    run_id = await _create_run(client, group_id, "full_auto")
+    group_id, target_id, _, _ = await _setup_fixtures(session, settings)
+    run_id = await _create_run(client, target_id, "full_auto")
     claim = await _claim(client, settings, run_id=run_id)
 
     resp = await client.post(
@@ -252,8 +272,8 @@ async def test_release_rejects_bad_credentials(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, _, _ = await _setup_fixtures(session, settings)
-    run_id = await _create_run(client, group_id, "full_auto")
+    group_id, target_id, _, _ = await _setup_fixtures(session, settings)
+    run_id = await _create_run(client, target_id, "full_auto")
     await _claim(client, settings, run_id=run_id)
 
     # Wrong runner bearer secret.
@@ -292,8 +312,8 @@ async def test_release_refused_after_submit_checkpoint(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, _, _ = await _setup_fixtures(session, settings)
-    run_id = await _create_run(client, group_id, "full_auto")
+    group_id, target_id, _, _ = await _setup_fixtures(session, settings)
+    run_id = await _create_run(client, target_id, "full_auto")
     claim = await _claim(client, settings, run_id=run_id)
     lease_token = str(claim["lease_token"])
 
@@ -343,8 +363,8 @@ async def test_release_rejects_unknown_reason(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, _, _ = await _setup_fixtures(session, settings)
-    run_id = await _create_run(client, group_id, "full_auto")
+    group_id, target_id, _, _ = await _setup_fixtures(session, settings)
+    run_id = await _create_run(client, target_id, "full_auto")
     claim = await _claim(client, settings, run_id=run_id)
 
     resp = await client.post(
@@ -368,8 +388,8 @@ async def test_release_replay_is_idempotent(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, _, _ = await _setup_fixtures(session, settings)
-    run_id = await _create_run(client, group_id, "full_auto")
+    group_id, target_id, _, _ = await _setup_fixtures(session, settings)
+    run_id = await _create_run(client, target_id, "full_auto")
     claim = await _claim(client, settings, run_id=run_id)
     headers = _runner_headers(
         settings,
@@ -401,8 +421,8 @@ async def test_release_replay_rejects_spoofed_runner_id(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, _, _ = await _setup_fixtures(session, settings)
-    run_id = await _create_run(client, group_id, "full_auto")
+    group_id, target_id, _, _ = await _setup_fixtures(session, settings)
+    run_id = await _create_run(client, target_id, "full_auto")
     claim = await _claim(client, settings, run_id=run_id)
     lease_token = str(claim["lease_token"])
 
@@ -446,8 +466,8 @@ async def test_release_token_dies_after_reclaim(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, _, _ = await _setup_fixtures(session, settings)
-    run_id = await _create_run(client, group_id, "full_auto")
+    group_id, target_id, _, _ = await _setup_fixtures(session, settings)
+    run_id = await _create_run(client, target_id, "full_auto")
     claim = await _claim(client, settings, run_id=run_id)
     lease_token = str(claim["lease_token"])
     headers = _runner_headers(
@@ -477,8 +497,8 @@ async def test_release_preserves_monotonic_attempt_identity(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:
     settings: Settings = app.state.settings
-    group_id, _, _ = await _setup_fixtures(session, settings)
-    run_id = await _create_run(client, group_id, "full_auto")
+    group_id, target_id, _, _ = await _setup_fixtures(session, settings)
+    run_id = await _create_run(client, target_id, "full_auto")
 
     attempts: list[int] = []
     for index in range(3):

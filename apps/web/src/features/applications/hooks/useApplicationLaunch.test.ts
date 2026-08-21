@@ -57,6 +57,7 @@ describe("useApplicationLaunch transaction mutex", () => {
     const { result } = renderHook(() =>
       useApplicationLaunch({
         jobGroupId: "job-1",
+        applicationTargetId: "target-1",
         refreshReadiness: vi.fn().mockResolvedValue(undefined),
       }),
     );
@@ -89,6 +90,7 @@ describe("useApplicationLaunch transaction mutex", () => {
     const { result } = renderHook(() =>
       useApplicationLaunch({
         jobGroupId: "job-1",
+        applicationTargetId: "target-1",
         refreshReadiness: vi.fn().mockResolvedValue(undefined),
       }),
     );

@@ -192,12 +192,12 @@ describe("applications API client", () => {
       );
 
     const semiAuto = await createApplicationRun({
-      job_group_ids: [JOB_ID],
+      application_target_ids: [JOB_ID],
       resume_id: "res_primary_pdf",
       automation_mode: SEMI_AUTO_MODE,
     });
     const fullAuto = await createApplicationRun({
-      job_group_ids: [JOB_ID],
+      application_target_ids: [JOB_ID],
       resume_id: "res_primary_pdf",
       automation_mode: FULL_AUTO_MODE,
     });
@@ -213,7 +213,7 @@ describe("applications API client", () => {
           "Content-Type": "application/json",
         }),
         body: JSON.stringify({
-          job_group_ids: [JOB_ID],
+          application_target_ids: [JOB_ID],
           resume_id: "res_primary_pdf",
           automation_mode: SEMI_AUTO_MODE,
         }),
@@ -226,12 +226,12 @@ describe("applications API client", () => {
       (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1][1].body as string,
     );
     expect(semiAutoBody).toEqual({
-      job_group_ids: [JOB_ID],
+      application_target_ids: [JOB_ID],
       resume_id: "res_primary_pdf",
       automation_mode: SEMI_AUTO_MODE,
     });
     expect(fullAutoBody).toEqual({
-      job_group_ids: [JOB_ID],
+      application_target_ids: [JOB_ID],
       resume_id: "res_primary_pdf",
       automation_mode: FULL_AUTO_MODE,
       owner_confirmation: "Authorize automatic submission for these selected jobs",
@@ -259,7 +259,7 @@ describe("applications API client", () => {
 
     await expect(
       createApplicationRun({
-        job_group_ids: [JOB_ID],
+        application_target_ids: [JOB_ID],
         resume_id: "res_primary_pdf",
         automation_mode: SEMI_AUTO_MODE,
       }),

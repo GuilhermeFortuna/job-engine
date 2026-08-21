@@ -9,7 +9,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 DOCUMENTED_DATABASE_URL = "postgresql://job_engine:job_engine@127.0.0.1:5432/job_engine"
-DEFAULT_ENABLED_SOURCES: tuple[str, ...] = ("himalayas", "jobicy", "remoteok")
+DEFAULT_ENABLED_SOURCES: tuple[str, ...] = (
+    "himalayas",
+    "jobicy",
+    "remoteok",
+    "greenhouse",
+    "lever",
+)
 HIMALAYAS_USER_AGENT = (
     "JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; "
     "personal catalog; himalayas adapter)"
@@ -21,6 +27,10 @@ JOBICY_USER_AGENT = (
 REMOTEOK_USER_AGENT = (
     "JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; "
     "personal catalog; remoteok adapter)"
+)
+ATS_DISCOVERY_USER_AGENT = (
+    "JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; "
+    "personal catalog; ats-native)"
 )
 
 
@@ -60,6 +70,15 @@ class Settings(BaseSettings):
     remoteok_max_retries: int = 1
     remoteok_user_agent: str = REMOTEOK_USER_AGENT
     remoteok_stale_after_successful_misses: int = 3
+    ats_discovery_user_agent: str = ATS_DISCOVERY_USER_AGENT
+    greenhouse_connect_timeout_seconds: float = 5.0
+    greenhouse_read_timeout_seconds: float = 30.0
+    greenhouse_max_retries: int = 1
+    greenhouse_stale_after_successful_misses: int = 2
+    lever_connect_timeout_seconds: float = 5.0
+    lever_read_timeout_seconds: float = 30.0
+    lever_max_retries: int = 1
+    lever_stale_after_successful_misses: int = 2
 
     def stale_after_successful_misses(self, source_id: str) -> int:
         if source_id == "himalayas":
@@ -68,6 +87,10 @@ class Settings(BaseSettings):
             return self.jobicy_stale_after_successful_misses
         if source_id == "remoteok":
             return self.remoteok_stale_after_successful_misses
+        if source_id == "greenhouse":
+            return self.greenhouse_stale_after_successful_misses
+        if source_id == "lever":
+            return self.lever_stale_after_successful_misses
         return 2
 
     @property

@@ -111,14 +111,14 @@ async def _seed_matrix(session: AsyncSession) -> dict[str, UUID]:
             source_posting_input(
                 source_id="himalayas",
                 source_posting_id="grp-h",
-                application_url="https://himalayas.example/jobs/grp-h",
-                application_url_canonical="https://himalayas.example/jobs/grp-h",
+                listing_url="https://himalayas.example/jobs/grp-h",
+                listing_url_canonical="https://himalayas.example/jobs/grp-h",
             ),
             source_posting_input(
                 source_id="jobicy",
                 source_posting_id="grp-j",
-                application_url="https://jobicy.example/jobs/grp-j",
-                application_url_canonical="https://jobicy.example/jobs/grp-j",
+                listing_url="https://jobicy.example/jobs/grp-j",
+                listing_url_canonical="https://jobicy.example/jobs/grp-j",
             ),
         ],
     )
@@ -350,7 +350,10 @@ async def test_grouped_sources_are_one_item(
         "himalayas",
         "jobicy",
     ]
-    assert item["primary_application_url"] == "https://himalayas.example/jobs/grp-h"
+    assert item["preferred_application_target"]["listing_url"] == (
+        "https://himalayas.example/jobs/grp-h"
+    )
+    assert item["preferred_application_target"]["status"] == "unresolved"
 
 
 async def test_unknown_compensation_filter_and_json(

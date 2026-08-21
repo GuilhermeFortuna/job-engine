@@ -13,6 +13,7 @@ REQUIRED_TABLES = {
     "job_group_eligible_locations",
     "job_group_role_families",
     "source_postings",
+    "application_targets",
 }
 
 REQUIRED_ENUMS = {
@@ -72,5 +73,35 @@ def test_migration_upgrade_downgrade_upgrade_round_trip(
                 )
             }
         assert REQUIRED_ENUMS <= enum_names
+
+        posting_columns = {
+            column["name"] for column in inspector.get_columns("source_postings")
+        }
+        assert "listing_url" in posting_columns
+        assert "listing_url_canonical" in posting_columns
+        assert "application_url" not in posting_columns
+        assert "application_url_canonical" not in posting_columns
+
+        target_columns = {
+            column["name"] for column in inspector.get_columns("application_targets")
+        }
+        assert {
+            "id",
+            "source_posting_id",
+            "target_url",
+            "target_url_canonical",
+            "provider",
+            "desktop_adapter_id",
+            "status",
+            "resolution_method",
+            "evidence",
+            "verified_at",
+        } <= target_columns
+
+        run_columns = {
+            column["name"] for column in inspector.get_columns("application_runs")
+        }
+        assert "application_url" in run_columns
+        assert "canonical_application_url" in run_columns
     finally:
         engine.dispose()

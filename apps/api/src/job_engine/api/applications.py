@@ -74,7 +74,10 @@ from job_engine.domain.applications import (
     ReceiptSummary,
     RunCheckpoint,
 )
-from job_engine.services.applications import ApplicationService
+from job_engine.services.applications import (
+    ApplicationService,
+    ApplicationTargetRejectedError,
+)
 
 application_runs_router = APIRouter(
     prefix="/application-runs", tags=["application-runs"]
@@ -367,6 +370,11 @@ async def create_application_runs(
 ) -> Any:
     try:
         created, conflicts = await service.create_runs(request, profile_id=profile_id)
+    except ApplicationTargetRejectedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"reason_code": exc.reason_code, "message": exc.message},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)

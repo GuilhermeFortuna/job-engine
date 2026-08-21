@@ -111,7 +111,7 @@ def test_map_candidate_field_map() -> None:
     candidate = adapter.map_candidate(job, run_id=uuid4(), seen_at=SEEN_AT)
     assert candidate.source_id == "himalayas"
     assert candidate.source_posting_id == "globex-python-engineer"
-    assert candidate.application_url.endswith("/python-engineer")
+    assert candidate.listing_url.endswith("/python-engineer")
     assert candidate.remote_evidence == "remote"
     assert candidate.location_eligibility_evidence == "worldwide"
     assert candidate.location_original == "Worldwide"

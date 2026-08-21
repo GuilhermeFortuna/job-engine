@@ -18,6 +18,7 @@ from job_engine.api.schemas import (
     ReleaseSubmitRequest,
     ResolveAnswersRequest,
 )
+from job_engine.application_targets.provider_contract import match_provider_url
 from job_engine.config import Settings
 from job_engine.db.repositories import (
     ApplicantVaultRepository,
@@ -59,8 +60,16 @@ from job_engine.domain.applications import (
     redact_audit_payload,
     sanitize_dom_snapshot,
 )
-from job_engine.domain.enums import JobStatus
+from job_engine.domain.enums import ApplicationTargetStatus, JobStatus
 from job_engine.services.managed_assets import ManagedAssetService
+
+
+class ApplicationTargetRejectedError(ValueError):
+    def __init__(self, *, target_id: UUID, reason_code: str, message: str) -> None:
+        super().__init__(message)
+        self.target_id = target_id
+        self.reason_code = reason_code
+        self.message = message
 
 
 def format_sse_run_event(event: ApplicationRunEvent) -> str:
@@ -115,13 +124,10 @@ def get_global_broadcaster() -> ApplicationEventBroadcaster:
     return _GLOBAL_BROADCASTER
 
 
-def _detect_platform_adapter(canonical_url: str) -> str:
-    lower = canonical_url.lower()
-    if "greenhouse.io" in lower:
-        return "greenhouse"
-    if "lever.co" in lower:
-        return "lever"
-    return "generic"
+def _reject_target(target_id: UUID, reason_code: str, message: str) -> None:
+    raise ApplicationTargetRejectedError(
+        target_id=target_id, reason_code=reason_code, message=message
+    )
 
 
 class ApplicationService:
@@ -168,13 +174,13 @@ class ApplicationService:
             # 2. Queue limit check
             total_pending = await app_repo.count_active_runs()
             if (
-                total_pending + len(request.job_group_ids)
+                total_pending + len(request.application_target_ids)
                 > self._settings.max_queue_limit
             ):
                 raise ValueError(
                     f"Queue limit ({self._settings.max_queue_limit}) exceeded. "
                     f"Current pending/active: {total_pending}, "
-                    f"requested: {len(request.job_group_ids)}"
+                    f"requested: {len(request.application_target_ids)}"
                 )
 
             # 3. Resolve resume asset & verify on disk
@@ -222,26 +228,110 @@ class ApplicationService:
             created_runs: list[ApplicationRun] = []
             conflicts: list[ApplicationRunConflictItem] = []
 
-            for job_group_id in request.job_group_ids:
-                job_group = await catalog_repo.get_job_group(job_group_id)
-                if job_group is None:
-                    raise ValueError(f"Job group {job_group_id} not found")
-                if job_group.status != JobStatus.ACTIVE:
-                    raise ValueError(
-                        f"Job group {job_group_id} is not active "
-                        f"(status: {job_group.status.value})"
+            for target_id in request.application_target_ids:
+                target_row = await catalog_repo.get_application_target_row(target_id)
+                if target_row is None:
+                    _reject_target(
+                        target_id,
+                        "TARGET_NOT_FOUND",
+                        f"Application target {target_id} was not found",
+                    )
+                assert target_row is not None
+                posting = target_row.source_posting
+                if posting is None:
+                    _reject_target(
+                        target_id,
+                        "TARGET_POSTING_MISSING",
+                        f"Application target {target_id} has no source posting",
+                    )
+                assert posting is not None
+
+                if target_row.status is not ApplicationTargetStatus.EXECUTABLE:
+                    _reject_target(
+                        target_id,
+                        "TARGET_NOT_EXECUTABLE",
+                        (
+                            f"Application target {target_id} is "
+                            f"{target_row.status.value}, not executable"
+                        ),
                     )
 
-                # Find primary posting
-                if not job_group.source_postings:
-                    raise ValueError(
-                        f"Job group {job_group_id} has no linked source postings"
+                if posting.status in {JobStatus.CLOSED, JobStatus.STALE}:
+                    _reject_target(
+                        target_id,
+                        "TARGET_POSTING_INACTIVE",
+                        (
+                            f"Source posting for target {target_id} is "
+                            f"{posting.status.value}"
+                        ),
                     )
-                posting = job_group.source_postings[0]
-                canonical_url = (
-                    posting.application_url_canonical or posting.application_url
+
+                group_link = posting.group_links[0] if posting.group_links else None
+                if group_link is None:
+                    _reject_target(
+                        target_id,
+                        "TARGET_GROUP_MISSING",
+                        f"Application target {target_id} is not linked to a job group",
+                    )
+                assert group_link is not None
+                job_group_id = group_link.job_group_id
+                job_group = await catalog_repo.get_job_group(job_group_id)
+                if job_group is None:
+                    _reject_target(
+                        target_id,
+                        "TARGET_GROUP_MISSING",
+                        f"Job group for target {target_id} was not found",
+                    )
+                assert job_group is not None
+                if job_group.status != JobStatus.ACTIVE:
+                    _reject_target(
+                        target_id,
+                        "TARGET_GROUP_INACTIVE",
+                        (
+                            f"Job group {job_group_id} is not active "
+                            f"(status: {job_group.status.value})"
+                        ),
+                    )
+
+                expected_provider = target_row.provider
+                if expected_provider not in {"greenhouse", "lever"}:
+                    _reject_target(
+                        target_id,
+                        "TARGET_UNSUPPORTED_PROVIDER",
+                        f"Application target {target_id} has unsupported provider",
+                    )
+                match = match_provider_url(
+                    target_row.target_url_canonical,
+                    expected_provider=expected_provider,  # type: ignore[arg-type]
                 )
-                platform_adapter_id = _detect_platform_adapter(canonical_url)
+                if not match.matched:
+                    _reject_target(
+                        target_id,
+                        match.reason_code or "TARGET_CONTRACT_MISMATCH",
+                        (
+                            f"Application target {target_id} failed provider "
+                            "host/path contract verification"
+                        ),
+                    )
+                if match.desktop_adapter_id != target_row.desktop_adapter_id:
+                    _reject_target(
+                        target_id,
+                        "TARGET_ADAPTER_MISMATCH",
+                        (
+                            f"Application target {target_id} adapter "
+                            "does not match the provider contract"
+                        ),
+                    )
+                if not match.production_supported or match.desktop_adapter_id is None:
+                    _reject_target(
+                        target_id,
+                        "TARGET_ADAPTER_UNSUPPORTED",
+                        f"Application target {target_id} adapter is unsupported",
+                    )
+
+                canonical_url = target_row.target_url_canonical
+                platform_adapter_id = match.desktop_adapter_id
+                assert platform_adapter_id is not None
 
                 idempotency_key = calculate_idempotency_key(
                     canonical_url=canonical_url,
@@ -250,7 +340,6 @@ class ApplicationService:
                     answer_bank_hash=answer_bank_hash,
                 )
 
-                # Check duplicate
                 existing_run = await app_repo.find_active_or_submitted_by_url(
                     profile.id, canonical_url
                 )
@@ -258,6 +347,7 @@ class ApplicationService:
                     conflicts.append(
                         ApplicationRunConflictItem(
                             job_group_id=job_group_id,
+                            application_target_id=target_id,
                             canonical_application_url=canonical_url,
                             existing_run_id=existing_run.id,
                             existing_status=existing_run.status,
@@ -268,6 +358,7 @@ class ApplicationService:
                                 "Use the explicit duplicate-override endpoint, "
                                 "then retry."
                             ),
+                            reason_code="DUPLICATE_ACTIVE_RUN",
                         )
                     )
                     continue
@@ -277,7 +368,7 @@ class ApplicationService:
                     job_group_id=job_group_id,
                     source_posting_id=posting.id,
                     canonical_application_url=canonical_url,
-                    application_url=posting.application_url,
+                    application_url=target_row.target_url,
                     platform_adapter_id=platform_adapter_id,
                     resume_asset_id=resume.id,
                     resume_sha256=resume.sha256,
@@ -293,6 +384,7 @@ class ApplicationService:
                         "profile_version": profile.version,
                         "resume_id": resume.resume_id,
                         "answer_bank_hash": answer_bank_hash,
+                        "application_target_id": str(target_id),
                     },
                     duplicate_override_confirmed_at=None,
                     duplicate_override_reason=None,

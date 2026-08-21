@@ -145,10 +145,10 @@
     {
       "id": "url_strips_tracking_keeps_identity_query",
       "candidate": {
-        "application_url": "https://JOBS.Example.com/jobs/abc-123/?utm_source=feed&id=99&utm_campaign=x#frag"
+        "listing_url": "https://JOBS.Example.com/jobs/abc-123/?utm_source=feed&id=99&utm_campaign=x#frag"
       },
       "expect": {
-        "application_url": "https://JOBS.Example.com/jobs/abc-123/?utm_source=feed&id=99&utm_campaign=x#frag",
+        "listing_url": "https://JOBS.Example.com/jobs/abc-123/?utm_source=feed&id=99&utm_campaign=x#frag",
         "canonical_url": "https://jobs.example.com/jobs/abc-123?id=99"
       }
     }

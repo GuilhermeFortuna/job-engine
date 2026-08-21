@@ -287,7 +287,7 @@ class HimalayasAdapter:
             source_id=self.source_id,
             source_posting_id=str(parsed["guid"]),
             source_name=SOURCE_NAME,
-            application_url=str(parsed["applicationLink"]),
+            listing_url=str(parsed["applicationLink"]),
             title_original=str(parsed["title"]),
             company_original=str(parsed["companyName"]),
             description=description_text,

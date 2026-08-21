@@ -51,7 +51,7 @@ class FakeSourceAdapter:
             source_id=self.source_id,
             source_posting_id=posting_id,
             source_name=self.source_id.title(),
-            application_url=f"https://{self.source_id}.example/jobs/{posting_id}",
+            listing_url=f"https://{self.source_id}.example/jobs/{posting_id}",
             title_original=str(parsed["title"]),
             company_original=str(parsed["company"]),
             description="Build scalable software.",
@@ -98,6 +98,14 @@ def _mock_adapters() -> dict[str, Any]:
             "remoteok",
             [{"id": "rem-api-1", "title": "Data Engineer", "company": "Gamma"}],
         ),
+        "greenhouse": FakeSourceAdapter(
+            "greenhouse",
+            [{"id": "gh-api-1", "title": "Platform Engineer", "company": "Delta"}],
+        ),
+        "lever": FakeSourceAdapter(
+            "lever",
+            [{"id": "lv-api-1", "title": "Infra Engineer", "company": "Epsilon"}],
+        ),
     }
 
 
@@ -137,7 +145,7 @@ async def test_post_live_sync_streams_sse(client: AsyncClient) -> None:
 
         completed_event = next(e[1] for e in events if e[0] == "sync_completed")
         assert completed_event["status"] == "success"
-        assert completed_event["total_inserted"] == 3
+        assert completed_event["total_inserted"] == 5
 
 
 async def test_get_live_sync_streams_sse(client: AsyncClient) -> None:

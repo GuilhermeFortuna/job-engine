@@ -100,7 +100,7 @@ export function SourcePostingList({
                 </div>
                 <div>
                   <ExternalApplyLink
-                    url={posting.application_url}
+                    url={posting.listing_url}
                     sourceName={posting.source_name}
                   />
                 </div>

@@ -25,6 +25,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from job_engine.application_targets import ApplicationTarget, ApplicationTargetInput
 from job_engine.db import models as orm
 from job_engine.domain.applicant import (
     ApplicantProfile,
@@ -80,15 +81,6 @@ from job_engine.domain.enums import (
     RemoteStatus,
     Seniority,
 )
-from job_engine.domain.local_ai import (
-    LocalAiFailureCode,
-    LocalAiProposalStatus,
-    LocalAiSelfTestRecord,
-    ProposedField,
-    ResumeProfileProposal,
-    SourceSpan,
-)
-
 from job_engine.domain.jobs import (
     Compensation,
     EligibleLocation,
@@ -100,6 +92,14 @@ from job_engine.domain.jobs import (
     SourcePosting,
     SourcePostingInput,
     TechnologyTerm,
+)
+from job_engine.domain.local_ai import (
+    LocalAiFailureCode,
+    LocalAiProposalStatus,
+    LocalAiSelfTestRecord,
+    ProposedField,
+    ResumeProfileProposal,
+    SourceSpan,
 )
 
 
@@ -174,8 +174,8 @@ def _source_posting_from_row(row: orm.SourcePosting) -> SourcePosting:
         source_id=row.source_id,
         source_posting_id=row.source_posting_id,
         source_name=row.source_name,
-        application_url=row.application_url,
-        application_url_canonical=row.application_url_canonical,
+        listing_url=row.listing_url,
+        listing_url_canonical=row.listing_url_canonical,
         title_original=row.title_original,
         company_original=row.company_original,
         description=row.description,
@@ -196,6 +196,23 @@ def _source_posting_from_row(row: orm.SourcePosting) -> SourcePosting:
         ingestion_run_id=row.ingestion_run_id,
         adapter_version=row.adapter_version,
         raw_source_metadata=row.raw_source_metadata,
+    )
+
+
+def _application_target_from_row(row: orm.ApplicationTarget) -> ApplicationTarget:
+    return ApplicationTarget(
+        id=row.id,
+        source_posting_id=row.source_posting_id,
+        target_url=row.target_url,
+        target_url_canonical=row.target_url_canonical,
+        provider=row.provider,  # type: ignore[arg-type]
+        desktop_adapter_id=row.desktop_adapter_id,
+        status=row.status,
+        resolution_method=row.resolution_method,  # type: ignore[arg-type]
+        evidence=dict(row.evidence or {}),
+        verified_at=row.verified_at,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
     )
 
 
@@ -254,8 +271,8 @@ def _source_posting_values(
         "source_id": posting.source_id,
         "source_posting_id": posting.source_posting_id,
         "source_name": posting.source_name,
-        "application_url": posting.application_url,
-        "application_url_canonical": posting.application_url_canonical,
+        "listing_url": posting.listing_url,
+        "listing_url_canonical": posting.listing_url_canonical,
         "title_original": posting.title_original,
         "company_original": posting.company_original,
         "description": posting.description,
@@ -460,6 +477,75 @@ class CatalogRepository:
             return None
         return _source_posting_from_row(row)
 
+    async def get_application_target_by_source_posting(
+        self, source_posting_id: UUID
+    ) -> ApplicationTarget | None:
+        stmt = select(orm.ApplicationTarget).where(
+            orm.ApplicationTarget.source_posting_id == source_posting_id
+        )
+        row = await self._session.scalar(stmt)
+        if row is None:
+            return None
+        return _application_target_from_row(row)
+
+    async def get_application_target(self, target_id: UUID) -> ApplicationTarget | None:
+        row = await self._session.get(orm.ApplicationTarget, target_id)
+        if row is None:
+            return None
+        return _application_target_from_row(row)
+
+    async def get_application_target_row(
+        self, target_id: UUID
+    ) -> orm.ApplicationTarget | None:
+        return await self._session.get(
+            orm.ApplicationTarget,
+            target_id,
+            options=(
+                selectinload(orm.ApplicationTarget.source_posting).selectinload(
+                    orm.SourcePosting.group_links
+                ),
+            ),
+        )
+
+    async def upsert_application_target(
+        self, target: ApplicationTargetInput
+    ) -> ApplicationTarget:
+        values = {
+            "id": uuid4(),
+            "source_posting_id": target.source_posting_id,
+            "target_url": target.target_url,
+            "target_url_canonical": target.target_url_canonical,
+            "provider": target.provider,
+            "desktop_adapter_id": target.desktop_adapter_id,
+            "status": target.status,
+            "resolution_method": target.resolution_method,
+            "evidence": target.evidence,
+            "verified_at": target.verified_at,
+            "created_at": _utcnow(),
+            "updated_at": _utcnow(),
+        }
+        update_fields = {
+            key: values[key]
+            for key in values
+            if key not in {"id", "source_posting_id", "created_at"}
+        }
+        stmt = (
+            insert(orm.ApplicationTarget)
+            .values(values)
+            .on_conflict_do_update(
+                constraint="uq_application_targets_source_posting_id",
+                set_=update_fields,
+            )
+        )
+        await self._session.execute(stmt)
+        await self._session.flush()
+        loaded = await self.get_application_target_by_source_posting(
+            target.source_posting_id
+        )
+        if loaded is None:
+            raise RuntimeError("upsert_application_target did not persist a row")
+        return loaded
+
     async def get_job_group(self, group_id: UUID) -> JobGroup | None:
         stmt = (
             select(orm.JobGroup)
@@ -497,7 +583,7 @@ class CatalogRepository:
             select(orm.JobGroup)
             .join(orm.JobGroupPosting)
             .join(orm.SourcePosting)
-            .where(orm.SourcePosting.application_url_canonical == canonical_url)
+            .where(orm.SourcePosting.listing_url_canonical == canonical_url)
             .options(*_job_group_load_options())
             .execution_options(populate_existing=True)
         )
@@ -679,9 +765,9 @@ def _job_group_load_options() -> tuple[Any, ...]:
         selectinload(orm.JobGroup.technologies),
         selectinload(orm.JobGroup.eligible_locations),
         selectinload(orm.JobGroup.role_families),
-        selectinload(orm.JobGroup.posting_links).selectinload(
-            orm.JobGroupPosting.source_posting
-        ),
+        selectinload(orm.JobGroup.posting_links)
+        .selectinload(orm.JobGroupPosting.source_posting)
+        .selectinload(orm.SourcePosting.application_target),
     )
 
 
@@ -703,6 +789,7 @@ def _job_group_from_loaded_row(row: orm.JobGroup) -> JobGroup:
 class LinkedSourcePosting:
     row: orm.SourcePosting
     linked_at: datetime
+    target: orm.ApplicationTarget | None = None
 
 
 @dataclass(frozen=True)
@@ -734,7 +821,11 @@ def _escape_ilike(value: str) -> str:
 
 def _job_group_api_record(row: orm.JobGroup) -> JobGroupApiRecord:
     links = tuple(
-        LinkedSourcePosting(row=link.source_posting, linked_at=link.linked_at)
+        LinkedSourcePosting(
+            row=link.source_posting,
+            linked_at=link.linked_at,
+            target=link.source_posting.application_target,
+        )
         for link in sorted(
             row.posting_links,
             key=lambda item: (item.linked_at, item.source_posting.id),

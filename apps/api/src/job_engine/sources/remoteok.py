@@ -207,9 +207,9 @@ class RemoteokAdapter:
     ) -> NormalizationCandidate:
         signal = self.lifecycle_signal(parsed, seen_at=seen_at)
         job_id = _job_id(parsed)
-        application_url = _application_url(parsed)
+        listing_url = _application_url(parsed)
         assert job_id is not None
-        assert application_url is not None
+        assert listing_url is not None
         location_original = _optional_text(parsed.get("location"))
         description = parsed.get("description")
         description_text = description if isinstance(description, str) else None
@@ -229,7 +229,7 @@ class RemoteokAdapter:
             source_id=self.source_id,
             source_posting_id=job_id,
             source_name=SOURCE_NAME,
-            application_url=application_url,
+            listing_url=listing_url,
             title_original=str(parsed["position"]),
             company_original=str(parsed["company"]),
             description=description_text,

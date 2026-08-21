@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -23,6 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from job_engine.db.base import Base
 from job_engine.domain.enums import (
+    ApplicationTargetStatus,
     EmploymentType,
     IngestionRunStatus,
     JobStatus,
@@ -62,6 +64,12 @@ job_status_enum = ENUM(
 ingestion_run_status_enum = ENUM(
     IngestionRunStatus,
     name="ingestion_run_status",
+    create_type=False,
+    values_callable=_enum_values,
+)
+application_target_status_enum = ENUM(
+    ApplicationTargetStatus,
+    name="application_target_status",
     create_type=False,
     values_callable=_enum_values,
 )
@@ -195,8 +203,8 @@ class SourcePosting(CompensationMixin, Base):
             "source_id", "source_posting_id", name="uq_source_postings_source_identity"
         ),
         Index(
-            "ix_source_postings_application_url_canonical",
-            "application_url_canonical",
+            "ix_source_postings_listing_url_canonical",
+            "listing_url_canonical",
         ),
     )
 
@@ -204,8 +212,8 @@ class SourcePosting(CompensationMixin, Base):
     source_id: Mapped[str] = mapped_column(Text, nullable=False)
     source_posting_id: Mapped[str] = mapped_column(Text, nullable=False)
     source_name: Mapped[str] = mapped_column(Text, nullable=False)
-    application_url: Mapped[str] = mapped_column(Text, nullable=False)
-    application_url_canonical: Mapped[str] = mapped_column(Text, nullable=False)
+    listing_url: Mapped[str] = mapped_column(Text, nullable=False)
+    listing_url_canonical: Mapped[str] = mapped_column(Text, nullable=False)
     title_original: Mapped[str] = mapped_column(Text, nullable=False)
     company_original: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -240,6 +248,55 @@ class SourcePosting(CompensationMixin, Base):
 
     group_links: Mapped[list["JobGroupPosting"]] = relationship(
         back_populates="source_posting", cascade="all, delete-orphan"
+    )
+    application_target: Mapped["ApplicationTarget | None"] = relationship(
+        back_populates="source_posting",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class ApplicationTarget(Base):
+    __tablename__ = "application_targets"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_posting_id",
+            name="uq_application_targets_source_posting_id",
+        ),
+        Index(
+            "ix_application_targets_target_url_canonical",
+            "target_url_canonical",
+        ),
+        Index("ix_application_targets_status", "status"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    source_posting_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("source_postings.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    target_url: Mapped[str] = mapped_column(Text, nullable=False)
+    target_url_canonical: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[str | None] = mapped_column(Text)
+    desktop_adapter_id: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[ApplicationTargetStatus] = mapped_column(
+        application_target_status_enum, nullable=False
+    )
+    resolution_method: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    verified_at: Mapped[datetime | None] = _optional_aware_dt()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    source_posting: Mapped[SourcePosting] = relationship(
+        back_populates="application_target"
     )
 
 

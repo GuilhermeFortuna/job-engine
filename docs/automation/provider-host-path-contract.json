@@ -1,0 +1,25 @@
+{
+  "contract_id": "BACK-016-provider-host-path-v1",
+  "register_revision": "CROSS-015-REG-2026-08-21.1",
+  "providers": {
+    "greenhouse": {
+      "desktop_adapter_id": "greenhouse",
+      "production_supported": true,
+      "allowed_hosts": [
+        "boards.greenhouse.io",
+        "job-boards.greenhouse.io",
+        "boards.eu.greenhouse.io"
+      ],
+      "path_pattern": "^/[a-zA-Z0-9_-]+/jobs/\\d+$",
+      "require_https": true
+    },
+    "lever": {
+      "desktop_adapter_id": "lever",
+      "production_supported": true,
+      "allowed_hosts": ["jobs.lever.co"],
+      "path_pattern": "^/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/apply$",
+      "require_https": true,
+      "unbound_hosts": ["jobs.eu.lever.co"]
+    }
+  }
+}

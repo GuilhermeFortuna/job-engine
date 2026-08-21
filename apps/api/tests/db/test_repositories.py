@@ -36,8 +36,8 @@ def _source_posting(**overrides: object) -> SourcePostingInput:
         "source_id": "jobicy",
         "source_posting_id": "abc-123",
         "source_name": "Jobicy",
-        "application_url": "https://jobicy.com/jobs/abc-123",
-        "application_url_canonical": "https://jobicy.com/jobs/abc-123",
+        "listing_url": "https://jobicy.com/jobs/abc-123",
+        "listing_url_canonical": "https://jobicy.com/jobs/abc-123",
         "title_original": "Python Engineer",
         "company_original": "Acme Ltd",
         "description": "Build APIs.",
@@ -171,7 +171,7 @@ async def test_source_posting_uniqueness_is_enforced_by_postgresql(
             source_id="jobicy",
             source_posting_id="abc-123",
             source_name="Jobicy",
-            application_url="https://jobicy.com/jobs/dup",
+            listing_url="https://jobicy.com/jobs/dup",
             title_original="Dup",
             company_original="Acme",
             remote_status=RemoteStatus.UNKNOWN,
@@ -241,7 +241,7 @@ async def test_multiple_source_postings_round_trip_on_one_job_group(
             source_id="himalayas",
             source_posting_id="xyz-9",
             source_name="Himalayas",
-            application_url="https://himalayas.app/jobs/xyz-9",
+            listing_url="https://himalayas.app/jobs/xyz-9",
         )
     )
     await repo.add_posting_to_group(group.id, first.id)

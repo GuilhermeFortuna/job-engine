@@ -42,10 +42,22 @@ const sampleJob: JobListItem = {
     {
       source_id: "himalayas",
       source_name: "Himalayas",
-      application_url: "https://himalayas.app/jobs/globex-fe",
+      listing_url: "https://himalayas.app/jobs/globex-fe",
+      application_target: null,
     },
   ],
-  primary_application_url: "https://himalayas.app/jobs/globex-fe",
+  preferred_application_target: {
+    id: "target-1",
+    target_url: "https://himalayas.app/jobs/globex-fe",
+    listing_url: "https://himalayas.app/jobs/globex-fe",
+    provider: null,
+    desktop_adapter_id: null,
+    status: "unresolved",
+    resolution_method: null,
+    verified_at: null,
+    source_posting_id: null,
+    assisted_reason: "No verified executable application target is available yet.",
+  },
   description_excerpt: "Build accessible React applications.",
 };
 
