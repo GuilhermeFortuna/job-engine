@@ -12,6 +12,54 @@ let workspaceMode = "armed";
 let workspaceDuplicateOverride = false;
 let workspaceSequence = 1;
 
+// FRONT-006 gates every launch control on applicant-profile readiness, so the
+// workspace specs need a profile that exists. Values stay synthetic.
+const PROFILE_FIELD_NAMES = [
+  "first_name",
+  "last_name",
+  "email",
+  "phone",
+  "city",
+  "region",
+  "country",
+  "timezone",
+  "headline",
+  "summary",
+  "portfolio_url",
+  "linkedin_url",
+  "github_url",
+  "custom_urls",
+  "notice_period_days",
+  "employment_history",
+  "education_history",
+  "skills",
+  "languages",
+  "certifications",
+  "work_authorizations",
+  "compensation_expectation",
+  "location_preferences",
+  "demographics",
+];
+
+function applicantProfileFixture() {
+  const profile = {
+    id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    version: 1,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+  for (const name of PROFILE_FIELD_NAMES) {
+    profile[name] = {
+      state: "provided",
+      value: `synthetic-${name}`,
+      source: "owner",
+      last_confirmed_at: "2026-01-01T00:00:00Z",
+      policy_category: "verified_profile",
+    };
+  }
+  return profile;
+}
+
 function readJsonBody(req) {
   return new Promise((resolve) => {
     let body = "";
@@ -776,6 +824,12 @@ const server = http.createServer((req, res) => {
 
     res.writeHead(404);
     res.end(JSON.stringify({ detail: "Job group not found" }));
+    return;
+  }
+
+  if (url.pathname === "/api/v1/applicant-profile") {
+    res.writeHead(200);
+    res.end(JSON.stringify(applicantProfileFixture()));
     return;
   }
 

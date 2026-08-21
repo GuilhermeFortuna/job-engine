@@ -62,6 +62,7 @@ async function installDesktopBridge(page: Page) {
       getCapabilities: async () => ({
         embeddedBrowser: true,
         platform: "linux",
+        productionRuntime: true,
       }),
       openApplication: async (params: { runId: string }) => {
         api.opens.push(params);
@@ -138,7 +139,7 @@ test.describe("Embedded application workspace", () => {
   }) => {
     await page.goto("/jobs");
     await expect(
-      page.getByRole("button", { name: /apply in job engine/i }),
+      page.getByRole("button", { name: /^(auto apply|apply with assistance)$/i }),
     ).toHaveCount(0);
     const apply = page
       .getByRole("link", { name: /apply on himalayas/i })
@@ -154,7 +155,7 @@ test.describe("Embedded application workspace", () => {
     await setWorkspaceMode(page, "progress");
     await page.goto("/jobs");
     await page
-      .getByRole("button", { name: /apply in job engine/i })
+      .getByRole("button", { name: /^(auto apply|apply with assistance)$/i })
       .first()
       .click();
     const dialog = page.getByRole("dialog", {
@@ -214,9 +215,11 @@ test.describe("Embedded application workspace", () => {
     await expect(
       page.getByRole("heading", { name: "Submitted" }),
     ).toBeVisible();
+    // FRONT-006 removes the control outright after a submit attempt rather than
+    // leaving it disabled: no blind-retry action once submit_attempted_at is set.
     await expect(
       page.getByRole("button", { name: /submit application/i }),
-    ).toBeDisabled();
+    ).toHaveCount(0);
   });
 
   test("auth pause resumes without collecting credentials", async ({
@@ -265,7 +268,7 @@ test.describe("Embedded application workspace", () => {
     await setWorkspaceMode(page, "conflict");
     await page.goto("/jobs");
     await page
-      .getByRole("button", { name: /apply in job engine/i })
+      .getByRole("button", { name: /^(auto apply|apply with assistance)$/i })
       .first()
       .click();
     const start = page
