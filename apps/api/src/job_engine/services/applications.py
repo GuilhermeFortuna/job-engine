@@ -4,7 +4,8 @@ import asyncio
 import hashlib
 import json
 import secrets
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -22,9 +23,10 @@ from job_engine.application_targets.provider_contract import match_provider_url
 from job_engine.config import Settings
 from job_engine.db.repositories import (
     ApplicantVaultRepository,
+    ApplicationBatchCreateInput,
+    ApplicationBatchItemCreateInput,
     ApplicationRepository,
     ApplicationRunFilterCriteria,
-    ApplicationRunInput,
     ApplicationRunNotFoundError,
     CatalogRepository,
     ResourceNotFoundError,
@@ -40,6 +42,17 @@ from job_engine.domain.application_answers import (
     ObservationValidationConstraints,
     QuestionObservation,
     validate_control_compatibility,
+)
+from job_engine.domain.application_batches import (
+    BATCH_CONFIRMATION_REVISION,
+    BATCH_CONFIRMATION_TEXT,
+    BATCH_POLICY_REVISION,
+    DEFAULT_MAX_BATCH_SIZE,
+    ApplicationBatch,
+    BatchPreviewIssue,
+    BatchPreviewIssueCode,
+    BatchPreviewIssueSeverity,
+    validate_batch_confirmation,
 )
 from job_engine.domain.applications import (
     ApplicationException,
@@ -70,6 +83,52 @@ class ApplicationTargetRejectedError(ValueError):
         self.target_id = target_id
         self.reason_code = reason_code
         self.message = message
+
+
+class ApplicationBatchValidationError(ValueError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        issues: tuple[BatchPreviewIssue, ...] = (),
+        conflicts: tuple[ApplicationRunConflictItem, ...] = (),
+    ) -> None:
+        super().__init__(message)
+        self.issues = issues
+        self.conflicts = conflicts
+
+
+@dataclass(frozen=True)
+class ResolvedBatchTarget:
+    application_target_id: UUID
+    job_group_id: UUID
+    source_posting_id: UUID
+    canonical_application_url: str
+    application_url: str
+    platform_adapter_id: str
+
+
+@dataclass(frozen=True)
+class ApplicationBatchPreviewResult:
+    confirmation_text: str
+    confirmation_revision: str
+    policy_revision: str
+    max_batch_size: int
+    applicant_profile_id: UUID
+    applicant_profile_version: int
+    resume_asset_id: UUID
+    resume_asset_version: int
+    resume_sha256: str
+    answer_bank_hash: str
+    answer_bank_snapshot: dict[str, int]
+    issues: tuple[BatchPreviewIssue, ...]
+    resolved_targets: tuple[ResolvedBatchTarget, ...]
+
+
+@dataclass(frozen=True)
+class ApplicationBatchDuplicateOverride:
+    application_target_id: UUID
+    reason: str
 
 
 def format_sse_run_event(event: ApplicationRunEvent) -> str:
@@ -130,6 +189,23 @@ def _reject_target(target_id: UUID, reason_code: str, message: str) -> None:
     )
 
 
+def _issue(
+    code: BatchPreviewIssueCode,
+    message: str,
+    *,
+    severity: BatchPreviewIssueSeverity = BatchPreviewIssueSeverity.ERROR,
+    application_target_id: UUID | None = None,
+    existing_run_id: UUID | None = None,
+) -> BatchPreviewIssue:
+    return BatchPreviewIssue(
+        code=code,
+        severity=severity,
+        message=message,
+        application_target_id=application_target_id,
+        existing_run_id=existing_run_id,
+    )
+
+
 class ApplicationService:
     def __init__(
         self,
@@ -141,22 +217,619 @@ class ApplicationService:
         self._settings = settings
         self._broadcaster = broadcaster or get_global_broadcaster()
 
-    async def create_runs(
+    def _max_batch_size(self) -> int:
+        return min(self._settings.max_queue_limit, DEFAULT_MAX_BATCH_SIZE)
+
+    async def _resolve_resume_disk_path(
         self,
-        request: ApplicationRunCreateRequest,
-        profile_id: UUID | None = None,
-    ) -> tuple[tuple[ApplicationRun, ...], tuple[ApplicationRunConflictItem, ...]]:
-        automatic_submission_authorized_at = (
-            datetime.now(UTC)
-            if request.automation_mode == AutomationMode.FULL_AUTO
-            else None
+        vault_repo: ApplicantVaultRepository,
+        profile_id: UUID,
+        resume: Any,
+    ) -> Any:
+        if resume.managed_asset_id is not None:
+            managed_asset = await vault_repo.get_managed_asset(
+                profile_id, resume.managed_asset_id
+            )
+            if managed_asset is None:
+                raise ValueError("Managed asset for resume not found")
+            managed_asset_service = ManagedAssetService(
+                self._settings.resolved_data_root
+            )
+            resume_disk_path, _ = managed_asset_service.get_asset_file(
+                managed_asset.relative_path
+            )
+            return resume_disk_path
+        if resume.upload_pdf_path:
+            return self._settings.resolved_resume_root / resume.upload_pdf_path
+        raise ValueError("Resume file path is missing")
+
+    async def _validate_target(
+        self,
+        catalog_repo: CatalogRepository,
+        target_id: UUID,
+    ) -> ResolvedBatchTarget:
+        target_row = await catalog_repo.get_application_target_row(target_id)
+        if target_row is None:
+            _reject_target(
+                target_id,
+                "TARGET_NOT_FOUND",
+                f"Application target {target_id} was not found",
+            )
+        assert target_row is not None
+        posting = target_row.source_posting
+        if posting is None:
+            _reject_target(
+                target_id,
+                "TARGET_POSTING_MISSING",
+                f"Application target {target_id} has no source posting",
+            )
+        assert posting is not None
+
+        if target_row.status is not ApplicationTargetStatus.EXECUTABLE:
+            _reject_target(
+                target_id,
+                "TARGET_NOT_EXECUTABLE",
+                (
+                    f"Application target {target_id} is "
+                    f"{target_row.status.value}, not executable"
+                ),
+            )
+
+        if posting.status in {JobStatus.CLOSED, JobStatus.STALE}:
+            _reject_target(
+                target_id,
+                "TARGET_POSTING_INACTIVE",
+                (f"Source posting for target {target_id} is {posting.status.value}"),
+            )
+
+        group_link = posting.group_links[0] if posting.group_links else None
+        if group_link is None:
+            _reject_target(
+                target_id,
+                "TARGET_GROUP_MISSING",
+                f"Application target {target_id} is not linked to a job group",
+            )
+        assert group_link is not None
+        job_group_id = group_link.job_group_id
+        job_group = await catalog_repo.get_job_group(job_group_id)
+        if job_group is None:
+            _reject_target(
+                target_id,
+                "TARGET_GROUP_MISSING",
+                f"Job group for target {target_id} was not found",
+            )
+        assert job_group is not None
+        if job_group.status != JobStatus.ACTIVE:
+            _reject_target(
+                target_id,
+                "TARGET_GROUP_INACTIVE",
+                (
+                    f"Job group {job_group_id} is not active "
+                    f"(status: {job_group.status.value})"
+                ),
+            )
+
+        expected_provider = target_row.provider
+        if expected_provider not in {"greenhouse", "lever"}:
+            _reject_target(
+                target_id,
+                "TARGET_UNSUPPORTED_PROVIDER",
+                f"Application target {target_id} has unsupported provider",
+            )
+        match = match_provider_url(
+            target_row.target_url_canonical,
+            expected_provider=expected_provider,  # type: ignore[arg-type]
         )
+        if not match.matched:
+            _reject_target(
+                target_id,
+                match.reason_code or "TARGET_CONTRACT_MISMATCH",
+                (
+                    f"Application target {target_id} failed provider "
+                    "host/path contract verification"
+                ),
+            )
+        if match.desktop_adapter_id != target_row.desktop_adapter_id:
+            _reject_target(
+                target_id,
+                "TARGET_ADAPTER_MISMATCH",
+                (
+                    f"Application target {target_id} adapter "
+                    "does not match the provider contract"
+                ),
+            )
+        if not match.production_supported or match.desktop_adapter_id is None:
+            _reject_target(
+                target_id,
+                "TARGET_ADAPTER_UNSUPPORTED",
+                f"Application target {target_id} adapter is unsupported",
+            )
+        assert match.desktop_adapter_id is not None
+
+        return ResolvedBatchTarget(
+            application_target_id=target_id,
+            job_group_id=job_group_id,
+            source_posting_id=posting.id,
+            canonical_application_url=target_row.target_url_canonical,
+            application_url=target_row.target_url,
+            platform_adapter_id=match.desktop_adapter_id,
+        )
+
+    async def preview_batch(
+        self,
+        profile_id: UUID,
+        *,
+        application_target_ids: Sequence[UUID],
+        resume_id: str,
+        applicant_profile_version: int | None = None,
+        resume_version: int | None = None,
+        automation_mode: AutomationMode | None = None,
+        duplicate_overrides: Sequence[ApplicationBatchDuplicateOverride] = (),
+    ) -> ApplicationBatchPreviewResult:
+        del automation_mode  # preview is mode-agnostic for capability checks
         async with self._session_factory() as session:
             vault_repo = ApplicantVaultRepository(session)
             catalog_repo = CatalogRepository(session)
             app_repo = ApplicationRepository(session)
 
-            # 1. Profile must exist
+            issues: list[BatchPreviewIssue] = []
+            resolved: list[ResolvedBatchTarget] = []
+
+            profile = await vault_repo.get_profile(profile_id)
+            if profile is None:
+                issues.append(
+                    _issue(
+                        BatchPreviewIssueCode.PROFILE_NOT_FOUND,
+                        "Applicant profile does not exist",
+                    )
+                )
+                return ApplicationBatchPreviewResult(
+                    confirmation_text=BATCH_CONFIRMATION_TEXT,
+                    confirmation_revision=BATCH_CONFIRMATION_REVISION,
+                    policy_revision=BATCH_POLICY_REVISION,
+                    max_batch_size=self._max_batch_size(),
+                    applicant_profile_id=profile_id,
+                    applicant_profile_version=0,
+                    resume_asset_id=uuid4(),
+                    resume_asset_version=0,
+                    resume_sha256="",
+                    answer_bank_hash="",
+                    answer_bank_snapshot={},
+                    issues=tuple(issues),
+                    resolved_targets=(),
+                )
+
+            if (
+                applicant_profile_version is not None
+                and profile.version != applicant_profile_version
+            ):
+                issues.append(
+                    _issue(
+                        BatchPreviewIssueCode.PROFILE_VERSION_MISMATCH,
+                        (
+                            f"Profile version mismatch: expected "
+                            f"{applicant_profile_version}, current {profile.version}"
+                        ),
+                    )
+                )
+
+            resume = await vault_repo.get_resume(profile.id, resume_id)
+            if resume is None:
+                issues.append(
+                    _issue(
+                        BatchPreviewIssueCode.RESUME_NOT_FOUND,
+                        f"Resume asset {resume_id} not found",
+                    )
+                )
+                answers = await vault_repo.list_answers(profile.id)
+                snapshot = {a.answer_id: a.version for a in answers}
+                return ApplicationBatchPreviewResult(
+                    confirmation_text=BATCH_CONFIRMATION_TEXT,
+                    confirmation_revision=BATCH_CONFIRMATION_REVISION,
+                    policy_revision=BATCH_POLICY_REVISION,
+                    max_batch_size=self._max_batch_size(),
+                    applicant_profile_id=profile.id,
+                    applicant_profile_version=profile.version,
+                    resume_asset_id=uuid4(),
+                    resume_asset_version=0,
+                    resume_sha256="",
+                    answer_bank_hash=calculate_answer_bank_hash(snapshot),
+                    answer_bank_snapshot=snapshot,
+                    issues=tuple(issues),
+                    resolved_targets=(),
+                )
+
+            if resume_version is not None and resume.version != resume_version:
+                issues.append(
+                    _issue(
+                        BatchPreviewIssueCode.RESUME_VERSION_MISMATCH,
+                        (
+                            f"Resume version mismatch: expected "
+                            f"{resume_version}, current {resume.version}"
+                        ),
+                    )
+                )
+
+            try:
+                resume_disk_path = await self._resolve_resume_disk_path(
+                    vault_repo, profile.id, resume
+                )
+            except ValueError as exc:
+                issues.append(
+                    _issue(BatchPreviewIssueCode.RESUME_FILE_MISSING, str(exc))
+                )
+                resume_disk_path = None
+
+            disk_sha256 = resume.sha256
+            if resume_disk_path is not None:
+                if not resume_disk_path.is_file():
+                    issues.append(
+                        _issue(
+                            BatchPreviewIssueCode.RESUME_FILE_MISSING,
+                            f"Resume PDF file not found at {resume_disk_path}",
+                        )
+                    )
+                else:
+                    disk_sha256 = hashlib.sha256(
+                        resume_disk_path.read_bytes()
+                    ).hexdigest()
+                    if disk_sha256 != resume.sha256:
+                        issues.append(
+                            _issue(
+                                BatchPreviewIssueCode.RESUME_HASH_MISMATCH,
+                                "Resume file on disk does not match catalog checksum",
+                            )
+                        )
+
+            answers = await vault_repo.list_answers(profile.id)
+            snapshot = {a.answer_id: a.version for a in answers}
+            answer_bank_hash = calculate_answer_bank_hash(snapshot)
+
+            if not application_target_ids:
+                issues.append(
+                    _issue(
+                        BatchPreviewIssueCode.BATCH_EMPTY,
+                        "Batch selection is empty",
+                    )
+                )
+            elif len(application_target_ids) > self._max_batch_size():
+                issues.append(
+                    _issue(
+                        BatchPreviewIssueCode.BATCH_TOO_LARGE,
+                        (
+                            f"Batch size {len(application_target_ids)} exceeds "
+                            f"limit {self._max_batch_size()}"
+                        ),
+                    )
+                )
+
+            seen_targets: set[UUID] = set()
+            override_by_target = {
+                item.application_target_id: item for item in duplicate_overrides
+            }
+            for target_id in application_target_ids:
+                if target_id in seen_targets:
+                    issues.append(
+                        _issue(
+                            BatchPreviewIssueCode.DUPLICATE_TARGET_IN_BATCH,
+                            f"Target {target_id} appears more than once",
+                            application_target_id=target_id,
+                        )
+                    )
+                    continue
+                seen_targets.add(target_id)
+                try:
+                    resolved_target = await self._validate_target(
+                        catalog_repo, target_id
+                    )
+                except ApplicationTargetRejectedError as exc:
+                    reason = exc.reason_code
+                    if reason == "ADAPTER_UNSUPPORTED":
+                        reason = BatchPreviewIssueCode.TARGET_ADAPTER_UNSUPPORTED.value
+                    try:
+                        code = BatchPreviewIssueCode(reason)
+                    except ValueError:
+                        code = BatchPreviewIssueCode.TARGET_CONTRACT_MISMATCH
+                    issues.append(
+                        _issue(
+                            code,
+                            exc.message,
+                            application_target_id=target_id,
+                        )
+                    )
+                    continue
+
+                existing = await app_repo.find_active_or_submitted_by_url(
+                    profile.id, resolved_target.canonical_application_url
+                )
+                if existing is not None and target_id not in override_by_target:
+                    issues.append(
+                        _issue(
+                            BatchPreviewIssueCode.DUPLICATE_ACTIVE_RUN,
+                            (
+                                f"An active or submitted application run "
+                                f"({existing.id}) already exists for this job"
+                            ),
+                            application_target_id=target_id,
+                            existing_run_id=existing.id,
+                        )
+                    )
+                    # Keep resolved metadata so authorize can emit accurate conflicts.
+                    resolved.append(resolved_target)
+                    continue
+                resolved.append(resolved_target)
+
+            total_pending = await app_repo.count_active_runs()
+            requested = len(application_target_ids)
+            if total_pending + requested > self._settings.max_queue_limit:
+                issues.append(
+                    _issue(
+                        BatchPreviewIssueCode.QUEUE_LIMIT_EXCEEDED,
+                        (
+                            f"Queue limit ({self._settings.max_queue_limit}) exceeded. "
+                            f"Current pending/active: {total_pending}, "
+                            f"requested: {requested}"
+                        ),
+                    )
+                )
+
+            return ApplicationBatchPreviewResult(
+                confirmation_text=BATCH_CONFIRMATION_TEXT,
+                confirmation_revision=BATCH_CONFIRMATION_REVISION,
+                policy_revision=BATCH_POLICY_REVISION,
+                max_batch_size=self._max_batch_size(),
+                applicant_profile_id=profile.id,
+                applicant_profile_version=profile.version,
+                resume_asset_id=resume.id,
+                resume_asset_version=resume.version,
+                resume_sha256=disk_sha256,
+                answer_bank_hash=answer_bank_hash,
+                answer_bank_snapshot=snapshot,
+                issues=tuple(issues),
+                resolved_targets=tuple(resolved),
+            )
+
+    async def authorize_batch(
+        self,
+        profile_id: UUID,
+        *,
+        application_target_ids: Sequence[UUID],
+        resume_id: str,
+        applicant_profile_version: int,
+        resume_version: int,
+        automation_mode: AutomationMode,
+        confirmation_revision: str,
+        owner_confirmation: str | None = None,
+        duplicate_overrides: Sequence[ApplicationBatchDuplicateOverride] = (),
+    ) -> ApplicationBatch:
+        try:
+            validate_batch_confirmation(
+                automation_mode=automation_mode,
+                confirmation_revision=confirmation_revision,
+                owner_confirmation=owner_confirmation,
+            )
+        except ValueError as exc:
+            raise ApplicationBatchValidationError(str(exc)) from exc
+
+        preview = await self.preview_batch(
+            profile_id,
+            application_target_ids=application_target_ids,
+            resume_id=resume_id,
+            applicant_profile_version=applicant_profile_version,
+            resume_version=resume_version,
+            automation_mode=automation_mode,
+            duplicate_overrides=duplicate_overrides,
+        )
+        error_issues = tuple(
+            issue
+            for issue in preview.issues
+            if issue.severity == BatchPreviewIssueSeverity.ERROR
+        )
+        if error_issues:
+            resolved_by_target = {
+                t.application_target_id: t for t in preview.resolved_targets
+            }
+            enriched_conflicts: list[ApplicationRunConflictItem] = []
+            async with self._session_factory() as session:
+                app_repo = ApplicationRepository(session)
+                for issue in error_issues:
+                    if (
+                        issue.code != BatchPreviewIssueCode.DUPLICATE_ACTIVE_RUN
+                        or issue.existing_run_id is None
+                        or issue.application_target_id is None
+                    ):
+                        continue
+                    target = resolved_by_target.get(issue.application_target_id)
+                    existing = await app_repo.get_run(issue.existing_run_id)
+                    if existing is None:
+                        continue
+                    enriched_conflicts.append(
+                        ApplicationRunConflictItem(
+                            job_group_id=(
+                                target.job_group_id
+                                if target is not None
+                                else existing.job_group_id
+                            ),
+                            application_target_id=issue.application_target_id,
+                            canonical_application_url=(
+                                target.canonical_application_url
+                                if target is not None
+                                else existing.canonical_application_url
+                            ),
+                            existing_run_id=existing.id,
+                            existing_status=existing.status,
+                            message=(
+                                f"An active or submitted application run "
+                                f"({existing.id}) already exists for this job "
+                                f"({existing.status.value}). "
+                                "Use the explicit duplicate-override endpoint, "
+                                "then retry."
+                            ),
+                            reason_code=issue.code.value,
+                        )
+                    )
+            raise ApplicationBatchValidationError(
+                "Batch authorization failed validation",
+                issues=error_issues,
+                conflicts=tuple(enriched_conflicts),
+            )
+
+        if len(
+            [
+                t
+                for t in preview.resolved_targets
+                if t.application_target_id in set(application_target_ids)
+            ]
+        ) != len(set(application_target_ids)):
+            raise ApplicationBatchValidationError(
+                "Batch authorization failed validation",
+                issues=preview.issues,
+            )
+
+        automatic_submission_authorized_at = (
+            datetime.now(UTC) if automation_mode == AutomationMode.FULL_AUTO else None
+        )
+        override_by_target = {
+            item.application_target_id: item for item in duplicate_overrides
+        }
+        now = datetime.now(UTC)
+
+        async with self._session_factory() as session:
+            vault_repo = ApplicantVaultRepository(session)
+            catalog_repo = CatalogRepository(session)
+            app_repo = ApplicationRepository(session)
+
+            await app_repo.acquire_batch_authorization_lock(
+                profile_id, list(application_target_ids)
+            )
+
+            # Re-validate under lock (CAS on versions + duplicates)
+            profile = await vault_repo.get_profile(profile_id)
+            if profile is None or profile.version != applicant_profile_version:
+                raise ApplicationBatchValidationError(
+                    "Profile version mismatch under lock"
+                )
+            resume = await vault_repo.get_resume(profile.id, resume_id)
+            if resume is None or resume.version != resume_version:
+                raise ApplicationBatchValidationError(
+                    "Resume version mismatch under lock"
+                )
+            resume_disk_path = await self._resolve_resume_disk_path(
+                vault_repo, profile.id, resume
+            )
+            if not resume_disk_path.is_file():
+                raise ApplicationBatchValidationError("Resume file missing under lock")
+            disk_sha256 = hashlib.sha256(resume_disk_path.read_bytes()).hexdigest()
+            if disk_sha256 != resume.sha256:
+                raise ApplicationBatchValidationError("Resume hash mismatch under lock")
+
+            answers = await vault_repo.list_answers(profile.id)
+            snapshot = {a.answer_id: a.version for a in answers}
+            answer_bank_hash = calculate_answer_bank_hash(snapshot)
+
+            total_pending = await app_repo.count_active_runs()
+            if (
+                total_pending + len(application_target_ids)
+                > self._settings.max_queue_limit
+            ):
+                raise ApplicationBatchValidationError("Queue limit exceeded under lock")
+
+            item_inputs: list[ApplicationBatchItemCreateInput] = []
+            for position, target_id in enumerate(application_target_ids):
+                resolved = await self._validate_target(catalog_repo, target_id)
+                existing = await app_repo.find_active_or_submitted_by_url(
+                    profile.id, resolved.canonical_application_url
+                )
+                override = override_by_target.get(target_id)
+                if existing is not None and override is None:
+                    raise ApplicationBatchValidationError(
+                        f"Duplicate active run for target {target_id}"
+                    )
+                idempotency_key = calculate_idempotency_key(
+                    canonical_url=resolved.canonical_application_url,
+                    resume_sha256=resume.sha256,
+                    profile_version=profile.version,
+                    answer_bank_hash=answer_bank_hash,
+                )
+                item_inputs.append(
+                    ApplicationBatchItemCreateInput(
+                        position=position,
+                        job_group_id=resolved.job_group_id,
+                        application_target_id=resolved.application_target_id,
+                        source_posting_id=resolved.source_posting_id,
+                        canonical_application_url=resolved.canonical_application_url,
+                        application_url=resolved.application_url,
+                        platform_adapter_id=resolved.platform_adapter_id,
+                        duplicate_override_reason=(
+                            override.reason if override is not None else None
+                        ),
+                        duplicate_override_confirmed_at=(
+                            now if override is not None else None
+                        ),
+                        idempotency_key=idempotency_key,
+                        policy_snapshot={
+                            "profile_version": profile.version,
+                            "resume_id": resume.resume_id,
+                            "answer_bank_hash": answer_bank_hash,
+                            "application_target_id": str(target_id),
+                            "batch_policy_revision": BATCH_POLICY_REVISION,
+                            "confirmation_revision": BATCH_CONFIRMATION_REVISION,
+                        },
+                    )
+                )
+
+            batch = await app_repo.create_authorized_batch(
+                ApplicationBatchCreateInput(
+                    applicant_profile_id=profile.id,
+                    applicant_profile_version=profile.version,
+                    resume_asset_id=resume.id,
+                    resume_asset_version=resume.version,
+                    resume_sha256=resume.sha256,
+                    answer_bank_snapshot=snapshot,
+                    answer_bank_hash=answer_bank_hash,
+                    automation_mode=automation_mode,
+                    items=tuple(item_inputs),
+                    known_capability_exceptions=(),
+                    automatic_submission_authorized_at=(
+                        automatic_submission_authorized_at
+                    ),
+                    owner_confirmed_at=now,
+                    confirmation_text=BATCH_CONFIRMATION_TEXT,
+                    confirmation_text_revision=BATCH_CONFIRMATION_REVISION,
+                    policy_revision=BATCH_POLICY_REVISION,
+                )
+            )
+            await session.commit()
+
+        for item in batch.items:
+            created_event = ApplicationRunEvent(
+                id=uuid4(),
+                run_id=item.run_id,
+                attempt=1,
+                sequence_num=1,
+                event_type=AuditEventType.RUN_CREATED.value,
+                event_payload={
+                    "batch_id": str(batch.id),
+                    "batch_item_id": str(item.id),
+                    "applicant_profile_id": str(batch.applicant_profile_id),
+                    "canonical_application_url": (
+                        item.snapshot.canonical_application_url
+                    ),
+                    "platform_adapter_id": item.snapshot.platform_adapter_id,
+                },
+                created_at=datetime.now(UTC),
+            )
+            await self._broadcaster.publish(created_event)
+
+        return batch
+
+    async def create_runs(
+        self,
+        request: ApplicationRunCreateRequest,
+        profile_id: UUID | None = None,
+    ) -> tuple[tuple[ApplicationRun, ...], tuple[ApplicationRunConflictItem, ...]]:
+        async with self._session_factory() as session:
+            vault_repo = ApplicantVaultRepository(session)
             target_profile_id = profile_id
             if target_profile_id is None:
                 target_profile_id = await vault_repo.get_active_profile_id()
@@ -164,253 +837,108 @@ class ApplicationService:
                 raise ValueError(
                     "Applicant profile does not exist. Please configure profile first."
                 )
-
             profile = await vault_repo.get_profile(target_profile_id)
             if profile is None:
                 raise ValueError(
                     "Applicant profile does not exist. Please configure profile first."
                 )
-
-            # 2. Queue limit check
-            total_pending = await app_repo.count_active_runs()
-            if (
-                total_pending + len(request.application_target_ids)
-                > self._settings.max_queue_limit
-            ):
-                raise ValueError(
-                    f"Queue limit ({self._settings.max_queue_limit}) exceeded. "
-                    f"Current pending/active: {total_pending}, "
-                    f"requested: {len(request.application_target_ids)}"
-                )
-
-            # 3. Resolve resume asset & verify on disk
             if request.resume_id:
                 resume = await vault_repo.get_resume(profile.id, request.resume_id)
                 if resume is None:
                     raise ValueError(f"Resume asset {request.resume_id} not found")
+                resume_id = request.resume_id
             else:
                 resumes = await vault_repo.list_resumes(profile.id)
                 default_res = next((r for r in resumes if r.is_default), None)
                 if default_res is None:
                     raise ValueError("No default resume found in catalog")
                 resume = default_res
+                resume_id = resume.resume_id
 
-            if resume.managed_asset_id is not None:
-                managed_asset = await vault_repo.get_managed_asset(
-                    profile.id, resume.managed_asset_id
-                )
-                if managed_asset is None:
-                    raise ValueError("Managed asset for resume not found")
-                managed_asset_service = ManagedAssetService(
-                    self._settings.resolved_data_root
-                )
-                resume_disk_path, _ = managed_asset_service.get_asset_file(
-                    managed_asset.relative_path
-                )
-            elif resume.upload_pdf_path:
-                resume_disk_path = (
-                    self._settings.resolved_resume_root / resume.upload_pdf_path
-                )
-            else:
-                raise ValueError("Resume file path is missing")
+        try:
+            batch = await self.authorize_batch(
+                target_profile_id,
+                application_target_ids=request.application_target_ids,
+                resume_id=resume_id,
+                applicant_profile_version=profile.version,
+                resume_version=resume.version,
+                automation_mode=request.automation_mode,
+                confirmation_revision=BATCH_CONFIRMATION_REVISION,
+                owner_confirmation=request.owner_confirmation,
+            )
+        except ApplicationBatchValidationError as exc:
+            if exc.conflicts and not any(
+                issue.code != BatchPreviewIssueCode.DUPLICATE_ACTIVE_RUN
+                for issue in exc.issues
+            ):
+                return (), exc.conflicts
+            if exc.issues:
+                first = exc.issues[0]
+                if first.application_target_id is not None:
+                    raise ApplicationTargetRejectedError(
+                        target_id=first.application_target_id,
+                        reason_code=first.code.value,
+                        message=first.message,
+                    ) from exc
+            raise ValueError(str(exc)) from exc
 
-            if not resume_disk_path.is_file():
-                raise ValueError(f"Resume PDF file not found at {resume_disk_path}")
-            disk_sha256 = hashlib.sha256(resume_disk_path.read_bytes()).hexdigest()
-            if disk_sha256 != resume.sha256:
-                raise ValueError("Resume file on disk does not match catalog checksum")
+        runs: list[ApplicationRun] = []
+        async with self._session_factory() as session:
+            app_repo = ApplicationRepository(session)
+            for item in batch.items:
+                run = await app_repo.get_run(item.run_id)
+                if run is not None:
+                    runs.append(run)
+        return tuple(runs), ()
 
-            # 4. Snapshot reusable answers
-            answers = await vault_repo.list_answers(profile.id)
-            snapshot = {a.answer_id: a.version for a in answers}
-            answer_bank_hash = calculate_answer_bank_hash(snapshot)
+    async def get_batch(
+        self, profile_id: UUID, batch_id: UUID
+    ) -> ApplicationBatch | None:
+        async with self._session_factory() as session:
+            repo = ApplicationRepository(session)
+            return await repo.get_batch(profile_id, batch_id)
 
-            created_runs: list[ApplicationRun] = []
-            conflicts: list[ApplicationRunConflictItem] = []
+    async def list_batches(
+        self,
+        profile_id: UUID,
+        *,
+        page: int = 1,
+        page_size: int = 25,
+    ) -> tuple[tuple[ApplicationBatch, ...], int]:
+        offset = max(page - 1, 0) * page_size
+        async with self._session_factory() as session:
+            repo = ApplicationRepository(session)
+            return await repo.list_batches(profile_id, offset=offset, limit=page_size)
 
-            for target_id in request.application_target_ids:
-                target_row = await catalog_repo.get_application_target_row(target_id)
-                if target_row is None:
-                    _reject_target(
-                        target_id,
-                        "TARGET_NOT_FOUND",
-                        f"Application target {target_id} was not found",
-                    )
-                assert target_row is not None
-                posting = target_row.source_posting
-                if posting is None:
-                    _reject_target(
-                        target_id,
-                        "TARGET_POSTING_MISSING",
-                        f"Application target {target_id} has no source posting",
-                    )
-                assert posting is not None
-
-                if target_row.status is not ApplicationTargetStatus.EXECUTABLE:
-                    _reject_target(
-                        target_id,
-                        "TARGET_NOT_EXECUTABLE",
-                        (
-                            f"Application target {target_id} is "
-                            f"{target_row.status.value}, not executable"
-                        ),
-                    )
-
-                if posting.status in {JobStatus.CLOSED, JobStatus.STALE}:
-                    _reject_target(
-                        target_id,
-                        "TARGET_POSTING_INACTIVE",
-                        (
-                            f"Source posting for target {target_id} is "
-                            f"{posting.status.value}"
-                        ),
-                    )
-
-                group_link = posting.group_links[0] if posting.group_links else None
-                if group_link is None:
-                    _reject_target(
-                        target_id,
-                        "TARGET_GROUP_MISSING",
-                        f"Application target {target_id} is not linked to a job group",
-                    )
-                assert group_link is not None
-                job_group_id = group_link.job_group_id
-                job_group = await catalog_repo.get_job_group(job_group_id)
-                if job_group is None:
-                    _reject_target(
-                        target_id,
-                        "TARGET_GROUP_MISSING",
-                        f"Job group for target {target_id} was not found",
-                    )
-                assert job_group is not None
-                if job_group.status != JobStatus.ACTIVE:
-                    _reject_target(
-                        target_id,
-                        "TARGET_GROUP_INACTIVE",
-                        (
-                            f"Job group {job_group_id} is not active "
-                            f"(status: {job_group.status.value})"
-                        ),
-                    )
-
-                expected_provider = target_row.provider
-                if expected_provider not in {"greenhouse", "lever"}:
-                    _reject_target(
-                        target_id,
-                        "TARGET_UNSUPPORTED_PROVIDER",
-                        f"Application target {target_id} has unsupported provider",
-                    )
-                match = match_provider_url(
-                    target_row.target_url_canonical,
-                    expected_provider=expected_provider,  # type: ignore[arg-type]
-                )
-                if not match.matched:
-                    _reject_target(
-                        target_id,
-                        match.reason_code or "TARGET_CONTRACT_MISMATCH",
-                        (
-                            f"Application target {target_id} failed provider "
-                            "host/path contract verification"
-                        ),
-                    )
-                if match.desktop_adapter_id != target_row.desktop_adapter_id:
-                    _reject_target(
-                        target_id,
-                        "TARGET_ADAPTER_MISMATCH",
-                        (
-                            f"Application target {target_id} adapter "
-                            "does not match the provider contract"
-                        ),
-                    )
-                if not match.production_supported or match.desktop_adapter_id is None:
-                    _reject_target(
-                        target_id,
-                        "TARGET_ADAPTER_UNSUPPORTED",
-                        f"Application target {target_id} adapter is unsupported",
-                    )
-
-                canonical_url = target_row.target_url_canonical
-                platform_adapter_id = match.desktop_adapter_id
-                assert platform_adapter_id is not None
-
-                idempotency_key = calculate_idempotency_key(
-                    canonical_url=canonical_url,
-                    resume_sha256=resume.sha256,
-                    profile_version=profile.version,
-                    answer_bank_hash=answer_bank_hash,
-                )
-
-                existing_run = await app_repo.find_active_or_submitted_by_url(
-                    profile.id, canonical_url
-                )
-                if existing_run is not None:
-                    conflicts.append(
-                        ApplicationRunConflictItem(
-                            job_group_id=job_group_id,
-                            application_target_id=target_id,
-                            canonical_application_url=canonical_url,
-                            existing_run_id=existing_run.id,
-                            existing_status=existing_run.status,
-                            message=(
-                                f"An active or submitted application run "
-                                f"({existing_run.id}) already exists for this job "
-                                f"({existing_run.status.value}). "
-                                "Use the explicit duplicate-override endpoint, "
-                                "then retry."
-                            ),
-                            reason_code="DUPLICATE_ACTIVE_RUN",
-                        )
-                    )
-                    continue
-
-                run_input = ApplicationRunInput(
-                    applicant_profile_id=profile.id,
-                    job_group_id=job_group_id,
-                    source_posting_id=posting.id,
-                    canonical_application_url=canonical_url,
-                    application_url=target_row.target_url,
-                    platform_adapter_id=platform_adapter_id,
-                    resume_asset_id=resume.id,
-                    resume_sha256=resume.sha256,
-                    applicant_profile_version=profile.version,
-                    answer_bank_snapshot=snapshot,
-                    answer_bank_hash=answer_bank_hash,
-                    automation_mode=request.automation_mode,
-                    automatic_submission_authorized_at=(
-                        automatic_submission_authorized_at
-                    ),
-                    idempotency_key=idempotency_key,
-                    policy_snapshot={
-                        "profile_version": profile.version,
-                        "resume_id": resume.resume_id,
-                        "answer_bank_hash": answer_bank_hash,
-                        "application_target_id": str(target_id),
-                    },
-                    duplicate_override_confirmed_at=None,
-                    duplicate_override_reason=None,
-                )
-                created = await app_repo.create_run(run_input)
-                created_runs.append(created)
-
+    async def cancel_batch(
+        self,
+        profile_id: UUID,
+        batch_id: UUID,
+        reason: str | None = None,
+    ) -> ApplicationBatch:
+        async with self._session_factory() as session:
+            repo = ApplicationRepository(session)
+            updated = await repo.cancel_batch(profile_id, batch_id, reason=reason)
             await session.commit()
 
-        # Broadcast events outside transaction
-        for run in created_runs:
-            created_event = ApplicationRunEvent(
+        for item in updated.items:
+            if item.run_status != ApplicationRunStatus.CANCELLED:
+                continue
+            cancel_event = ApplicationRunEvent(
                 id=uuid4(),
-                run_id=run.id,
+                run_id=item.run_id,
                 attempt=1,
-                sequence_num=1,
-                event_type=AuditEventType.RUN_CREATED.value,
+                sequence_num=200,
+                event_type=AuditEventType.RUN_CANCELLED.value,
                 event_payload={
-                    "canonical_application_url": run.canonical_application_url,
-                    "platform_adapter_id": run.platform_adapter_id,
+                    "batch_id": str(updated.id),
+                    "batch_item_id": str(item.id),
+                    "reason": reason or "Cancelled via batch cancellation",
                 },
                 created_at=datetime.now(UTC),
             )
-            await self._broadcaster.publish(created_event)
-
-        return tuple(created_runs), tuple(conflicts)
+            await self._broadcaster.publish(cancel_event)
+        return updated
 
     async def get_run(self, run_id: UUID) -> ApplicationRun | None:
         async with self._session_factory() as session:

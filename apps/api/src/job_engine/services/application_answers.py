@@ -126,13 +126,21 @@ def authorize_run_for_answers(
     ):
         raise LeaseInvalidOrExpiredError(f"Valid lease not held for run {run.id}")
 
-    if profile is None or profile.version != run.applicant_profile_version:
+    if profile is None:
+        raise StaleRunContextError(f"Applicant profile missing for run {run.id}")
+    if profile.id != run.applicant_profile_id:
+        raise StaleRunContextError(
+            f"Applicant profile ownership mismatch for run {run.id}"
+        )
+    if profile.version != run.applicant_profile_version:
         raise StaleRunContextError(
             f"Applicant profile version mismatch for run {run.id}"
         )
 
     if resume is None or resume.sha256 != run.resume_sha256:
         raise StaleRunContextError(f"Resume asset checksum mismatch for run {run.id}")
+    if resume.applicant_profile_id != run.applicant_profile_id:
+        raise StaleRunContextError(f"Resume ownership mismatch for run {run.id}")
 
     answers_by_id = {answer.answer_id: answer for answer in answer_bank}
     snapshot_answers: list[ReusableAnswer] = []

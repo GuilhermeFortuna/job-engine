@@ -443,9 +443,16 @@ export function ApplicationWorkspace({
     detail: ApplicationRunDetail,
     completedAction: "resolved" | "released" | "resumed",
   ) => {
-    openAttemptRef.current = runRevision(detail);
+    const revision = runRevision(detail);
+    // Claim this revision while the open is in flight so the REOPEN effect does
+    // not double-open. Clear on failure so the effect can retry once bounds or
+    // desktop availability catch up (common race right after submit).
+    openAttemptRef.current = revision;
     setRun(detail);
-    await requestDesktopOpen(completedAction);
+    const opened = await requestDesktopOpen(completedAction);
+    if (!opened && openAttemptRef.current === revision) {
+      openAttemptRef.current = null;
+    }
   };
 
   const handleSubmit = async () => {

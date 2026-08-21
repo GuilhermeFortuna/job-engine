@@ -1,118 +1,121 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  ApiNotFoundError,
-  fetchApplicantProfile,
-  fetchResumes,
-} from "../api";
+import { ApiNotFoundError } from "@/features/profiles/api";
 import { APPLICATION_READINESS_REFRESH_EVENT } from "../events";
-import type { ApplicantProfile, SafeResume } from "../types";
+import type { ApplicantProfile, ProfileResume } from "@/features/profiles/types";
 import { useApplicationReadiness } from "./useApplicationReadiness";
 
-vi.mock("../api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api")>();
+const fetchActiveProfile = vi.fn();
+const fetchProfileResumes = vi.fn();
+const fetchLocalAiReadiness = vi.fn();
+const getCapabilities = vi.fn();
+
+vi.mock("@/features/profiles/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/profiles/api")>();
   return {
     ...actual,
-    fetchApplicantProfile: vi.fn(),
-    fetchResumes: vi.fn(),
+    fetchActiveProfile: (...args: unknown[]) => fetchActiveProfile(...args),
+    fetchProfileResumes: (...args: unknown[]) => fetchProfileResumes(...args),
+    fetchLocalAiReadiness: (...args: unknown[]) => fetchLocalAiReadiness(...args),
   };
 });
 
-const profile = { id: "profile-1" } as ApplicantProfile;
+vi.mock("../desktop-bridge", () => ({
+  getCapabilities: () => getCapabilities(),
+  isProductionRuntimeReady: (capabilities: { productionRuntime: boolean }) =>
+    capabilities.productionRuntime,
+}));
+
+const profile = {
+  id: "profile-1",
+  display_name: "Ada",
+  first_name: { state: "provided", value: "Ada" },
+  last_name: { state: "provided", value: "Lovelace" },
+  email: { state: "provided", value: "ada@example.com" },
+  work_authorizations: { state: "provided", value: [{ authorized: true }] },
+  compensation_expectation: { state: "provided", value: { currency: "USD" } },
+} as unknown as ApplicantProfile;
+
 const resume = {
   id: "asset-1",
   resume_id: "resume-1",
   label: "Primary",
   sha256: "abc",
   checksum_summary: "abc",
-} as SafeResume;
+  is_default: true,
+  applicant_profile_id: "profile-1",
+  managed_asset_id: "m1",
+} as ProfileResume;
 
 describe("useApplicationReadiness", () => {
   beforeEach(() => {
-    vi.mocked(fetchApplicantProfile).mockReset();
-    vi.mocked(fetchResumes).mockReset();
-  });
-
-  it("loads a profile and path-free registered resumes", async () => {
-    vi.mocked(fetchApplicantProfile).mockResolvedValue(profile);
-    vi.mocked(fetchResumes).mockResolvedValue([resume]);
-
-    const { result } = renderHook(() => useApplicationReadiness());
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current).toMatchObject({
-      profile,
-      resumes: [resume],
-      isReady: true,
-      error: null,
-    });
-    expect(result.current.resumes[0]).not.toHaveProperty(
-      "source_markdown_path",
-    );
-    expect(result.current.resumes[0]).not.toHaveProperty("upload_pdf_path");
-  });
-
-  it("treats a missing profile as incomplete readiness, not a load error", async () => {
-    vi.mocked(fetchApplicantProfile).mockRejectedValue(
-      new ApiNotFoundError("Not Found"),
-    );
-    vi.mocked(fetchResumes).mockResolvedValue([resume]);
-
-    const { result } = renderHook(() => useApplicationReadiness());
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current).toMatchObject({
-      profile: null,
-      resumes: [resume],
-      isReady: false,
-      error: null,
+    fetchActiveProfile.mockReset();
+    fetchProfileResumes.mockReset();
+    fetchLocalAiReadiness.mockReset();
+    getCapabilities.mockReset();
+    getCapabilities.mockResolvedValue({ productionRuntime: true });
+    fetchLocalAiReadiness.mockResolvedValue({
+      local_ai_configured: true,
+      local_ai_ready: true,
+      local_ai_failure_code: null,
+      model: "mock",
+      last_self_test_passed: true,
+      exceptions: [],
     });
   });
 
-  it("requires at least one registered resume and exposes refresh", async () => {
-    vi.mocked(fetchApplicantProfile).mockResolvedValue(profile);
-    vi.mocked(fetchResumes)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([resume]);
+  it("loads profile-scoped resumes without path fields", async () => {
+    fetchActiveProfile.mockResolvedValue(profile);
+    fetchProfileResumes.mockResolvedValue([resume]);
 
     const { result } = renderHook(() => useApplicationReadiness());
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.profile?.id).toBe("profile-1");
+    expect(result.current.resumes[0]).not.toHaveProperty("source_markdown_path");
+    expect(result.current.readinessLabel).toBe("Ready for Auto Apply");
+  });
+
+  it("treats a missing profile as setup required, not a load error", async () => {
+    fetchActiveProfile.mockRejectedValue(new ApiNotFoundError("Not Found"));
+
+    const { result } = renderHook(() => useApplicationReadiness());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.profile).toBeNull();
     expect(result.current.isReady).toBe(false);
-
-    await act(async () => {
-      await result.current.refresh();
-    });
-    expect(result.current.isReady).toBe(true);
+    expect(result.current.error).toBeNull();
+    expect(result.current.readinessLabel).toBe("Setup required");
   });
 
-  it("refreshes when settings announce a readiness change", async () => {
-    vi.mocked(fetchApplicantProfile).mockResolvedValue(profile);
-    vi.mocked(fetchResumes)
+  it("refreshes when readiness events fire", async () => {
+    fetchActiveProfile.mockResolvedValue(profile);
+    fetchProfileResumes
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([resume]);
+
     const { result } = renderHook(() => useApplicationReadiness());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.readinessLabel).toBe("Setup required");
 
     act(() => {
       window.dispatchEvent(new Event(APPLICATION_READINESS_REFRESH_EVENT));
     });
 
-    await waitFor(() => expect(result.current.isReady).toBe(true));
+    await waitFor(() =>
+      expect(result.current.readinessLabel).toBe("Ready for Auto Apply"),
+    );
   });
 
-  it("surfaces independent readiness request failures", async () => {
-    vi.mocked(fetchApplicantProfile).mockResolvedValue(profile);
-    vi.mocked(fetchResumes).mockRejectedValue(
+  it("sanitizes resume load failures", async () => {
+    fetchActiveProfile.mockResolvedValue(profile);
+    fetchProfileResumes.mockRejectedValue(
       new Error("private resume service detail at /home/user/resume.pdf"),
     );
 
     const { result } = renderHook(() => useApplicationReadiness());
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.profile).toBe(profile);
-    expect(result.current.resumes).toEqual([]);
-    expect(result.current.isReady).toBe(false);
     expect(result.current.error).toBe("Unable to load application readiness.");
     expect(result.current.error).not.toContain("private");
     expect(result.current.error).not.toContain("/home/user");

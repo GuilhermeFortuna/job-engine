@@ -14,6 +14,9 @@ REQUIRED_TABLES = {
     "job_group_role_families",
     "source_postings",
     "application_targets",
+    "application_batches",
+    "application_batch_items",
+    "application_runs",
 }
 
 REQUIRED_ENUMS = {
@@ -103,5 +106,34 @@ def test_migration_upgrade_downgrade_upgrade_round_trip(
         }
         assert "application_url" in run_columns
         assert "canonical_application_url" in run_columns
+        assert "batch_id" in run_columns
+        assert "batch_item_id" in run_columns
+
+        batch_columns = {
+            column["name"] for column in inspector.get_columns("application_batches")
+        }
+        assert {
+            "id",
+            "applicant_profile_id",
+            "origin",
+            "automation_mode",
+            "resume_sha256",
+            "answer_bank_hash",
+            "confirmation_text_revision",
+            "owner_confirmed_at",
+        } <= batch_columns
+
+        item_columns = {
+            column["name"]
+            for column in inspector.get_columns("application_batch_items")
+        }
+        assert {
+            "id",
+            "batch_id",
+            "position",
+            "run_id",
+            "job_group_id",
+            "canonical_application_url",
+        } <= item_columns
     finally:
         engine.dispose()

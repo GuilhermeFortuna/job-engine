@@ -189,6 +189,8 @@ def test_application_run_model_invariants() -> None:
 
     # Valid run
     run = ApplicationRun(
+        batch_id=uuid4(),
+        batch_item_id=uuid4(),
         job_group_id=job_id,
         canonical_application_url="https://boards.greenhouse.io/acme/jobs/1",
         application_url="https://boards.greenhouse.io/acme/jobs/1?gh_jid=1",
@@ -222,6 +224,8 @@ def test_application_run_model_invariants() -> None:
     # SUBMITTED status requires receipt_summary and completed_at
     with pytest.raises(ValueError, match="SUBMITTED status requires receipt_summary"):
         ApplicationRun(
+            batch_id=uuid4(),
+            batch_item_id=uuid4(),
             job_group_id=job_id,
             canonical_application_url="https://boards.greenhouse.io/acme/jobs/1",
             application_url="https://boards.greenhouse.io/acme/jobs/1",
@@ -249,6 +253,8 @@ def test_application_run_model_invariants() -> None:
     )
 
     valid_submitted = ApplicationRun(
+        batch_id=uuid4(),
+        batch_item_id=uuid4(),
         job_group_id=job_id,
         canonical_application_url="https://boards.greenhouse.io/acme/jobs/1",
         application_url="https://boards.greenhouse.io/acme/jobs/1",

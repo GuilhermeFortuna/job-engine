@@ -124,6 +124,10 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value : String(value ?? "");
 }
 
+function asOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
 function asNullableString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
@@ -238,6 +242,9 @@ function projectPolicySnapshot(
 function projectRunSummary(raw: Record<string, unknown>): ApplicationRunSummary {
   return {
     id: asString(raw.id),
+    applicant_profile_id: asOptionalString(raw.applicant_profile_id),
+    batch_id: asOptionalString(raw.batch_id),
+    batch_item_id: asOptionalString(raw.batch_item_id),
     job_group_id: asString(raw.job_group_id),
     canonical_application_url: asString(raw.canonical_application_url),
     application_url: asString(raw.application_url),
@@ -497,7 +504,7 @@ export async function fetchApplicantProfile(
   init?: RequestInit,
 ): Promise<ApplicantProfile> {
   return requestProjectedJson(
-    `${getApiBaseUrl()}/api/v1/applicant-profile`,
+    `${getApiBaseUrl()}/api/v1/profiles/active`,
     init,
     "Failed to fetch applicant profile",
     projectApplicantProfile,
@@ -515,14 +522,15 @@ export async function updateApplicantProfile(
       `A complete applicant profile is required; missing: ${missingFields.join(", ")}`,
     );
   }
+  const active = await fetchApplicantProfile();
   const body: Record<string, unknown> = {
-    expected_version: input.expected_version,
+    expected_version: input.expected_version ?? active.version,
   };
   for (const name of APPLICANT_PROFILE_FIELD_NAMES) {
     body[name] = input[name];
   }
   return requestProjectedJson(
-    `${getApiBaseUrl()}/api/v1/applicant-profile`,
+    `${getApiBaseUrl()}/api/v1/profiles/${encodeURIComponent(active.id)}`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -534,7 +542,8 @@ export async function updateApplicantProfile(
 }
 
 export async function fetchResumes(init?: RequestInit): Promise<SafeResume[]> {
-  const url = `${getApiBaseUrl()}/api/v1/resumes`;
+  const active = await fetchApplicantProfile(init);
+  const url = `${getApiBaseUrl()}/api/v1/profiles/${encodeURIComponent(active.id)}/resumes`;
   const response = await fetchJson(url, init, "Failed to fetch registered resumes");
   if (!response.ok) {
     throwForStatus(response, await parseDetail(response));

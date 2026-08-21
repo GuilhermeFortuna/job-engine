@@ -21,6 +21,7 @@ from fastapi import (
 from fastapi.responses import Response as RawResponse
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from job_engine.api.dependencies import get_session, get_settings
 from job_engine.api.schemas import (
@@ -373,7 +374,9 @@ async def register_or_upload_resume(
     if content_type.startswith("multipart/form-data"):
         form = await request.form()
         file = form.get("file")
-        if file is not None and isinstance(file, UploadFile):
+        # request.form() yields starlette.datastructures.UploadFile, which is not a
+        # subclass of fastapi.UploadFile — isinstance must use the Starlette type.
+        if file is not None and isinstance(file, StarletteUploadFile):
 
             async def file_stream() -> AsyncIterator[bytes]:
                 while chunk := await file.read(65536):

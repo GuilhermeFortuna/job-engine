@@ -94,6 +94,8 @@ class EvidenceType(StrEnum):
 class AuditEventType(StrEnum):
     RUN_CREATED = "run_created"
     AUTOMATIC_SUBMISSION_AUTHORIZED = "automatic_submission_authorized"
+    BATCH_AUTHORIZED = "batch_authorized"
+    BATCH_CANCELLED = "batch_cancelled"
     LEASE_CLAIMED = "lease_claimed"
     LEASE_EXTENDED = "lease_extended"
     LEASE_EXPIRED = "lease_expired"
@@ -314,6 +316,8 @@ class ReceiptSummary(FrozenModel):
 class ApplicationRun(FrozenModel):
     id: UUID = Field(default_factory=uuid4)
     applicant_profile_id: UUID = Field(default_factory=uuid4)
+    batch_id: UUID
+    batch_item_id: UUID
     job_group_id: UUID
     source_posting_id: UUID | None = None
     canonical_application_url: str

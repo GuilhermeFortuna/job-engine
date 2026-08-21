@@ -16,9 +16,18 @@ vi.mock("@/components/theme-provider", () => ({
 vi.mock("@/components/theme-toggle", () => ({
   ThemeToggle: () => <button type="button">Theme</button>,
 }));
+vi.mock("@/features/profiles/ProfileProvider", () => ({
+  ProfileProvider: ({ children }: { children: ReactNode }) => children,
+}));
+vi.mock("@/features/profiles/components/ProfileRouteGuard", () => ({
+  ProfileRouteGuard: ({ children }: { children: ReactNode }) => children,
+}));
+vi.mock("@/features/profiles/components/ProfileSwitcher", () => ({
+  ProfileSwitcher: () => <button type="button">Profiles</button>,
+}));
 
 describe("RootLayout navigation", () => {
-  it("keeps Jobs and Applications as persistent header destinations", () => {
+  it("keeps Jobs, Applications, and Profile with the profile switcher", () => {
     render(
       <RootLayout>
         <p>Page content</p>
@@ -31,14 +40,15 @@ describe("RootLayout navigation", () => {
     expect(navigation).toContainElement(
       screen.getByRole("link", { name: "Jobs" }),
     );
-    expect(screen.getByRole("link", { name: "Jobs" })).toHaveAttribute(
-      "href",
-      "/jobs",
-    );
     expect(screen.getByRole("link", { name: "Applications" })).toHaveAttribute(
       "href",
       "/applications",
     );
+    expect(screen.getByRole("link", { name: "Profile" })).toHaveAttribute(
+      "href",
+      "/profile",
+    );
+    expect(screen.getByRole("button", { name: "Profiles" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Theme" })).toBeInTheDocument();
   });
 });

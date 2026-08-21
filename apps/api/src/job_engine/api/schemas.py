@@ -25,6 +25,13 @@ from job_engine.domain.application_answers import (
     ControlType,
     ReasonCode,
 )
+from job_engine.domain.application_batches import (
+    BATCH_CONFIRMATION_REVISION,
+    BATCH_CONFIRMATION_TEXT,
+    ApplicationBatchOrigin,
+    BatchPreviewIssueCode,
+    BatchPreviewIssueSeverity,
+)
 from job_engine.domain.applications import (
     FULL_AUTO_OWNER_CONFIRMATION,
     ApplicationRunStatus,
@@ -946,6 +953,8 @@ class EvidenceArtifactRead(ApiModel):
 class ApplicationRunRead(ApiModel):
     id: UUID
     applicant_profile_id: UUID
+    batch_id: UUID
+    batch_item_id: UUID
     job_group_id: UUID
     source_posting_id: UUID | None = None
     canonical_application_url: str
@@ -995,6 +1004,150 @@ class ApplicationRunListResponse(ApiModel):
     page: int
     page_size: int
     total_pages: int
+
+
+class ApplicationBatchDuplicateOverrideRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    application_target_id: UUID
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class ApplicationBatchPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    application_target_ids: list[UUID] = Field(min_length=1, max_length=25)
+    resume_id: str = Field(min_length=1)
+    applicant_profile_version: int | None = None
+    resume_version: int | None = None
+    automation_mode: AutomationMode | None = None
+    duplicate_overrides: list[ApplicationBatchDuplicateOverrideRequest] = Field(
+        default_factory=list
+    )
+
+
+class ApplicationBatchCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    application_target_ids: list[UUID] = Field(min_length=1, max_length=25)
+    resume_id: str = Field(min_length=1)
+    applicant_profile_version: int = Field(ge=1)
+    resume_version: int = Field(ge=1)
+    automation_mode: AutomationMode
+    confirmation_revision: str = Field(min_length=1)
+    owner_confirmation: str | None = None
+    duplicate_overrides: list[ApplicationBatchDuplicateOverrideRequest] = Field(
+        default_factory=list
+    )
+
+    @model_validator(mode="after")
+    def validate_full_auto_authorization(self) -> "ApplicationBatchCreateRequest":
+        if self.automation_mode == AutomationMode.FULL_AUTO:
+            if self.owner_confirmation != FULL_AUTO_OWNER_CONFIRMATION:
+                raise ValueError(
+                    "owner_confirmation must exactly authorize automatic submission"
+                )
+        elif self.owner_confirmation is not None:
+            raise ValueError("owner_confirmation is only accepted for full_auto")
+        if self.confirmation_revision != BATCH_CONFIRMATION_REVISION:
+            raise ValueError(
+                f"confirmation_revision must be '{BATCH_CONFIRMATION_REVISION}'"
+            )
+        return self
+
+
+class ApplicationBatchPreviewIssueRead(ApiModel):
+    code: BatchPreviewIssueCode
+    severity: BatchPreviewIssueSeverity
+    message: str
+    application_target_id: UUID | None = None
+    existing_run_id: UUID | None = None
+
+
+class ApplicationBatchResolvedTargetRead(ApiModel):
+    application_target_id: UUID
+    job_group_id: UUID
+    source_posting_id: UUID
+    canonical_application_url: str
+    application_url: str
+    platform_adapter_id: str
+
+
+class ApplicationBatchPreviewResponse(ApiModel):
+    confirmation_text: str = BATCH_CONFIRMATION_TEXT
+    confirmation_revision: str = BATCH_CONFIRMATION_REVISION
+    policy_revision: str
+    max_batch_size: int
+    applicant_profile_id: UUID
+    applicant_profile_version: int
+    resume_asset_id: UUID
+    resume_asset_version: int
+    resume_sha256: str
+    answer_bank_hash: str
+    answer_bank_snapshot: dict[str, int]
+    issues: tuple[ApplicationBatchPreviewIssueRead, ...] = ()
+    resolved_targets: tuple[ApplicationBatchResolvedTargetRead, ...] = ()
+
+
+class ApplicationBatchCountersRead(ApiModel):
+    queued: int
+    running: int
+    needs_attention: int
+    submitted: int
+    failed: int
+    cancelled: int
+
+
+class ApplicationBatchItemRead(ApiModel):
+    id: UUID
+    batch_id: UUID
+    position: int
+    run_id: UUID
+    job_group_id: UUID
+    application_target_id: UUID | None = None
+    source_posting_id: UUID | None = None
+    canonical_application_url: str
+    application_url: str
+    platform_adapter_id: str
+    duplicate_override_reason: str | None = None
+    run_status: ApplicationRunStatus
+    created_at: datetime
+
+
+class ApplicationBatchRead(ApiModel):
+    id: UUID
+    origin: ApplicationBatchOrigin
+    applicant_profile_id: UUID
+    applicant_profile_version: int
+    resume_asset_id: UUID
+    resume_asset_version: int
+    resume_sha256: str
+    answer_bank_snapshot: dict[str, int]
+    answer_bank_hash: str
+    automation_mode: AutomationMode
+    known_capability_exceptions: tuple[dict[str, Any], ...] = ()
+    policy_revision: str
+    confirmation_text_revision: str
+    confirmation_text: str
+    owner_confirmed_at: datetime
+    counters: ApplicationBatchCountersRead
+    items: tuple[ApplicationBatchItemRead, ...] = ()
+    created_at: datetime
+    updated_at: datetime
+
+
+class ApplicationBatchListResponse(ApiModel):
+    items: tuple[ApplicationBatchRead, ...]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class CancelBatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = None
 
 
 class ResolveAnswerItem(BaseModel):

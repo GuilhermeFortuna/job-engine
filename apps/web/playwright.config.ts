@@ -11,9 +11,9 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  // ubuntu-latest GitHub-hosted runners expose 2 vCPUs; pin this so local
-  // `CI=true pnpm run ci` does not hide races behind a different worker count.
-  workers: process.env.CI ? 2 : undefined,
+  // Shared mock-server state (profiles, live-sync modes) is process-global.
+  // Multiple workers race on mutations such as fresh-install resets.
+  workers: 1,
   reporter: "list",
   use: {
     baseURL: "http://127.0.0.1:3005",

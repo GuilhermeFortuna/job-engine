@@ -64,6 +64,7 @@ _NOW = datetime.now(UTC)
 _RAW_LEASE_TOKEN = "test-lease-token"
 _LEASE_HASH = calculate_token_hash(_RAW_LEASE_TOKEN)
 _RESUME_SHA = "a" * 64
+_DEFAULT_PROFILE_ID = UUID("00000000-0000-4000-8000-000000000001")
 _AI_CORPUS_PATH = (
     Path(__file__).resolve().parents[1] / "fixtures" / "ai_application_questions.json"
 )
@@ -125,13 +126,17 @@ def _confirmed_field(value: Any, *, policy: PolicyCategory) -> ConfirmedField[An
 def make_profile(
     *,
     version: int = 1,
+    profile_id: UUID | None = None,
     notice_period_days: int | None = None,
     headline: str | None = "Senior Backend Engineer",
     summary: str | None = "Builds reliable backend systems.",
     skills: tuple[str, ...] = ("Python", "PostgreSQL"),
 ) -> ApplicantProfile:
     profile = ApplicantProfile(
-        id=uuid4(), version=version, created_at=_NOW, updated_at=_NOW
+        id=profile_id or _DEFAULT_PROFILE_ID,
+        version=version,
+        created_at=_NOW,
+        updated_at=_NOW,
     )
     updates: dict[str, Any] = {}
     if notice_period_days is not None:
@@ -158,6 +163,7 @@ def make_profile(
 def make_resume(*, version: int = 1, sha256: str = _RESUME_SHA) -> ResumeAsset:
     return ResumeAsset(
         id=uuid4(),
+        applicant_profile_id=_DEFAULT_PROFILE_ID,
         resume_id="res_primary",
         label="Primary resume",
         source_markdown_path="resume.md",
@@ -196,6 +202,7 @@ def make_run(
     *,
     resume_asset_id: UUID,
     resume_sha256: str = _RESUME_SHA,
+    applicant_profile_id: UUID | None = None,
     applicant_profile_version: int = 1,
     answer_bank_snapshot: dict[str, int] | None = None,
     status: ApplicationRunStatus = ApplicationRunStatus.RUNNING,
@@ -212,8 +219,12 @@ def make_run(
         if automation_mode == AutomationMode.FULL_AUTO
         else None
     )
+    profile_id = applicant_profile_id or _DEFAULT_PROFILE_ID
     return ApplicationRun(
         id=uuid4(),
+        applicant_profile_id=profile_id,
+        batch_id=uuid4(),
+        batch_item_id=uuid4(),
         job_group_id=uuid4(),
         source_posting_id=uuid4(),
         canonical_application_url="https://boards.greenhouse.io/acme/jobs/1",

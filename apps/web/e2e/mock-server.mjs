@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import http from "node:http";
 
 const PORT = parseInt(process.env.MOCK_PORT || "8088", 10);
@@ -42,24 +43,83 @@ const PROFILE_FIELD_NAMES = [
   "demographics",
 ];
 
-function applicantProfileFixture() {
+function applicantProfileFixture(overrides = {}) {
   const profile = {
     id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    display_name: "Ada Lovelace",
+    avatar_asset_id: null,
+    onboarding_step: "ready",
+    onboarding_completed_at: "2026-01-01T00:00:00Z",
+    archived_at: null,
+    automation_preferences: {},
     version: 1,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
   };
   for (const name of PROFILE_FIELD_NAMES) {
     profile[name] = {
       state: "provided",
-      value: `synthetic-${name}`,
+      value: name === "email" ? "ada@example.com" : `synthetic-${name}`,
       source: "owner",
       last_confirmed_at: "2026-01-01T00:00:00Z",
       policy_category: "verified_profile",
     };
   }
+  profile.first_name = {
+    state: "provided",
+    value: "Ada",
+    source: "owner",
+    last_confirmed_at: "2026-01-01T00:00:00Z",
+    policy_category: "verified_profile",
+  };
+  profile.last_name = {
+    state: "provided",
+    value: "Lovelace",
+    source: "owner",
+    last_confirmed_at: "2026-01-01T00:00:00Z",
+    policy_category: "verified_profile",
+  };
   return profile;
 }
+
+const PROFILE_A = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+let mockProfiles = [
+  {
+    id: PROFILE_A,
+    display_name: "Ada Lovelace",
+    avatar_asset_id: null,
+    onboarding_step: "ready",
+    onboarding_completed_at: "2026-01-01T00:00:00Z",
+    archived_at: null,
+    automation_preferences: {},
+    version: 1,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    is_active: true,
+  },
+];
+let mockActiveProfileId = PROFILE_A;
+let mockResumesByProfile = {
+  [PROFILE_A]: [
+    {
+      id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      applicant_profile_id: PROFILE_A,
+      managed_asset_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
+      resume_id: "res_primary_pdf",
+      label: "Primary resume",
+      sha256: "cc".repeat(32),
+      language: "en",
+      is_default: true,
+      file_size_bytes: 1024,
+      version: 1,
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    },
+  ],
+};
+let mockLocalAiReady = true;
+let freshInstallMode = false;
 
 function readJsonBody(req) {
   return new Promise((resolve) => {
@@ -536,7 +596,7 @@ const server = http.createServer((req, res) => {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
 
   if (req.method === "OPTIONS") {
     res.writeHead(204);
@@ -852,32 +912,400 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url.pathname === "/api/v1/test/set-fresh-install" && req.method === "POST") {
+    void readJsonBody(req).then((body) => {
+      freshInstallMode = Boolean(body.enabled);
+      if (freshInstallMode) {
+        mockProfiles = [];
+        mockActiveProfileId = null;
+        mockResumesByProfile = {};
+      } else {
+        mockProfiles = [
+          {
+            id: PROFILE_A,
+            display_name: "Ada Lovelace",
+            avatar_asset_id: null,
+            onboarding_step: "ready",
+            onboarding_completed_at: "2026-01-01T00:00:00Z",
+            archived_at: null,
+            automation_preferences: {},
+            version: 1,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+            is_active: true,
+          },
+        ];
+        mockActiveProfileId = PROFILE_A;
+        mockResumesByProfile = {
+          [PROFILE_A]: [
+            {
+              id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              applicant_profile_id: PROFILE_A,
+              managed_asset_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa01",
+              resume_id: "res_primary_pdf",
+              label: "Primary resume",
+              sha256: "cc".repeat(32),
+              language: "en",
+              is_default: true,
+              file_size_bytes: 1024,
+              version: 1,
+              created_at: "2026-01-01T00:00:00Z",
+              updated_at: "2026-01-01T00:00:00Z",
+            },
+          ],
+        };
+      }
+      res.writeHead(200);
+      res.end(JSON.stringify({ ok: true, freshInstallMode }));
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/v1/test/set-local-ai-ready" && req.method === "POST") {
+    void readJsonBody(req).then((body) => {
+      mockLocalAiReady = body.ready !== false;
+      res.writeHead(200);
+      res.end(JSON.stringify({ ok: true, ready: mockLocalAiReady }));
+    });
+    return;
+  }
+
   if (url.pathname === "/api/v1/applicant-profile") {
+    if (!mockActiveProfileId) {
+      res.writeHead(404);
+      res.end(JSON.stringify({ detail: "No active profile" }));
+      return;
+    }
     res.writeHead(200);
-    res.end(JSON.stringify(applicantProfileFixture()));
+    res.end(JSON.stringify(applicantProfileFixture({ id: mockActiveProfileId })));
+    return;
+  }
+
+  if (url.pathname === "/api/v1/profiles" && req.method === "GET") {
+    res.writeHead(200);
+    res.end(
+      JSON.stringify({
+        items: mockProfiles.map((item) => ({
+          ...item,
+          is_active: item.id === mockActiveProfileId,
+        })),
+        active_profile_id: mockActiveProfileId,
+      }),
+    );
+    return;
+  }
+
+  if (url.pathname === "/api/v1/profiles" && req.method === "POST") {
+    void readJsonBody(req).then((body) => {
+      const id = crypto.randomUUID();
+      const summary = {
+        id,
+        display_name: body.display_name || "Applicant",
+        avatar_asset_id: null,
+        onboarding_step: body.onboarding_step || "profile",
+        onboarding_completed_at: null,
+        archived_at: null,
+        automation_preferences: body.automation_preferences || {},
+        version: 1,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+        is_active: true,
+      };
+      mockProfiles.push(summary);
+      mockActiveProfileId = id;
+      mockResumesByProfile[id] = [];
+      res.writeHead(201);
+      res.end(JSON.stringify(applicantProfileFixture(summary)));
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/v1/profiles/active" && req.method === "GET") {
+    if (!mockActiveProfileId) {
+      res.writeHead(404);
+      res.end(JSON.stringify({ detail: "No active profile" }));
+      return;
+    }
+    const summary =
+      mockProfiles.find((item) => item.id === mockActiveProfileId) || {};
+    res.writeHead(200);
+    res.end(
+      JSON.stringify(
+        applicantProfileFixture({
+          id: mockActiveProfileId,
+          display_name: summary.display_name,
+          onboarding_step: summary.onboarding_step,
+          onboarding_completed_at: summary.onboarding_completed_at,
+          version: summary.version || 1,
+        }),
+      ),
+    );
+    return;
+  }
+
+  if (url.pathname === "/api/v1/profiles/active" && req.method === "PUT") {
+    void readJsonBody(req).then((body) => {
+      mockActiveProfileId = body.profile_id;
+      mockProfiles = mockProfiles.map((item) => ({
+        ...item,
+        is_active: item.id === mockActiveProfileId,
+      }));
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          status: "ok",
+          active_profile_id: mockActiveProfileId,
+        }),
+      );
+    });
+    return;
+  }
+
+  const profileMatch = url.pathname.match(
+    /^\/api\/v1\/profiles\/([^/]+)(?:\/(.*))?$/,
+  );
+  if (profileMatch) {
+    const profileId = profileMatch[1];
+    const rest = profileMatch[2] || "";
+
+    if (!rest && (req.method === "GET" || req.method === "PATCH" || req.method === "PUT")) {
+      if (req.method === "GET") {
+        const summary = mockProfiles.find((item) => item.id === profileId);
+        if (!summary) {
+          res.writeHead(404);
+          res.end(JSON.stringify({ detail: "Profile not found" }));
+          return;
+        }
+        res.writeHead(200);
+        res.end(JSON.stringify(applicantProfileFixture(summary)));
+        return;
+      }
+      void readJsonBody(req).then((body) => {
+        mockProfiles = mockProfiles.map((item) =>
+          item.id === profileId
+            ? {
+                ...item,
+                display_name: body.display_name || item.display_name,
+                onboarding_step: body.onboarding_step || item.onboarding_step,
+                onboarding_completed_at:
+                  body.onboarding_completed_at ?? item.onboarding_completed_at,
+                automation_preferences:
+                  body.automation_preferences || item.automation_preferences,
+                version: (item.version || 1) + 1,
+              }
+            : item,
+        );
+        const summary = mockProfiles.find((item) => item.id === profileId);
+        res.writeHead(200);
+        res.end(JSON.stringify(applicantProfileFixture(summary)));
+      });
+      return;
+    }
+
+    if (rest === "resumes" && req.method === "GET") {
+      res.writeHead(200);
+      res.end(JSON.stringify({ items: mockResumesByProfile[profileId] || [] }));
+      return;
+    }
+
+    if (rest === "resumes" && req.method === "POST") {
+      const resume = {
+        id: crypto.randomUUID(),
+        applicant_profile_id: profileId,
+        managed_asset_id: crypto.randomUUID(),
+        resume_id: `res_${Date.now()}`,
+        label: "Uploaded resume",
+        sha256: "ab".repeat(32),
+        language: "en",
+        is_default: (mockResumesByProfile[profileId] || []).length === 0,
+        file_size_bytes: 2048,
+        version: 1,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      };
+      mockResumesByProfile[profileId] = [
+        ...(mockResumesByProfile[profileId] || []),
+        resume,
+      ];
+      res.writeHead(201);
+      res.end(JSON.stringify(resume));
+      return;
+    }
+
+    if (rest === "avatar" && req.method === "POST") {
+      const assetId = crypto.randomUUID();
+      mockProfiles = mockProfiles.map((item) =>
+        item.id === profileId ? { ...item, avatar_asset_id: assetId } : item,
+      );
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          asset: {
+            id: assetId,
+            profile_id: profileId,
+            asset_type: "avatar",
+            file_name: "avatar.png",
+            content_type: "image/png",
+            byte_size: 128,
+            sha256: "aa".repeat(32),
+            crop_coordinates: null,
+            extracted_text: null,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+          },
+        }),
+      );
+      return;
+    }
+
+    if (rest === "avatar" && req.method === "DELETE") {
+      mockProfiles = mockProfiles.map((item) =>
+        item.id === profileId ? { ...item, avatar_asset_id: null } : item,
+      );
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    if (rest === "local-ai/resume-proposals" && req.method === "POST") {
+      res.writeHead(201);
+      res.end(
+        JSON.stringify({
+          id: crypto.randomUUID(),
+          profile_id: profileId,
+          source_asset_id: crypto.randomUUID(),
+          source_asset_sha256: "ab".repeat(32),
+          status: "pending",
+          schema_revision: "1",
+          prompt_revision: "1",
+          model: "mock",
+          fields: [
+            {
+              field_path: "headline",
+              value: "Analytical mathematician",
+              evidence: [{ start: 0, end: 12, excerpt: "mathematician" }],
+              confidence: 0.9,
+            },
+          ],
+          failure_code: null,
+          deterministic_extraction_ok: true,
+          accepted_field_paths: [],
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        }),
+      );
+      return;
+    }
+
+    if (rest.startsWith("local-ai/resume-proposals/") && rest.endsWith("/accept")) {
+      void readJsonBody(req).then(() => {
+        const summary = mockProfiles.find((item) => item.id === profileId);
+        res.writeHead(200);
+        res.end(
+          JSON.stringify({
+            proposal: {
+              id: crypto.randomUUID(),
+              profile_id: profileId,
+              source_asset_id: crypto.randomUUID(),
+              source_asset_sha256: "ab".repeat(32),
+              status: "accepted",
+              schema_revision: "1",
+              prompt_revision: "1",
+              model: "mock",
+              fields: [],
+              failure_code: null,
+              deterministic_extraction_ok: true,
+              accepted_field_paths: ["headline"],
+              created_at: "2026-01-01T00:00:00Z",
+              updated_at: "2026-01-01T00:00:00Z",
+            },
+            profile: applicantProfileFixture(summary),
+          }),
+        );
+      });
+      return;
+    }
+
+    if (rest.startsWith("local-ai/resume-proposals/") && rest.endsWith("/decline")) {
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          id: crypto.randomUUID(),
+          profile_id: profileId,
+          source_asset_id: crypto.randomUUID(),
+          source_asset_sha256: "ab".repeat(32),
+          status: "declined",
+          schema_revision: "1",
+          prompt_revision: "1",
+          model: "mock",
+          fields: [],
+          failure_code: null,
+          deterministic_extraction_ok: true,
+          accepted_field_paths: [],
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        }),
+      );
+      return;
+    }
+  }
+
+  if (url.pathname === "/api/v1/local-ai/status") {
+    res.writeHead(200);
+    res.end(
+      JSON.stringify({
+        configured: true,
+        endpoint_class: "loopback_openai_compatible",
+        model: "mock-model",
+        reachable: mockLocalAiReady,
+        model_available: mockLocalAiReady,
+        schema_revision: "1",
+        last_self_test_passed: mockLocalAiReady,
+        last_self_test_at: "2026-01-01T00:00:00Z",
+        last_self_test_latency_ms: 12,
+        failure_code: mockLocalAiReady ? null : "runtime_unreachable",
+      }),
+    );
+    return;
+  }
+
+  if (url.pathname === "/api/v1/local-ai/self-test" && req.method === "POST") {
+    res.writeHead(200);
+    res.end(
+      JSON.stringify({
+        passed: mockLocalAiReady,
+        model: "mock-model",
+        schema_revision: "1",
+        prompt_revision: "1",
+        latency_ms: 15,
+        failure_code: mockLocalAiReady ? null : "runtime_unreachable",
+        tested_at: "2026-01-01T00:00:00Z",
+      }),
+    );
+    return;
+  }
+
+  if (url.pathname === "/api/v1/local-ai/readiness") {
+    res.writeHead(200);
+    res.end(
+      JSON.stringify({
+        local_ai_configured: true,
+        local_ai_ready: mockLocalAiReady,
+        local_ai_failure_code: mockLocalAiReady ? null : "runtime_unreachable",
+        model: "mock-model",
+        last_self_test_passed: mockLocalAiReady,
+        exceptions: mockLocalAiReady ? [] : ["runtime_unreachable"],
+      }),
+    );
     return;
   }
 
   if (url.pathname === "/api/v1/resumes") {
+    const items = mockActiveProfileId
+      ? mockResumesByProfile[mockActiveProfileId] || []
+      : [];
     res.writeHead(200);
-    res.end(
-      JSON.stringify({
-        items: [
-          {
-            id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-            resume_id: "res_primary_pdf",
-            label: "Primary resume",
-            source_markdown_path: "resume.md",
-            upload_pdf_path: "resume.pdf",
-            sha256: "cc".repeat(32),
-            language: "en",
-            is_default: true,
-            file_size_bytes: 1024,
-            version: 1,
-          },
-        ],
-      }),
-    );
+    res.end(JSON.stringify({ items }));
     return;
   }
 

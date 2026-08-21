@@ -51,6 +51,19 @@ from job_engine.domain.applicant import (
     ValueState,
     WorkAuthorization,
 )
+from job_engine.domain.application_batches import (
+    BATCH_CANCELABLE_RUN_STATUSES,
+    BATCH_CONFIRMATION_REVISION,
+    BATCH_CONFIRMATION_TEXT,
+    BATCH_POLICY_REVISION,
+    ApplicationBatch,
+    ApplicationBatchAuthorization,
+    ApplicationBatchItem,
+    ApplicationBatchItemSnapshot,
+    ApplicationBatchOrigin,
+    derive_batch_counters,
+    is_batch_item_cancellable,
+)
 from job_engine.domain.applications import (
     ACTIVE_STATUSES,
     ApplicationException,
@@ -2456,10 +2469,48 @@ class ApplicationRunInput:
     automation_mode: AutomationMode
     idempotency_key: str
     applicant_profile_id: UUID | None = None
+    batch_id: UUID | None = None
+    batch_item_id: UUID | None = None
+    id: UUID | None = None
     automatic_submission_authorized_at: datetime | None = None
     policy_snapshot: dict[str, Any] | None = None
     duplicate_override_confirmed_at: datetime | None = None
     duplicate_override_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ApplicationBatchItemCreateInput:
+    position: int
+    job_group_id: UUID
+    application_target_id: UUID
+    source_posting_id: UUID | None
+    canonical_application_url: str
+    application_url: str
+    platform_adapter_id: str
+    duplicate_override_reason: str | None = None
+    duplicate_override_confirmed_at: datetime | None = None
+    idempotency_key: str = ""
+    policy_snapshot: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class ApplicationBatchCreateInput:
+    applicant_profile_id: UUID
+    applicant_profile_version: int
+    resume_asset_id: UUID
+    resume_asset_version: int
+    resume_sha256: str
+    answer_bank_snapshot: dict[str, int]
+    answer_bank_hash: str
+    automation_mode: AutomationMode
+    items: tuple[ApplicationBatchItemCreateInput, ...]
+    known_capability_exceptions: tuple[dict[str, Any], ...] = ()
+    automatic_submission_authorized_at: datetime | None = None
+    owner_confirmed_at: datetime | None = None
+    confirmation_text: str = BATCH_CONFIRMATION_TEXT
+    confirmation_text_revision: str = BATCH_CONFIRMATION_REVISION
+    policy_revision: str = BATCH_POLICY_REVISION
+    origin: ApplicationBatchOrigin = ApplicationBatchOrigin.AUTHORIZED
 
 
 @dataclass(frozen=True)
@@ -2593,6 +2644,8 @@ def _application_run_from_row(row: orm.ApplicationRun) -> ApplicationRun:
     return ApplicationRun(
         id=row.id,
         applicant_profile_id=row.applicant_profile_id,
+        batch_id=row.batch_id,
+        batch_item_id=row.batch_item_id,
         job_group_id=row.job_group_id,
         source_posting_id=row.source_posting_id,
         canonical_application_url=row.canonical_application_url,
@@ -2711,10 +2764,74 @@ class ApplicationRepository:
                 )
             )
 
-        run_id = uuid4()
+        run_id = input_data.id if input_data.id is not None else uuid4()
+        batch_id = input_data.batch_id
+        batch_item_id = input_data.batch_item_id
+        if batch_id is None or batch_item_id is None:
+            batch_id = uuid4()
+            batch_item_id = uuid4()
+            resume_version = 1
+            resume_row = await self._session.get(
+                orm.ResumeAsset, input_data.resume_asset_id
+            )
+            if resume_row is not None:
+                resume_version = resume_row.version
+            confirmed_at = (
+                input_data.automatic_submission_authorized_at
+                or input_data.duplicate_override_confirmed_at
+                or now
+            )
+            self._session.add(
+                orm.ApplicationBatch(
+                    id=batch_id,
+                    applicant_profile_id=profile_id,
+                    origin=ApplicationBatchOrigin.AUTHORIZED.value,
+                    automation_mode=input_data.automation_mode.value,
+                    applicant_profile_version=input_data.applicant_profile_version,
+                    resume_asset_id=input_data.resume_asset_id,
+                    resume_asset_version=resume_version,
+                    resume_sha256=input_data.resume_sha256,
+                    answer_bank_snapshot=input_data.answer_bank_snapshot,
+                    answer_bank_hash=input_data.answer_bank_hash,
+                    known_capability_exceptions=[],
+                    policy_revision=BATCH_POLICY_REVISION,
+                    confirmation_text_revision=BATCH_CONFIRMATION_REVISION,
+                    confirmation_text=BATCH_CONFIRMATION_TEXT,
+                    owner_confirmed_at=confirmed_at,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            target_id = None
+            if input_data.policy_snapshot:
+                raw_target = input_data.policy_snapshot.get("application_target_id")
+                if isinstance(raw_target, str):
+                    try:
+                        target_id = UUID(raw_target)
+                    except ValueError:
+                        target_id = None
+            self._session.add(
+                orm.ApplicationBatchItem(
+                    id=batch_item_id,
+                    batch_id=batch_id,
+                    position=0,
+                    job_group_id=input_data.job_group_id,
+                    application_target_id=target_id,
+                    source_posting_id=input_data.source_posting_id,
+                    canonical_application_url=input_data.canonical_application_url,
+                    application_url=input_data.application_url,
+                    platform_adapter_id=input_data.platform_adapter_id,
+                    duplicate_override_reason=input_data.duplicate_override_reason,
+                    run_id=run_id,
+                    created_at=now,
+                )
+            )
+
         run_row = orm.ApplicationRun(
             id=run_id,
             applicant_profile_id=profile_id,
+            batch_id=batch_id,
+            batch_item_id=batch_item_id,
             job_group_id=input_data.job_group_id,
             source_posting_id=input_data.source_posting_id,
             canonical_application_url=input_data.canonical_application_url,
@@ -2751,21 +2868,23 @@ class ApplicationRepository:
         )
         self._session.add(run_row)
 
+        event_payload = {
+            "canonical_application_url": input_data.canonical_application_url,
+            "platform_adapter_id": input_data.platform_adapter_id,
+            "automation_mode": input_data.automation_mode.value,
+            "profile_version": input_data.applicant_profile_version,
+            "answer_bank_hash": input_data.answer_bank_hash,
+            "batch_id": str(batch_id),
+            "batch_item_id": str(batch_item_id),
+            "applicant_profile_id": str(profile_id),
+        }
         event_row = orm.ApplicationRunEvent(
             id=uuid4(),
             run_id=run_id,
             attempt=1,
             sequence_num=1,
             event_type=AuditEventType.RUN_CREATED.value,
-            event_payload=redact_audit_payload(
-                {
-                    "canonical_application_url": input_data.canonical_application_url,
-                    "platform_adapter_id": input_data.platform_adapter_id,
-                    "automation_mode": input_data.automation_mode.value,
-                    "profile_version": input_data.applicant_profile_version,
-                    "answer_bank_hash": input_data.answer_bank_hash,
-                }
-            ),
+            event_payload=redact_audit_payload(event_payload),
             created_at=now,
         )
         self._session.add(event_row)
@@ -2785,6 +2904,8 @@ class ApplicationRepository:
                         "resume_asset_id": str(input_data.resume_asset_id),
                         "profile_version": input_data.applicant_profile_version,
                         "answer_bank_hash": input_data.answer_bank_hash,
+                        "batch_id": str(batch_id),
+                        "batch_item_id": str(batch_item_id),
                     },
                     created_at=now,
                 )
@@ -4121,6 +4242,263 @@ class ApplicationRepository:
         if reclaimed_count > 0:
             await self._session.flush()
         return reclaimed_count
+
+    async def acquire_batch_authorization_lock(
+        self, profile_id: UUID, target_ids: Sequence[UUID]
+    ) -> None:
+        """Serialize batch authorization for a profile + sorted target set."""
+        sorted_ids = ",".join(str(tid) for tid in sorted(target_ids, key=str))
+        lock_key = f"application_batch:{profile_id}:{sorted_ids}"
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+            {"lock_key": lock_key},
+        )
+
+    def _application_batch_from_rows(
+        self,
+        batch_row: orm.ApplicationBatch,
+        item_rows: Sequence[orm.ApplicationBatchItem],
+        run_status_by_id: dict[UUID, ApplicationRunStatus],
+    ) -> ApplicationBatch:
+        items: list[ApplicationBatchItem] = []
+        statuses: list[ApplicationRunStatus] = []
+        for item in sorted(item_rows, key=lambda row: row.position):
+            status = run_status_by_id.get(item.run_id, ApplicationRunStatus.QUEUED)
+            statuses.append(status)
+            items.append(
+                ApplicationBatchItem(
+                    id=item.id,
+                    batch_id=item.batch_id,
+                    position=item.position,
+                    run_id=item.run_id,
+                    snapshot=ApplicationBatchItemSnapshot(
+                        job_group_id=item.job_group_id,
+                        application_target_id=item.application_target_id,
+                        source_posting_id=item.source_posting_id,
+                        canonical_application_url=item.canonical_application_url,
+                        application_url=item.application_url,
+                        platform_adapter_id=item.platform_adapter_id,
+                        duplicate_override_reason=item.duplicate_override_reason,
+                    ),
+                    run_status=status,
+                    created_at=item.created_at,
+                )
+            )
+        exceptions_raw = batch_row.known_capability_exceptions or []
+        known_exceptions = tuple(
+            dict(item) for item in exceptions_raw if isinstance(item, dict)
+        )
+        return ApplicationBatch(
+            id=batch_row.id,
+            origin=ApplicationBatchOrigin(batch_row.origin),
+            authorization=ApplicationBatchAuthorization(
+                applicant_profile_id=batch_row.applicant_profile_id,
+                applicant_profile_version=batch_row.applicant_profile_version,
+                resume_asset_id=batch_row.resume_asset_id,
+                resume_asset_version=batch_row.resume_asset_version,
+                resume_sha256=batch_row.resume_sha256,
+                answer_bank_snapshot=dict(batch_row.answer_bank_snapshot),
+                answer_bank_hash=batch_row.answer_bank_hash,
+                automation_mode=AutomationMode(batch_row.automation_mode),
+                known_capability_exceptions=known_exceptions,
+                policy_revision=batch_row.policy_revision,
+                confirmation_text_revision=batch_row.confirmation_text_revision,
+                confirmation_text=batch_row.confirmation_text,
+                owner_confirmed_at=batch_row.owner_confirmed_at,
+            ),
+            items=tuple(items),
+            counters=derive_batch_counters(statuses),
+            created_at=batch_row.created_at,
+            updated_at=batch_row.updated_at,
+        )
+
+    async def create_authorized_batch(
+        self, input_data: ApplicationBatchCreateInput
+    ) -> ApplicationBatch:
+        if not input_data.items:
+            raise ValueError("Batch must contain at least one item")
+
+        now = _utcnow()
+        confirmed_at = input_data.owner_confirmed_at or now
+        batch_id = uuid4()
+        self._session.add(
+            orm.ApplicationBatch(
+                id=batch_id,
+                applicant_profile_id=input_data.applicant_profile_id,
+                origin=input_data.origin.value,
+                automation_mode=input_data.automation_mode.value,
+                applicant_profile_version=input_data.applicant_profile_version,
+                resume_asset_id=input_data.resume_asset_id,
+                resume_asset_version=input_data.resume_asset_version,
+                resume_sha256=input_data.resume_sha256,
+                answer_bank_snapshot=input_data.answer_bank_snapshot,
+                answer_bank_hash=input_data.answer_bank_hash,
+                known_capability_exceptions=list(
+                    input_data.known_capability_exceptions
+                ),
+                policy_revision=input_data.policy_revision,
+                confirmation_text_revision=input_data.confirmation_text_revision,
+                confirmation_text=input_data.confirmation_text,
+                owner_confirmed_at=confirmed_at,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+        created_runs: list[ApplicationRun] = []
+        item_rows: list[orm.ApplicationBatchItem] = []
+        for item in input_data.items:
+            run_id = uuid4()
+            item_id = uuid4()
+            item_row = orm.ApplicationBatchItem(
+                id=item_id,
+                batch_id=batch_id,
+                position=item.position,
+                job_group_id=item.job_group_id,
+                application_target_id=item.application_target_id,
+                source_posting_id=item.source_posting_id,
+                canonical_application_url=item.canonical_application_url,
+                application_url=item.application_url,
+                platform_adapter_id=item.platform_adapter_id,
+                duplicate_override_reason=item.duplicate_override_reason,
+                run_id=run_id,
+                created_at=now,
+            )
+            self._session.add(item_row)
+            item_rows.append(item_row)
+
+            run_input = ApplicationRunInput(
+                applicant_profile_id=input_data.applicant_profile_id,
+                batch_id=batch_id,
+                batch_item_id=item_id,
+                id=run_id,
+                job_group_id=item.job_group_id,
+                source_posting_id=item.source_posting_id,
+                canonical_application_url=item.canonical_application_url,
+                application_url=item.application_url,
+                platform_adapter_id=item.platform_adapter_id,
+                resume_asset_id=input_data.resume_asset_id,
+                resume_sha256=input_data.resume_sha256,
+                applicant_profile_version=input_data.applicant_profile_version,
+                answer_bank_snapshot=input_data.answer_bank_snapshot,
+                answer_bank_hash=input_data.answer_bank_hash,
+                automation_mode=input_data.automation_mode,
+                automatic_submission_authorized_at=(
+                    input_data.automatic_submission_authorized_at
+                ),
+                idempotency_key=item.idempotency_key,
+                policy_snapshot=item.policy_snapshot,
+                duplicate_override_confirmed_at=item.duplicate_override_confirmed_at,
+                duplicate_override_reason=item.duplicate_override_reason,
+            )
+            created = await self.create_run(run_input)
+            created_runs.append(created)
+
+        await self._session.flush()
+        batch_row = await self._session.get(orm.ApplicationBatch, batch_id)
+        if batch_row is None:
+            raise RuntimeError("Failed to load created application batch")
+        return self._application_batch_from_rows(
+            batch_row,
+            item_rows,
+            {run.id: run.status for run in created_runs},
+        )
+
+    async def get_batch(
+        self, profile_id: UUID, batch_id: UUID
+    ) -> ApplicationBatch | None:
+        batch_row = await self._session.scalar(
+            select(orm.ApplicationBatch)
+            .where(
+                orm.ApplicationBatch.id == batch_id,
+                orm.ApplicationBatch.applicant_profile_id == profile_id,
+            )
+            .options(selectinload(orm.ApplicationBatch.items))
+            .execution_options(populate_existing=True)
+        )
+        if batch_row is None:
+            return None
+        run_ids = [item.run_id for item in batch_row.items]
+        status_rows = (
+            await self._session.execute(
+                select(orm.ApplicationRun.id, orm.ApplicationRun.status).where(
+                    orm.ApplicationRun.id.in_(run_ids)
+                )
+            )
+        ).all()
+        status_by_id = {row.id: ApplicationRunStatus(row.status) for row in status_rows}
+        return self._application_batch_from_rows(
+            batch_row, batch_row.items, status_by_id
+        )
+
+    async def list_batches(
+        self,
+        profile_id: UUID,
+        *,
+        offset: int = 0,
+        limit: int = 25,
+    ) -> tuple[tuple[ApplicationBatch, ...], int]:
+        count_stmt = (
+            select(func.count())
+            .select_from(orm.ApplicationBatch)
+            .where(orm.ApplicationBatch.applicant_profile_id == profile_id)
+        )
+        total = int(await self._session.scalar(count_stmt) or 0)
+        stmt = (
+            select(orm.ApplicationBatch)
+            .where(orm.ApplicationBatch.applicant_profile_id == profile_id)
+            .options(selectinload(orm.ApplicationBatch.items))
+            .order_by(
+                orm.ApplicationBatch.created_at.desc(),
+                orm.ApplicationBatch.id.desc(),
+            )
+            .offset(offset)
+            .limit(limit)
+            .execution_options(populate_existing=True)
+        )
+        batch_rows = list((await self._session.scalars(stmt)).all())
+        if not batch_rows:
+            return (), total
+
+        all_run_ids = [item.run_id for batch in batch_rows for item in batch.items]
+        status_rows = (
+            await self._session.execute(
+                select(orm.ApplicationRun.id, orm.ApplicationRun.status).where(
+                    orm.ApplicationRun.id.in_(all_run_ids)
+                )
+            )
+        ).all()
+        status_by_id = {row.id: ApplicationRunStatus(row.status) for row in status_rows}
+        batches = tuple(
+            self._application_batch_from_rows(batch, batch.items, status_by_id)
+            for batch in batch_rows
+        )
+        return batches, total
+
+    async def cancel_batch(
+        self,
+        profile_id: UUID,
+        batch_id: UUID,
+        reason: str | None = None,
+    ) -> ApplicationBatch:
+        batch = await self.get_batch(profile_id, batch_id)
+        if batch is None:
+            raise ApplicationRunNotFoundError(f"Batch {batch_id} not found")
+
+        for item in batch.items:
+            if not is_batch_item_cancellable(item.run_status):
+                continue
+            if item.run_status not in BATCH_CANCELABLE_RUN_STATUSES:
+                continue
+            await self.cancel_run(
+                item.run_id,
+                reason=reason or "Cancelled via batch cancellation",
+            )
+
+        reloaded = await self.get_batch(profile_id, batch_id)
+        if reloaded is None:
+            raise RuntimeError("Failed to reload cancelled batch")
+        return reloaded
 
     async def _next_sequence_num(self, run_id: UUID) -> int:
         return (await self._max_sequence_num(run_id)) + 1

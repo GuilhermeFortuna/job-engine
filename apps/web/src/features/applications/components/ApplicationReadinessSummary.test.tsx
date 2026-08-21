@@ -1,4 +1,3 @@
-import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithProviders, screen } from "@/test/render";
 import { ApplicationReadinessSummary } from "./ApplicationReadinessSummary";
@@ -8,74 +7,61 @@ vi.mock("../hooks/useApplicationReadiness", () => ({
   useApplicationReadiness: () => useApplicationReadiness(),
 }));
 
-const getCapabilities = vi.fn();
-vi.mock("../desktop-bridge", () => ({
-  getCapabilities: () => getCapabilities(),
-  isProductionRuntimeReady: (capabilities: { productionRuntime: boolean }) =>
-    capabilities.productionRuntime,
-}));
-
 describe("ApplicationReadinessSummary", () => {
   beforeEach(() => {
     useApplicationReadiness.mockReset();
-    getCapabilities.mockReset();
     useApplicationReadiness.mockReturnValue({
       profile: { id: "profile-1" },
       resumes: [{ id: "resume-1", label: "Primary résumé" }],
       isReady: true,
+      readinessLabel: "Ready for Auto Apply",
+      productReadiness: {
+        label: "Ready for Auto Apply",
+        blockers: [],
+        exceptions: [],
+        actions: [],
+      },
       isLoading: false,
       error: null,
       refresh: vi.fn(),
     });
-    getCapabilities.mockResolvedValue({
-      embeddedBrowser: true,
-      platform: "linux",
-      productionRuntime: true,
-    });
   });
 
-  it("summarizes profile, résumé, and production runtime readiness", async () => {
+  it("shows the product readiness label and Profile link", () => {
     renderWithProviders(<ApplicationReadinessSummary />);
 
     expect(
       screen.getByRole("region", { name: "Application readiness" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Profile complete")).toBeInTheDocument();
-    expect(screen.getByText("1 registered résumé")).toBeInTheDocument();
-    await waitFor(() => {
-      expect(screen.getByText("Production runtime available")).toBeInTheDocument();
-    });
-    expect(
-      screen.getByRole("link", { name: "Application settings" }),
-    ).toHaveAttribute("href", "/applications/settings");
+    expect(screen.getByText("Ready for Auto Apply")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Profile" })).toHaveAttribute(
+      "href",
+      "/profile",
+    );
   });
 
-  it("identifies missing profile and résumé without exposing private values", async () => {
+  it("lists blockers without exposing private values", () => {
     useApplicationReadiness.mockReturnValue({
       profile: null,
       resumes: [],
       isReady: false,
+      readinessLabel: "Setup required",
+      productReadiness: {
+        label: "Setup required",
+        blockers: ["Create an applicant profile", "Upload a default resume"],
+        exceptions: [],
+        actions: [],
+      },
       isLoading: false,
       error: null,
       refresh: vi.fn(),
     });
-    getCapabilities.mockResolvedValue({
-      embeddedBrowser: false,
-      platform: null,
-      productionRuntime: false,
-    });
 
     renderWithProviders(<ApplicationReadinessSummary />);
 
-    expect(screen.getByText("Profile setup required")).toBeInTheDocument();
-    expect(screen.getByText("Résumé registration required")).toBeInTheDocument();
-    await waitFor(() => {
-      expect(
-        screen.getByText("Open the desktop app to use the production runtime"),
-      ).toBeInTheDocument();
-    });
+    expect(screen.getByText("Setup required")).toBeInTheDocument();
+    expect(screen.getByText("Create an applicant profile")).toBeInTheDocument();
     expect(screen.queryByText("profile-1")).not.toBeInTheDocument();
-    expect(screen.queryByText("Primary résumé")).not.toBeInTheDocument();
   });
 
   it("shows readiness loading and API error states accessibly", () => {
@@ -83,6 +69,13 @@ describe("ApplicationReadinessSummary", () => {
       profile: null,
       resumes: [],
       isReady: false,
+      readinessLabel: "Setup required",
+      productReadiness: {
+        label: "Setup required",
+        blockers: [],
+        exceptions: [],
+        actions: [],
+      },
       isLoading: true,
       error: "Readiness service unavailable",
       refresh: vi.fn(),
@@ -90,9 +83,9 @@ describe("ApplicationReadinessSummary", () => {
 
     renderWithProviders(<ApplicationReadinessSummary />);
 
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Checking application readiness",
-    );
+    expect(
+      screen.getByText("Checking application readiness"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Unable to check application readiness",
     );

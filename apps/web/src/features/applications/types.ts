@@ -181,6 +181,9 @@ export interface ApplicationRunEvent {
 
 export interface ApplicationRunSummary {
   id: string;
+  applicant_profile_id?: string;
+  batch_id?: string;
+  batch_item_id?: string;
   job_group_id: string;
   canonical_application_url: string;
   application_url: string;

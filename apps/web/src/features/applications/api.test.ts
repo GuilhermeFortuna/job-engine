@@ -422,25 +422,35 @@ describe("applications API client", () => {
   });
 
   it("lists resumes with label and checksum summary and without filesystem paths", async () => {
-    global.fetch = vi.fn().mockResolvedValue(
-      jsonResponse({
-        items: [
-          {
-            id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-            resume_id: "res_primary_pdf",
-            label: "Primary resume",
-            source_markdown_path: "/home/owner/resume.md",
-            upload_pdf_path: "/home/owner/resume.pdf",
-            preview_html_path: null,
-            sha256: "cc".repeat(32),
-            language: "en",
-            is_default: true,
-            file_size_bytes: 1024,
-            version: 1,
-          },
-        ],
-      }),
-    );
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "profile-id",
+          version: 1,
+          created_at: "2026-08-19T00:00:00Z",
+          updated_at: "2026-08-20T00:00:00Z",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          items: [
+            {
+              id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              resume_id: "res_primary_pdf",
+              label: "Primary resume",
+              source_markdown_path: "/home/owner/resume.md",
+              upload_pdf_path: "/home/owner/resume.pdf",
+              preview_html_path: null,
+              sha256: "cc".repeat(32),
+              language: "en",
+              is_default: true,
+              file_size_bytes: 1024,
+              version: 1,
+            },
+          ],
+        }),
+      );
 
     const resumes = await fetchResumes();
     expect(resumes[0].label).toBe("Primary resume");
@@ -449,6 +459,16 @@ describe("applications API client", () => {
     expect(resumes[0]).not.toHaveProperty("source_markdown_path");
     expect(resumes[0]).not.toHaveProperty("upload_pdf_path");
     expect(JSON.stringify(resumes)).not.toContain("/home/owner");
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      "http://127.0.0.1:8000/api/v1/profiles/active",
+      expect.any(Object),
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      "http://127.0.0.1:8000/api/v1/profiles/profile-id/resumes",
+      expect.any(Object),
+    );
   });
 
   it("reads and updates the applicant profile through a known-field projection", async () => {
@@ -475,6 +495,15 @@ describe("applications API client", () => {
       .mockResolvedValueOnce(
         jsonResponse({
           id: "profile-id",
+          version: 3,
+          created_at: "2026-08-19T00:00:00Z",
+          updated_at: "2026-08-20T00:00:00Z",
+          first_name: firstName,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "profile-id",
           version: 4,
           created_at: "2026-08-19T00:00:00Z",
           updated_at: "2026-08-20T00:01:00Z",
@@ -496,8 +525,8 @@ describe("applications API client", () => {
     expect(profile).not.toHaveProperty("arbitrary_payload");
     expect(updated.version).toBe(4);
     expect(global.fetch).toHaveBeenNthCalledWith(
-      2,
-      "http://127.0.0.1:8000/api/v1/applicant-profile",
+      3,
+      "http://127.0.0.1:8000/api/v1/profiles/profile-id",
       expect.objectContaining({
         method: "PUT",
         body: JSON.stringify({ expected_version: 3, ...completeFields }),

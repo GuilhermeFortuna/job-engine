@@ -25,6 +25,15 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from job_engine.api.dependencies import get_settings
 from job_engine.api.schemas import (
+    ApplicationBatchCountersRead,
+    ApplicationBatchCreateRequest,
+    ApplicationBatchItemRead,
+    ApplicationBatchListResponse,
+    ApplicationBatchPreviewIssueRead,
+    ApplicationBatchPreviewRequest,
+    ApplicationBatchPreviewResponse,
+    ApplicationBatchRead,
+    ApplicationBatchResolvedTargetRead,
     ApplicationExceptionFieldRead,
     ApplicationExceptionRead,
     ApplicationRunCreateRequest,
@@ -34,6 +43,7 @@ from job_engine.api.schemas import (
     ApplicationRunListResponse,
     ApplicationRunRead,
     ApplicationRunReceiptRead,
+    CancelBatchRequest,
     CancelRunRequest,
     DuplicateOverrideInput,
     EvidenceArtifactRead,
@@ -63,6 +73,7 @@ from job_engine.db.repositories import (
 )
 from job_engine.domain.applicant import LEGAL_CONSENT_INTENTS, QuestionIntent
 from job_engine.domain.application_answers import ControlType
+from job_engine.domain.application_batches import ApplicationBatch
 from job_engine.domain.applications import (
     ApplicationException,
     ApplicationRun,
@@ -75,6 +86,8 @@ from job_engine.domain.applications import (
     RunCheckpoint,
 )
 from job_engine.services.applications import (
+    ApplicationBatchDuplicateOverride,
+    ApplicationBatchValidationError,
     ApplicationService,
     ApplicationTargetRejectedError,
 )
@@ -82,6 +95,7 @@ from job_engine.services.applications import (
 application_runs_router = APIRouter(
     prefix="/application-runs", tags=["application-runs"]
 )
+application_batches_router = APIRouter(tags=["application-batches"])
 runner_router = APIRouter(prefix="/runner", tags=["runner"])
 
 
@@ -304,6 +318,8 @@ def _map_run_read(run: ApplicationRun) -> ApplicationRunRead:
     return ApplicationRunRead(
         id=run.id,
         applicant_profile_id=run.applicant_profile_id,
+        batch_id=run.batch_id,
+        batch_item_id=run.batch_item_id,
         job_group_id=run.job_group_id,
         source_posting_id=run.source_posting_id,
         canonical_application_url=run.canonical_application_url,
@@ -355,7 +371,274 @@ def _map_run_detail(
     )
 
 
+def _map_batch_read(batch: ApplicationBatch) -> ApplicationBatchRead:
+    return ApplicationBatchRead(
+        id=batch.id,
+        origin=batch.origin,
+        applicant_profile_id=batch.applicant_profile_id,
+        applicant_profile_version=batch.authorization.applicant_profile_version,
+        resume_asset_id=batch.authorization.resume_asset_id,
+        resume_asset_version=batch.authorization.resume_asset_version,
+        resume_sha256=batch.authorization.resume_sha256,
+        answer_bank_snapshot=batch.authorization.answer_bank_snapshot,
+        answer_bank_hash=batch.authorization.answer_bank_hash,
+        automation_mode=batch.authorization.automation_mode,
+        known_capability_exceptions=batch.authorization.known_capability_exceptions,
+        policy_revision=batch.authorization.policy_revision,
+        confirmation_text_revision=batch.authorization.confirmation_text_revision,
+        confirmation_text=batch.authorization.confirmation_text,
+        owner_confirmed_at=batch.authorization.owner_confirmed_at,
+        counters=ApplicationBatchCountersRead(
+            queued=batch.counters.queued,
+            running=batch.counters.running,
+            needs_attention=batch.counters.needs_attention,
+            submitted=batch.counters.submitted,
+            failed=batch.counters.failed,
+            cancelled=batch.counters.cancelled,
+        ),
+        items=tuple(
+            ApplicationBatchItemRead(
+                id=item.id,
+                batch_id=item.batch_id,
+                position=item.position,
+                run_id=item.run_id,
+                job_group_id=item.snapshot.job_group_id,
+                application_target_id=item.snapshot.application_target_id,
+                source_posting_id=item.snapshot.source_posting_id,
+                canonical_application_url=item.snapshot.canonical_application_url,
+                application_url=item.snapshot.application_url,
+                platform_adapter_id=item.snapshot.platform_adapter_id,
+                duplicate_override_reason=item.snapshot.duplicate_override_reason,
+                run_status=item.run_status,
+                created_at=item.created_at,
+            )
+            for item in batch.items
+        ),
+        created_at=batch.created_at,
+        updated_at=batch.updated_at,
+    )
+
+
 # --- User-Facing Endpoints ---
+
+
+@application_batches_router.post(
+    "/profiles/{profile_id}/application-batches/preview",
+    response_model=ApplicationBatchPreviewResponse,
+)
+async def preview_application_batch(
+    profile_id: UUID,
+    request: ApplicationBatchPreviewRequest,
+    service: Annotated[ApplicationService, Depends(get_application_service)],
+) -> ApplicationBatchPreviewResponse:
+    preview = await service.preview_batch(
+        profile_id,
+        application_target_ids=request.application_target_ids,
+        resume_id=request.resume_id,
+        applicant_profile_version=request.applicant_profile_version,
+        resume_version=request.resume_version,
+        automation_mode=request.automation_mode,
+        duplicate_overrides=tuple(
+            ApplicationBatchDuplicateOverride(
+                application_target_id=item.application_target_id,
+                reason=item.reason,
+            )
+            for item in request.duplicate_overrides
+        ),
+    )
+    return ApplicationBatchPreviewResponse(
+        confirmation_text=preview.confirmation_text,
+        confirmation_revision=preview.confirmation_revision,
+        policy_revision=preview.policy_revision,
+        max_batch_size=preview.max_batch_size,
+        applicant_profile_id=preview.applicant_profile_id,
+        applicant_profile_version=preview.applicant_profile_version,
+        resume_asset_id=preview.resume_asset_id,
+        resume_asset_version=preview.resume_asset_version,
+        resume_sha256=preview.resume_sha256,
+        answer_bank_hash=preview.answer_bank_hash,
+        answer_bank_snapshot=preview.answer_bank_snapshot,
+        issues=tuple(
+            ApplicationBatchPreviewIssueRead(
+                code=issue.code,
+                severity=issue.severity,
+                message=issue.message,
+                application_target_id=issue.application_target_id,
+                existing_run_id=issue.existing_run_id,
+            )
+            for issue in preview.issues
+        ),
+        resolved_targets=tuple(
+            ApplicationBatchResolvedTargetRead(
+                application_target_id=target.application_target_id,
+                job_group_id=target.job_group_id,
+                source_posting_id=target.source_posting_id,
+                canonical_application_url=target.canonical_application_url,
+                application_url=target.application_url,
+                platform_adapter_id=target.platform_adapter_id,
+            )
+            for target in preview.resolved_targets
+        ),
+    )
+
+
+@application_batches_router.post(
+    "/profiles/{profile_id}/application-batches",
+    response_model=ApplicationBatchRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_application_batch(
+    profile_id: UUID,
+    request: ApplicationBatchCreateRequest,
+    service: Annotated[ApplicationService, Depends(get_application_service)],
+) -> Any:
+    try:
+        batch = await service.authorize_batch(
+            profile_id,
+            application_target_ids=request.application_target_ids,
+            resume_id=request.resume_id,
+            applicant_profile_version=request.applicant_profile_version,
+            resume_version=request.resume_version,
+            automation_mode=request.automation_mode,
+            confirmation_revision=request.confirmation_revision,
+            owner_confirmation=request.owner_confirmation,
+            duplicate_overrides=tuple(
+                ApplicationBatchDuplicateOverride(
+                    application_target_id=item.application_target_id,
+                    reason=item.reason,
+                )
+                for item in request.duplicate_overrides
+            ),
+        )
+    except ApplicationBatchValidationError as exc:
+        if exc.conflicts and all(
+            issue.code.value == "DUPLICATE_ACTIVE_RUN" for issue in exc.issues
+        ):
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "detail": "Duplicate application conflict",
+                    "conflicts": [
+                        conflict.model_dump(mode="json") for conflict in exc.conflicts
+                    ],
+                    "issues": [
+                        {
+                            "code": issue.code.value,
+                            "severity": issue.severity.value,
+                            "message": issue.message,
+                            "application_target_id": (
+                                str(issue.application_target_id)
+                                if issue.application_target_id
+                                else None
+                            ),
+                            "existing_run_id": (
+                                str(issue.existing_run_id)
+                                if issue.existing_run_id
+                                else None
+                            ),
+                        }
+                        for issue in exc.issues
+                    ],
+                },
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "message": str(exc),
+                "issues": [
+                    {
+                        "code": issue.code.value,
+                        "severity": issue.severity.value,
+                        "message": issue.message,
+                        "application_target_id": (
+                            str(issue.application_target_id)
+                            if issue.application_target_id
+                            else None
+                        ),
+                        "existing_run_id": (
+                            str(issue.existing_run_id)
+                            if issue.existing_run_id
+                            else None
+                        ),
+                    }
+                    for issue in exc.issues
+                ],
+            },
+        ) from exc
+    except ApplicationTargetRejectedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"reason_code": exc.reason_code, "message": exc.message},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    return _map_batch_read(batch)
+
+
+@application_batches_router.get(
+    "/profiles/{profile_id}/application-batches",
+    response_model=ApplicationBatchListResponse,
+)
+async def list_application_batches(
+    profile_id: UUID,
+    service: Annotated[ApplicationService, Depends(get_application_service)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 25,
+) -> ApplicationBatchListResponse:
+    batches, total = await service.list_batches(
+        profile_id, page=page, page_size=page_size
+    )
+    total_pages = ceil(total / page_size) if page_size else 0
+    return ApplicationBatchListResponse(
+        items=tuple(_map_batch_read(batch) for batch in batches),
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
+@application_batches_router.get(
+    "/profiles/{profile_id}/application-batches/{batch_id}",
+    response_model=ApplicationBatchRead,
+)
+async def get_application_batch(
+    profile_id: UUID,
+    batch_id: UUID,
+    service: Annotated[ApplicationService, Depends(get_application_service)],
+) -> ApplicationBatchRead:
+    batch = await service.get_batch(profile_id, batch_id)
+    if batch is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Batch not found"
+        )
+    return _map_batch_read(batch)
+
+
+@application_batches_router.post(
+    "/profiles/{profile_id}/application-batches/{batch_id}/cancel",
+    response_model=ApplicationBatchRead,
+)
+async def cancel_application_batch(
+    profile_id: UUID,
+    batch_id: UUID,
+    request: CancelBatchRequest,
+    service: Annotated[ApplicationService, Depends(get_application_service)],
+) -> ApplicationBatchRead:
+    try:
+        batch = await service.cancel_batch(profile_id, batch_id, reason=request.reason)
+    except ApplicationRunNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    except Exception as exc:
+        # InvalidStateTransitionError from already-terminal items is skipped in repo
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    return _map_batch_read(batch)
 
 
 @application_runs_router.post(

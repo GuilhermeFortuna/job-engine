@@ -356,6 +356,34 @@ async def test_avatar_upload_crop_and_delete(profile_client: AsyncClient) -> Non
 
 
 @pytest.mark.asyncio
+async def test_multipart_resume_upload_registers_managed_asset(
+    profile_client: AsyncClient,
+) -> None:
+    """Regression: form uploads must accept starlette UploadFile (not fastapi's)."""
+    res_prof = await profile_client.post(
+        "/api/v1/profiles", json={"display_name": "Alice"}
+    )
+    profile_id = res_prof.json()["id"]
+
+    pdf_bytes = _make_synthetic_pdf("Multipart Resume Upload")
+    upload_res = await profile_client.post(
+        f"/api/v1/profiles/{profile_id}/resumes",
+        files={"file": ("alice_resume.pdf", pdf_bytes, "application/pdf")},
+        data={"label": "Alice Resume", "is_default": "true"},
+    )
+    assert upload_res.status_code == 201, upload_res.text
+    body = upload_res.json()
+    assert body["label"] == "Alice Resume"
+    assert body["is_default"] is True
+    assert body["managed_asset_id"] is not None
+    assert body["file_size_bytes"] == len(pdf_bytes)
+
+    listed = await profile_client.get(f"/api/v1/profiles/{profile_id}/resumes")
+    assert listed.status_code == 200
+    assert len(listed.json()["items"]) == 1
+
+
+@pytest.mark.asyncio
 async def test_document_and_binary_streaming(profile_client: AsyncClient) -> None:
     res_prof = await profile_client.post(
         "/api/v1/profiles", json={"display_name": "Alice"}

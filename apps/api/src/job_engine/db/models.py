@@ -472,6 +472,9 @@ class ApplicantProfile(Base):
     runs: Mapped[list["ApplicationRun"]] = relationship(
         back_populates="profile", cascade="all, delete-orphan"
     )
+    application_batches: Mapped[list["ApplicationBatch"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan"
+    )
 
 
 class ApplicantProfileField(Base):
@@ -598,6 +601,121 @@ class ReusableAnswer(Base):
     profile: Mapped[ApplicantProfile] = relationship(back_populates="answers")
 
 
+class ApplicationBatch(Base):
+    __tablename__ = "application_batches"
+    __table_args__ = (
+        Index(
+            "ix_application_batches_profile_created",
+            "applicant_profile_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    applicant_profile_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("applicant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    origin: Mapped[str] = mapped_column(Text, nullable=False)
+    automation_mode: Mapped[str] = mapped_column(Text, nullable=False)
+    applicant_profile_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    resume_asset_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("resume_assets.id"), nullable=False
+    )
+    resume_asset_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    resume_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    answer_bank_snapshot: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False)
+    answer_bank_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    known_capability_exceptions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    policy_revision: Mapped[str] = mapped_column(Text, nullable=False)
+    confirmation_text_revision: Mapped[str] = mapped_column(Text, nullable=False)
+    confirmation_text: Mapped[str] = mapped_column(Text, nullable=False)
+    owner_confirmed_at: Mapped[datetime] = _required_aware_dt()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    profile: Mapped[ApplicantProfile] = relationship(
+        back_populates="application_batches"
+    )
+    resume_asset: Mapped[ResumeAsset] = relationship()
+    items: Mapped[list["ApplicationBatchItem"]] = relationship(
+        back_populates="batch",
+        cascade="all, delete-orphan",
+        order_by="ApplicationBatchItem.position.asc()",
+    )
+    runs: Mapped[list["ApplicationRun"]] = relationship(
+        back_populates="batch",
+        foreign_keys="ApplicationRun.batch_id",
+    )
+
+
+class ApplicationBatchItem(Base):
+    __tablename__ = "application_batch_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "batch_id",
+            "position",
+            name="uq_application_batch_items_batch_position",
+        ),
+        Index(
+            "ix_application_batch_items_batch_position",
+            "batch_id",
+            "position",
+        ),
+        Index(
+            "ix_application_batch_items_run_id",
+            "run_id",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    batch_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    job_group_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("job_groups.id"), nullable=False
+    )
+    application_target_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_targets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    source_posting_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("source_postings.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    canonical_application_url: Mapped[str] = mapped_column(Text, nullable=False)
+    application_url: Mapped[str] = mapped_column(Text, nullable=False)
+    platform_adapter_id: Mapped[str] = mapped_column(Text, nullable=False)
+    duplicate_override_reason: Mapped[str | None] = mapped_column(Text)
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_runs.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    batch: Mapped[ApplicationBatch] = relationship(back_populates="items")
+    run: Mapped["ApplicationRun"] = relationship(
+        back_populates="batch_item",
+        foreign_keys=[run_id],
+    )
+
+
 class ApplicationRun(Base):
     __tablename__ = "application_runs"
     __table_args__ = (
@@ -606,21 +724,16 @@ class ApplicationRun(Base):
         Index("ix_application_runs_queue_order", "status", "created_at"),
         Index("ix_application_runs_lease_expires", "lease_expires_at"),
         Index("ix_application_runs_profile_status", "applicant_profile_id", "status"),
+        Index("ix_application_runs_batch_id", "batch_id"),
+        Index(
+            "uq_application_runs_batch_item_id",
+            "batch_item_id",
+            unique=True,
+        ),
         Index(
             "uq_application_runs_active_or_submitted_url",
             "applicant_profile_id",
             "canonical_application_url",
-            unique=True,
-            postgresql_where=text(
-                "status IN ('queued', 'claimed', 'running', 'needs_input', "
-                "'paused_auth', 'failed_retryable', 'submitted') "
-                "AND duplicate_override_confirmed_at IS NULL"
-            ),
-        ),
-        Index(
-            "uq_application_runs_active_or_submitted_job_group",
-            "applicant_profile_id",
-            "job_group_id",
             unique=True,
             postgresql_where=text(
                 "status IN ('queued', 'claimed', 'running', 'needs_input', "
@@ -634,6 +747,16 @@ class ApplicationRun(Base):
     applicant_profile_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("applicant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    batch_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_batches.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    batch_item_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("application_batch_items.id", ondelete="RESTRICT"),
         nullable=False,
     )
     job_group_id: Mapped[UUID] = mapped_column(
@@ -684,6 +807,15 @@ class ApplicationRun(Base):
     completed_at: Mapped[datetime | None] = _optional_aware_dt()
 
     profile: Mapped[ApplicantProfile] = relationship(back_populates="runs")
+    batch: Mapped[ApplicationBatch] = relationship(
+        back_populates="runs",
+        foreign_keys=[batch_id],
+    )
+    batch_item: Mapped[ApplicationBatchItem] = relationship(
+        back_populates="run",
+        foreign_keys=[ApplicationBatchItem.run_id],
+        uselist=False,
+    )
     job_group: Mapped[JobGroup] = relationship()
     resume_asset: Mapped[ResumeAsset] = relationship()
     events: Mapped[list["ApplicationRunEvent"]] = relationship(

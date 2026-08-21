@@ -569,11 +569,27 @@ describe("ApplicationWorkspace", () => {
 
   it("enables submit for the matching armed run and ignores a second click", async () => {
     const order: string[] = [];
+    // Delay desktop readiness so release can finish before bounds/capabilities
+    // catch up — reopen must still open once the viewport is ready.
+    getCapabilities.mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                embeddedBrowser: true,
+                platform: "linux",
+                productionRuntime: true,
+              }),
+            40,
+          ),
+        ),
+    );
     releaseSubmit.mockImplementation(
       () => {
         order.push("release");
         return new Promise((resolve) =>
-          setTimeout(() => resolve(detail({ status: "queued" })), 50),
+          setTimeout(() => resolve(detail({ status: "queued" })), 10),
         );
       },
     );
