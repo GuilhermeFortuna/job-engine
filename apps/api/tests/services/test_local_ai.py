@@ -73,7 +73,7 @@ def test_sanitize_discards_prohibited_and_unknown_fields() -> None:
         source_text=source,
     )
     paths = {f.field_path for f in fields}
-    assert paths == {"first_name", "skills"}
+    assert paths == {"first_name"}
     assert "work_authorizations" not in paths
 
 
@@ -89,7 +89,22 @@ def test_sanitize_rejects_out_of_range_spans() -> None:
         ],
         source_text=source,
     )
-    assert fields[0].evidence == ()
+    assert fields == ()
+
+
+def test_sanitize_uses_source_text_instead_of_model_excerpt() -> None:
+    fields = sanitize_proposed_fields(
+        [
+            {
+                "field_path": "headline",
+                "value": "Engineer",
+                "evidence": [{"start": 0, "end": 8, "excerpt": "Invented executive"}],
+            }
+        ],
+        source_text="Engineer at Acme",
+    )
+
+    assert fields[0].evidence[0].excerpt == "Engineer"
 
 
 def test_apply_accepted_fields_maps_owner_confirmation() -> None:

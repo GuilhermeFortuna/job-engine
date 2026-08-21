@@ -116,6 +116,75 @@ def parse_strict_json_object(raw_text: str) -> dict[str, Any]:
     return parsed
 
 
+def validate_json_schema(
+    value: Any, schema: dict[str, Any], *, path: str = "$"
+) -> None:
+    """Validate the bounded JSON-schema subset used by local inference tasks."""
+    expected = schema.get("type")
+    type_matches = {
+        "object": isinstance(value, dict),
+        "array": isinstance(value, list),
+        "string": isinstance(value, str),
+        "boolean": isinstance(value, bool),
+        "integer": isinstance(value, int) and not isinstance(value, bool),
+        "number": isinstance(value, (int, float)) and not isinstance(value, bool),
+        "null": value is None,
+    }
+    if isinstance(expected, str) and not type_matches.get(expected, False):
+        raise LocalAiError(
+            LocalAiFailureCode.INVALID_STRUCTURE,
+            f"Model response schema mismatch at {path}: expected {expected}",
+        )
+
+    if "enum" in schema and value not in schema["enum"]:
+        raise LocalAiError(
+            LocalAiFailureCode.INVALID_STRUCTURE,
+            f"Model response schema mismatch at {path}: value is not allowed",
+        )
+
+    if isinstance(value, dict):
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        if isinstance(required, list):
+            missing = [key for key in required if key not in value]
+            if missing:
+                raise LocalAiError(
+                    LocalAiFailureCode.INVALID_STRUCTURE,
+                    f"Model response schema mismatch at {path}: missing {missing[0]}",
+                )
+        if schema.get("additionalProperties") is False:
+            extras = [key for key in value if key not in properties]
+            if extras:
+                raise LocalAiError(
+                    LocalAiFailureCode.INVALID_STRUCTURE,
+                    f"Model response schema mismatch at {path}: unexpected {extras[0]}",
+                )
+        if isinstance(properties, dict):
+            for key, child_schema in properties.items():
+                if key in value and isinstance(child_schema, dict):
+                    validate_json_schema(value[key], child_schema, path=f"{path}.{key}")
+
+    if isinstance(value, list):
+        item_schema = schema.get("items")
+        if isinstance(item_schema, dict):
+            for index, item in enumerate(value):
+                validate_json_schema(item, item_schema, path=f"{path}[{index}]")
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        minimum = schema.get("minimum")
+        maximum = schema.get("maximum")
+        if isinstance(minimum, (int, float)) and value < minimum:
+            raise LocalAiError(
+                LocalAiFailureCode.INVALID_STRUCTURE,
+                f"Model response schema mismatch at {path}: below minimum",
+            )
+        if isinstance(maximum, (int, float)) and value > maximum:
+            raise LocalAiError(
+                LocalAiFailureCode.INVALID_STRUCTURE,
+                f"Model response schema mismatch at {path}: above maximum",
+            )
+
+
 class LocalInferenceBroker:
     """Backend-owned semaphore + bounded queue for all local model calls."""
 
@@ -352,6 +421,7 @@ class LocalInferenceBroker:
             ) from exc
 
         parsed = parse_strict_json_object(content)
+        validate_json_schema(parsed, request.response_json_schema)
         latency_ms = int((asyncio.get_running_loop().time() - started) * 1000)
         return LocalInferenceResponse(
             content=parsed,

@@ -554,6 +554,12 @@ describe("applications API client", () => {
   });
 
   it("registers, updates, and deletes resumes without returning local paths", async () => {
+    const activeProfile = {
+      id: "profile-id",
+      version: 1,
+      created_at: "2026-08-20T00:00:00Z",
+      updated_at: "2026-08-20T00:00:00Z",
+    };
     const rawResume = {
       id: "resume-uuid",
       resume_id: "res_primary_pdf",
@@ -572,8 +578,11 @@ describe("applications API client", () => {
     };
     global.fetch = vi
       .fn()
+      .mockResolvedValueOnce(jsonResponse(activeProfile))
       .mockResolvedValueOnce(jsonResponse(rawResume, 201))
+      .mockResolvedValueOnce(jsonResponse(activeProfile))
       .mockResolvedValueOnce(jsonResponse({ ...rawResume, label: "Updated", version: 2 }))
+      .mockResolvedValueOnce(jsonResponse(activeProfile))
       .mockResolvedValueOnce(jsonResponse(undefined, 204));
 
     const registered = await registerResume({
@@ -596,12 +605,23 @@ describe("applications API client", () => {
     expect(updated).toMatchObject({ label: "Updated", version: 2 });
     expect(global.fetch).toHaveBeenNthCalledWith(
       3,
-      "http://127.0.0.1:8000/api/v1/resumes/res_primary_pdf?expected_version=2",
+      "http://127.0.0.1:8000/api/v1/profiles/active",
+      expect.any(Object),
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      6,
+      "http://127.0.0.1:8000/api/v1/profiles/profile-id/resumes/res_primary_pdf?expected_version=2",
       expect.objectContaining({ method: "DELETE" }),
     );
   });
 
   it("lists and mutates owner-authored answer-bank entries", async () => {
+    const activeProfile = {
+      id: "profile-id",
+      version: 1,
+      created_at: "2026-08-20T00:00:00Z",
+      updated_at: "2026-08-20T00:00:00Z",
+    };
     const answer = {
       id: "answer-uuid",
       answer_id: "work_auth_us",
@@ -620,9 +640,13 @@ describe("applications API client", () => {
     };
     global.fetch = vi
       .fn()
+      .mockResolvedValueOnce(jsonResponse(activeProfile))
       .mockResolvedValueOnce(jsonResponse({ items: [answer] }))
+      .mockResolvedValueOnce(jsonResponse(activeProfile))
       .mockResolvedValueOnce(jsonResponse(answer, 201))
+      .mockResolvedValueOnce(jsonResponse(activeProfile))
       .mockResolvedValueOnce(jsonResponse({ ...answer, answer_text: "Still authorized", version: 2 }))
+      .mockResolvedValueOnce(jsonResponse(activeProfile))
       .mockResolvedValueOnce(jsonResponse(undefined, 204));
 
     const listed = await fetchAnswerBank({ question_intent: "work_authorization" });
@@ -649,8 +673,8 @@ describe("applications API client", () => {
     expect(created.answer_text).toBe("Authorized");
     expect(updated).toMatchObject({ answer_text: "Still authorized", version: 2 });
     expect(global.fetch).toHaveBeenNthCalledWith(
-      4,
-      "http://127.0.0.1:8000/api/v1/answer-bank/work_auth_us?expected_version=2",
+      8,
+      "http://127.0.0.1:8000/api/v1/profiles/profile-id/answer-bank/work_auth_us?expected_version=2",
       expect.objectContaining({ method: "DELETE" }),
     );
   });

@@ -27,6 +27,21 @@ JPEG_MAGIC = b"\xff\xd8\xff"
 PDF_MAGIC = b"%PDF-"
 ZIP_MAGIC = b"PK\x03\x04"
 
+DECLARED_MIME_ALIASES: dict[str, frozenset[str]] = {
+    "application/pdf": frozenset({"application/pdf"}),
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": (
+        frozenset(
+            {
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/docx",
+            }
+        )
+    ),
+    "image/png": frozenset({"image/png"}),
+    "image/jpeg": frozenset({"image/jpeg", "image/jpg"}),
+    "image/webp": frozenset({"image/webp"}),
+}
+
 
 class InvalidAssetError(ValueError):
     """Raised when an uploaded asset violates format, type, or integrity rules."""
@@ -107,6 +122,7 @@ def validate_resume_or_document_type(
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }:
         raise InvalidAssetTypeError(f"Expected PDF or DOCX, detected {detected_mime}")
+    _validate_declared_mime(detected_mime, content_type)
     return detected_mime, detected_ext
 
 
@@ -119,7 +135,17 @@ def validate_avatar_type(
         raise InvalidAssetTypeError(
             f"Expected PNG, JPEG, or WebP avatar image, detected {detected_mime}"
         )
+    _validate_declared_mime(detected_mime, content_type)
     return detected_mime, detected_ext
+
+
+def _validate_declared_mime(detected_mime: str, declared_mime: str | None) -> None:
+    normalized = (declared_mime or "").split(";", 1)[0].strip().lower()
+    if normalized not in DECLARED_MIME_ALIASES[detected_mime]:
+        raise InvalidAssetTypeError(
+            "Declared content type does not match detected file signature "
+            f"(declared: {declared_mime}, detected: {detected_mime})"
+        )
 
 
 def extract_text_from_file(file_path: Path, content_type: str) -> str | None:

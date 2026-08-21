@@ -11,10 +11,12 @@ from alembic import command
 from sqlalchemy import func, select
 
 from job_engine.config import Settings
+from job_engine.db.models import ApplicationTarget as ApplicationTargetRow
 from job_engine.db.models import JobGroup as JobGroupRow
 from job_engine.db.models import SourcePosting as SourcePostingRow
 from job_engine.db.session import create_engine, create_session_factory
 from job_engine.domain.enums import JobStatus
+from job_engine.domain.jobs import ErrorSummary
 from job_engine.services.normalization import NormalizationCandidate
 from job_engine.services.sync import (
     LiveSyncCooldownError,
@@ -42,12 +44,14 @@ class FakeSourceAdapter:
         records: list[dict[str, Any]],
         *,
         fail_with: Exception | None = None,
+        board_errors: tuple[ErrorSummary, ...] = (),
         adapter_version: str = "1.0.0",
     ) -> None:
         self.source_id = source_id
         self.adapter_version = adapter_version
         self._records = records
         self._fail_with = fail_with
+        self.board_errors = board_errors
 
     async def fetch_page(self, cursor: PageCursor | None) -> SourcePage:
         if self._fail_with is not None:
@@ -70,11 +74,16 @@ class FakeSourceAdapter:
         seen_at: datetime,
     ) -> NormalizationCandidate:
         posting_id = str(parsed["id"])
+        listing_url = (
+            f"https://boards.greenhouse.io/acme/jobs/{posting_id}"
+            if self.source_id == "greenhouse"
+            else f"https://{self.source_id}.example/jobs/{posting_id}"
+        )
         return NormalizationCandidate(
             source_id=self.source_id,
             source_posting_id=posting_id,
             source_name=self.source_id.title(),
-            listing_url=f"https://{self.source_id}.example/jobs/{posting_id}",
+            listing_url=listing_url,
             title_original=str(parsed["title"]),
             company_original=str(parsed["company"]),
             description="Build scalable software.",
@@ -180,6 +189,52 @@ async def test_live_sync_success_all_sources(disposable_database_url: str) -> No
         )
         assert posting_count == 3
         assert group_count == 3
+        target_count = await session.scalar(
+            select(func.count()).select_from(ApplicationTargetRow)
+        )
+        assert target_count == 0
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_live_sync_materializes_ats_target_and_reports_board_errors(
+    disposable_database_url: str,
+) -> None:
+    command.upgrade(alembic_config(disposable_database_url), "head")
+    engine = create_async_engine_helper(disposable_database_url)
+    factory = create_session_factory(engine)
+    settings = Settings(
+        database_url=disposable_database_url,
+        enabled_sources=("greenhouse",),
+    )
+    service = LiveSyncService(factory, settings, guard=LiveSyncGuard(1.0))
+    adapter = FakeSourceAdapter(
+        "greenhouse",
+        [{"id": "101", "title": "Backend Dev", "company": "Acme"}],
+        board_errors=(
+            ErrorSummary(code="board_fetch_error", message="one board failed"),
+        ),
+    )
+
+    chunks = [
+        chunk
+        async for chunk in service.stream_live_sync(
+            adapters={"greenhouse": adapter}, observed_at=SEEN_AT
+        )
+    ]
+    events = _parse_sse_events(chunks)
+    completed = next(data for event, data in events if event == "source_completed")
+    assert completed["status"] == "partial_success"
+    assert completed["error_summaries"] == [
+        {"code": "board_fetch_error", "message": "one board failed"}
+    ]
+
+    async with factory() as session:
+        target_count = await session.scalar(
+            select(func.count()).select_from(ApplicationTargetRow)
+        )
+        assert target_count == 1
 
     await engine.dispose()
 

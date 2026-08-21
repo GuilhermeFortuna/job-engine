@@ -123,6 +123,13 @@ async def _mark_stale_absences(
         await repo.update_source_posting_status(
             posting.source_id, posting.source_posting_id, JobStatus.STALE
         )
+        updated_posting = await repo.get_source_posting(
+            posting.source_id, posting.source_posting_id
+        )
+        if updated_posting is not None:
+            await sync_application_target_for_posting(
+                repo, updated_posting, verified_at=run_started_at
+            )
         marked += 1
         group = await repo.get_job_group_by_source_posting(
             posting.source_id, posting.source_posting_id

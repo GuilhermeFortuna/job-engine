@@ -113,6 +113,38 @@ async def test_malformed_json_rejected() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "content",
+    (
+        '{"ok": true}',
+        '{"ok": true, "echo": "token", "extra": true}',
+        '{"ok": "yes", "echo": "token"}',
+    ),
+)
+async def test_schema_mismatch_rejected(content: str) -> None:
+    transport = httpx.MockTransport(lambda _request: _chat_response(content))
+    client = httpx.AsyncClient(transport=transport, follow_redirects=False)
+    broker = LocalInferenceBroker(client=client, base_url="http://127.0.0.1:11434/v1")
+    try:
+        with pytest.raises(LocalAiError) as exc:
+            await broker.run(
+                LocalInferenceRequest(
+                    task_class=LocalAiTaskClass.SELF_TEST,
+                    model="qwen3:4b",
+                    system_prompt="sys",
+                    user_prompt="user",
+                    response_json_schema=SELF_TEST_RESPONSE_SCHEMA,
+                    schema_name="self_test",
+                    max_output_tokens=64,
+                    timeout_seconds=5.0,
+                )
+            )
+        assert exc.value.code == LocalAiFailureCode.INVALID_STRUCTURE
+    finally:
+        await broker.aclose()
+
+
+@pytest.mark.asyncio
 async def test_missing_model_maps_to_failure_code() -> None:
     transport = httpx.MockTransport(
         lambda r: httpx.Response(404, text="model 'qwen3:4b' not found, try pulling")

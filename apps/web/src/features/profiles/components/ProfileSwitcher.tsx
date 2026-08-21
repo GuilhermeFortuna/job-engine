@@ -18,10 +18,25 @@ export function ProfileSwitcher() {
   const menuId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const openFocusRef = useRef<"selected" | "first" | "last">("selected");
 
   useEffect(() => {
     if (!open) {
       return;
+    }
+    const items = menuRef.current?.querySelectorAll<HTMLElement>(
+      '[role="menuitemradio"], [role="menuitem"]',
+    );
+    if (items?.length) {
+      const target =
+        openFocusRef.current === "last"
+          ? items[items.length - 1]
+          : openFocusRef.current === "selected"
+            ? Array.from(items).find(
+                (item) => item.getAttribute("aria-checked") === "true",
+              ) ?? items[0]
+            : items[0];
+      target.focus();
     }
     function onPointerDown(event: MouseEvent) {
       const target = event.target as Node;
@@ -58,7 +73,17 @@ export function ProfileSwitcher() {
         aria-expanded={open}
         aria-controls={menuId}
         disabled={isLoading}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          openFocusRef.current = "selected";
+          setOpen((value) => !value);
+        }}
+        onKeyDown={(event) => {
+          if (!open && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+            event.preventDefault();
+            openFocusRef.current = event.key === "ArrowUp" ? "last" : "first";
+            setOpen(true);
+          }
+        }}
         className="profile-switcher-trigger"
       >
         {activeProfile ? (
@@ -77,6 +102,28 @@ export function ProfileSwitcher() {
           role="menu"
           aria-label="Applicant profiles"
           className="profile-switcher-menu"
+          onKeyDown={(event) => {
+            if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+              return;
+            }
+            const items = Array.from(
+              event.currentTarget.querySelectorAll<HTMLElement>(
+                '[role="menuitemradio"], [role="menuitem"]',
+              ),
+            );
+            if (items.length === 0) return;
+            event.preventDefault();
+            const current = items.indexOf(document.activeElement as HTMLElement);
+            const next =
+              event.key === "Home"
+                ? 0
+                : event.key === "End"
+                  ? items.length - 1
+                  : event.key === "ArrowUp"
+                    ? (current - 1 + items.length) % items.length
+                    : (current + 1) % items.length;
+            items[next]?.focus();
+          }}
         >
           {profiles.length === 0 ? (
             <p className="profile-switcher-empty" role="none">

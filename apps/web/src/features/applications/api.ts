@@ -556,8 +556,9 @@ export async function fetchResumes(init?: RequestInit): Promise<SafeResume[]> {
 export async function registerResume(
   input: ResumeRegistrationInput,
 ): Promise<SafeResume> {
+  const active = await fetchApplicantProfile();
   return requestProjectedJson(
-    `${getApiBaseUrl()}/api/v1/resumes`,
+    `${getApiBaseUrl()}/api/v1/profiles/${encodeURIComponent(active.id)}/resumes`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -572,8 +573,9 @@ export async function updateResume(
   resumeId: string,
   input: ResumeUpdateInput,
 ): Promise<SafeResume> {
+  const active = await fetchApplicantProfile();
   return requestProjectedJson(
-    `${getApiBaseUrl()}/api/v1/resumes/${encodeURIComponent(resumeId)}`,
+    `${getApiBaseUrl()}/api/v1/profiles/${encodeURIComponent(active.id)}/resumes/${encodeURIComponent(resumeId)}`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -606,8 +608,9 @@ export async function deleteResume(
   resumeId: string,
   expectedVersion: number,
 ): Promise<void> {
+  const active = await fetchApplicantProfile();
   return deleteVersionedResource(
-    `/api/v1/resumes/${encodeURIComponent(resumeId)}`,
+    `/api/v1/profiles/${encodeURIComponent(active.id)}/resumes/${encodeURIComponent(resumeId)}`,
     expectedVersion,
     `Failed to delete resume ${resumeId}`,
   );
@@ -617,6 +620,7 @@ export async function fetchAnswerBank(
   filters: AnswerBankFilters = {},
   init?: RequestInit,
 ): Promise<ReusableAnswer[]> {
+  const active = await fetchApplicantProfile(init);
   const query = new URLSearchParams();
   for (const [name, value] of Object.entries(filters)) {
     if (value !== undefined) {
@@ -625,7 +629,7 @@ export async function fetchAnswerBank(
   }
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
   const response = await fetchJson(
-    `${getApiBaseUrl()}/api/v1/answer-bank${suffix}`,
+    `${getApiBaseUrl()}/api/v1/profiles/${encodeURIComponent(active.id)}/answer-bank${suffix}`,
     init,
     "Failed to fetch answer bank",
   );
@@ -641,8 +645,9 @@ export async function fetchAnswerBank(
 export async function createAnswer(
   input: ReusableAnswerInput,
 ): Promise<ReusableAnswer> {
+  const active = await fetchApplicantProfile();
   return requestProjectedJson(
-    `${getApiBaseUrl()}/api/v1/answer-bank`,
+    `${getApiBaseUrl()}/api/v1/profiles/${encodeURIComponent(active.id)}/answer-bank`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -657,8 +662,9 @@ export async function updateAnswer(
   answerId: string,
   input: ReusableAnswerUpdate,
 ): Promise<ReusableAnswer> {
+  const active = await fetchApplicantProfile();
   return requestProjectedJson(
-    `${getApiBaseUrl()}/api/v1/answer-bank/${encodeURIComponent(answerId)}`,
+    `${getApiBaseUrl()}/api/v1/profiles/${encodeURIComponent(active.id)}/answer-bank/${encodeURIComponent(answerId)}`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -673,8 +679,9 @@ export async function deleteAnswer(
   answerId: string,
   expectedVersion: number,
 ): Promise<void> {
+  const active = await fetchApplicantProfile();
   return deleteVersionedResource(
-    `/api/v1/answer-bank/${encodeURIComponent(answerId)}`,
+    `/api/v1/profiles/${encodeURIComponent(active.id)}/answer-bank/${encodeURIComponent(answerId)}`,
     expectedVersion,
     `Failed to delete answer-bank entry ${answerId}`,
   );

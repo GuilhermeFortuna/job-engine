@@ -361,6 +361,35 @@ async def test_stale_profile_snapshot_returns_conflict(
     assert resp.status_code == 409
 
 
+async def test_answer_decisions_use_run_profile_after_active_profile_switch(
+    client: AsyncClient, session: AsyncSession, app: FastAPI
+) -> None:
+    settings: Settings = app.state.settings
+    target_id = await _setup_fixtures(session, settings)
+    run_id, lease_token = await _create_and_claim_run(client, settings, target_id)
+
+    vault_repo = ApplicantVaultRepository(session)
+    other = await vault_repo.create_profile(
+        ApplicantProfileInput(display_name="Other applicant")
+    )
+    await vault_repo.set_active_profile(other.id)
+    await session.commit()
+
+    response = await client.post(
+        f"/api/v1/runner/runs/{run_id}/answer-decisions",
+        headers={
+            "Authorization": f"Bearer {settings.runner_secret}",
+            "X-Runner-Lease-Token": lease_token,
+        },
+        json={
+            "observations": [_observation("fp_notice", "What is your notice period?")]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["decisions"][0]["answer"] == "30"
+
+
 async def test_duplicate_field_fingerprint_rejected(
     client: AsyncClient, session: AsyncSession, app: FastAPI
 ) -> None:

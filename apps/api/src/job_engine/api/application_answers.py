@@ -21,7 +21,6 @@ from job_engine.db.repositories import (
     ApplicationRepository,
     CatalogRepository,
 )
-from job_engine.domain.applicant import ResumeAsset
 from job_engine.domain.application_answers import (
     ControlType,
     ObservationValidationConstraints,
@@ -75,13 +74,6 @@ def get_application_answer_service(
     )
     request.app.state.application_answer_service = service
     return service
-
-
-async def _load_resume_by_id(
-    vault_repo: ApplicantVaultRepository, resume_asset_id: UUID
-) -> ResumeAsset | None:
-    resumes = await vault_repo.list_resumes()
-    return next((r for r in resumes if r.id == resume_asset_id), None)
 
 
 def _to_domain_observation(
@@ -143,13 +135,23 @@ async def submit_answer_decisions(
         catalog_repo = CatalogRepository(session)
 
         run = await app_repo.get_run(run_id)
-        profile = await vault_repo.get_profile()
-        resume = (
-            await _load_resume_by_id(vault_repo, run.resume_asset_id)
+        profile = (
+            await vault_repo.get_profile(run.applicant_profile_id)
             if run is not None
             else None
         )
-        answer_bank = await vault_repo.list_answers()
+        resume = (
+            await vault_repo.get_resume_by_id(
+                run.applicant_profile_id, run.resume_asset_id
+            )
+            if run is not None
+            else None
+        )
+        answer_bank = (
+            await vault_repo.list_answers(run.applicant_profile_id)
+            if run is not None
+            else ()
+        )
         job_group = (
             await catalog_repo.get_job_group(run.job_group_id)
             if run is not None

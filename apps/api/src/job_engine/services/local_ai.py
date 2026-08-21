@@ -141,11 +141,15 @@ def sanitize_proposed_fields(
                     continue
                 if start < 0 or end < start or end > len(source_text):
                     continue
-                excerpt = str(span.get("excerpt") or source_text[start:end])[:240]
-                evidence.append(SourceSpan(start=start, end=end, excerpt=excerpt))
+                excerpt = source_text[start:end]
+                if not excerpt:
+                    continue
+                evidence.append(SourceSpan(start=start, end=end, excerpt=excerpt[:240]))
 
         if not evidence and isinstance(value, str) and value.strip():
             evidence.extend(find_source_spans(source_text, value))
+        if not evidence:
+            continue
 
         confidence = item.get("confidence")
         if confidence is not None and not isinstance(confidence, (int, float)):

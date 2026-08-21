@@ -83,10 +83,11 @@ test.describe("FRONT-007 profile onboarding", () => {
     });
     try {
       await page.goto("/profile");
+      const readinessPanel = page.getByRole("region", { name: "Readiness" });
       await expect(
-        page.getByText(
-          /Local model service is unreachable|Ready with exceptions|Setup required/,
-        ),
+        readinessPanel.getByText("Local model service is unreachable", {
+          exact: true,
+        }),
       ).toBeVisible();
     } finally {
       await resetMockProfiles();

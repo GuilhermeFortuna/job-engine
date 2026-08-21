@@ -6,7 +6,7 @@
 
 **Register revision:** `CROSS-015-REG-2026-08-21.1`  
 **Retrieved:** 2026-08-21T11:19:19Z  
-**Owner-review status:** `PENDING_OWNER`
+**Owner-review status:** `APPROVED`
 
 This register is the CROSS-015 feasibility record and the data/configuration
 authority for [BACK-016](../development/specs/BACK-016-executable-application-targets-spec.md).
@@ -404,7 +404,7 @@ not in this revision's `approved` list.
 ```json
 {
   "register_revision": "CROSS-015-REG-2026-08-21.1",
-  "owner_approved": false,
+  "owner_approved": true,
   "discovery": {
     "user_agent": "JobEngine/0.1 (+https://github.com/GuilhermeFortuna/job-engine; personal catalog; ats-native)",
     "max_polls_per_source_per_day": 1,
@@ -508,9 +508,8 @@ not in this revision's `approved` list.
 }
 ```
 
-`owner_approved` stays `false` until the repository owner records approval of
-**this exact revision**. BACK-016 must not dispatch against an unapproved
-revision.
+`owner_approved` records the repository owner's approval of this exact revision
+in [`docs/development/STATUS.md`](../development/STATUS.md).
 
 ---
 
@@ -589,16 +588,14 @@ cd docs/sources/fixtures/cross-015 && sha256sum -c SHA256SUMS
 
 ---
 
-## 11. Owner review request
+## 11. Owner approval record
 
-Please approve or reject register revision **`CROSS-015-REG-2026-08-21.1`**.
-
-CROSS-015 is implemented as documentation and fixtures only. Do not mark the
-pair `DONE` and do not start BACK-016 until this exact revision is
-owner-approved.
+CROSS-015 is implemented as documentation and fixtures. The repository owner
+approved revision **`CROSS-015-REG-2026-08-21.1`** and marked the pair `DONE` in
+the live status authority.
 
 ```text
-Status: PENDING_OWNER
+Status: APPROVED
 Revision: CROSS-015-REG-2026-08-21.1
 Approved: 4 Greenhouse + 4 Lever (global)
 Rejected: stripe (redirect_only), lever (empty), prosus (EU unbound)

@@ -89,14 +89,13 @@ async def test_applicant_profile_crud_and_optimistic_locking(
     applicant_client: AsyncClient,
 ) -> None:
     # 1. Profile not found initially
-    get_res = await applicant_client.get("/api/v1/applicant-profile")
+    get_res = await applicant_client.get("/api/v1/profiles/active")
     assert get_res.status_code == 404
 
     now_iso = datetime.now(UTC).isoformat()
 
     # 2. Create profile with expected_version=None
     create_payload = {
-        "expected_version": None,
         "first_name": {
             "state": "provided",
             "value": "Jane",
@@ -120,17 +119,16 @@ async def test_applicant_profile_crud_and_optimistic_locking(
         },
     }
 
-    put_res = await applicant_client.put(
-        "/api/v1/applicant-profile", json=create_payload
-    )
-    assert put_res.status_code == 200
+    put_res = await applicant_client.post("/api/v1/profiles", json=create_payload)
+    assert put_res.status_code == 201
     profile_data = put_res.json()
+    profile_url = f"/api/v1/profiles/{profile_data['id']}"
     assert profile_data["version"] == 1
     assert profile_data["first_name"]["value"] == "Jane"
     assert profile_data["email"]["value"] == "jane@example.com"
 
     # 3. GET profile
-    get_res2 = await applicant_client.get("/api/v1/applicant-profile")
+    get_res2 = await applicant_client.get("/api/v1/profiles/active")
     assert get_res2.status_code == 200
     assert get_res2.json()["version"] == 1
 
@@ -145,9 +143,7 @@ async def test_applicant_profile_crud_and_optimistic_locking(
             "policy_category": "verified_profile",
         },
     }
-    conflict_res = await applicant_client.put(
-        "/api/v1/applicant-profile", json=stale_payload
-    )
+    conflict_res = await applicant_client.put(profile_url, json=stale_payload)
     assert conflict_res.status_code == 409
 
     # 5. Successful update with expected_version=1 -> increments to 2
@@ -168,9 +164,7 @@ async def test_applicant_profile_crud_and_optimistic_locking(
             "policy_category": "verified_profile",
         },
     }
-    put_res2 = await applicant_client.put(
-        "/api/v1/applicant-profile", json=update_payload
-    )
+    put_res2 = await applicant_client.put(profile_url, json=update_payload)
     assert put_res2.status_code == 200
     assert put_res2.json()["version"] == 2
     assert put_res2.json()["first_name"]["value"] == "Janet"
@@ -179,6 +173,11 @@ async def test_applicant_profile_crud_and_optimistic_locking(
 async def test_resume_import_preview_endpoint(
     applicant_client: AsyncClient, tmp_path: Path
 ) -> None:
+    profile = await applicant_client.post(
+        "/api/v1/profiles", json={"display_name": "Robin Hood"}
+    )
+    assert profile.status_code == 201
+    profile_id = profile.json()["id"]
     md_file = tmp_path / "test_resume.md"
     md_file.write_text(
         """# ROBIN HOOD
@@ -195,14 +194,14 @@ Nottingham, UK • robin@example.com • [robin.dev](https://robin.dev)
 
     # 1. Invalid path escapes
     bad_res = await applicant_client.post(
-        "/api/v1/applicant-profile/import-resume",
+        f"/api/v1/profiles/{profile_id}/import-resume",
         json={"source_markdown_path": "../outside.md"},
     )
     assert bad_res.status_code == 422
 
     # 2. Valid import proposal
     good_res = await applicant_client.post(
-        "/api/v1/applicant-profile/import-resume",
+        f"/api/v1/profiles/{profile_id}/import-resume",
         json={"source_markdown_path": "test_resume.md"},
     )
     assert good_res.status_code == 200
@@ -213,13 +212,20 @@ Nottingham, UK • robin@example.com • [robin.dev](https://robin.dev)
     assert diff_map["email"]["proposed_value"] == "robin@example.com"
 
     # 3. Assert profile was NOT mutated in database
-    prof_res = await applicant_client.get("/api/v1/applicant-profile")
-    assert prof_res.status_code == 404
+    prof_res = await applicant_client.get(f"/api/v1/profiles/{profile_id}")
+    assert prof_res.status_code == 200
+    assert prof_res.json()["version"] == 1
 
 
 async def test_resume_catalog_endpoints(
     applicant_client: AsyncClient, tmp_path: Path
 ) -> None:
+    profile = await applicant_client.post(
+        "/api/v1/profiles", json={"display_name": "Resume owner"}
+    )
+    assert profile.status_code == 201
+    profile_id = profile.json()["id"]
+    resumes_url = f"/api/v1/profiles/{profile_id}/resumes"
     # Prepare synthetic files
     md1 = tmp_path / "resume1.md"
     md1.write_text("# Candidate 1", encoding="utf-8")
@@ -232,13 +238,13 @@ async def test_resume_catalog_endpoints(
     pdf2.write_bytes(_make_synthetic_pdf("Resume Two Content"))
 
     # 1. List resumes empty
-    list_res = await applicant_client.get("/api/v1/resumes")
+    list_res = await applicant_client.get(resumes_url)
     assert list_res.status_code == 200
     assert list_res.json()["items"] == []
 
     # 2. Register first resume (automatically becomes default)
     create_res1 = await applicant_client.post(
-        "/api/v1/resumes",
+        resumes_url,
         json={
             "resume_id": "res_first",
             "label": "First Resume",
@@ -258,7 +264,7 @@ async def test_resume_catalog_endpoints(
 
     # 3. Register second resume as default (toggles first to non-default)
     create_res2 = await applicant_client.post(
-        "/api/v1/resumes",
+        resumes_url,
         json={
             "resume_id": "res_second",
             "label": "Second Resume",
@@ -273,14 +279,14 @@ async def test_resume_catalog_endpoints(
     assert r2["is_default"] is True
 
     # Check that res_first is now is_default=False
-    list_res2 = await applicant_client.get("/api/v1/resumes")
+    list_res2 = await applicant_client.get(resumes_url)
     items = {item["resume_id"]: item for item in list_res2.json()["items"]}
     assert items["res_second"]["is_default"] is True
     assert items["res_first"]["is_default"] is False
 
     # 4. Patch res_first (refresh checksum and update label)
     patch_res = await applicant_client.patch(
-        "/api/v1/resumes/res_first",
+        f"{resumes_url}/res_first",
         json={
             "expected_version": 1,
             "label": "First Resume Updated",
@@ -293,28 +299,33 @@ async def test_resume_catalog_endpoints(
 
     # 5. Try deleting default resume while another exists -> 409
     del_default_res = await applicant_client.delete(
-        "/api/v1/resumes/res_second?expected_version=1"
+        f"{resumes_url}/res_second?expected_version=1"
     )
     assert del_default_res.status_code == 409
 
     # 6. Delete non-default resume -> 204
     del_non_default = await applicant_client.delete(
-        "/api/v1/resumes/res_first?expected_version=2"
+        f"{resumes_url}/res_first?expected_version=2"
     )
     assert del_non_default.status_code == 204
 
     # 7. Now deleting the only remaining resume succeeds -> 204
     del_last = await applicant_client.delete(
-        "/api/v1/resumes/res_second?expected_version=1"
+        f"{resumes_url}/res_second?expected_version=1"
     )
     assert del_last.status_code == 204
 
 
 async def test_answer_bank_endpoints(applicant_client: AsyncClient) -> None:
+    profile = await applicant_client.post(
+        "/api/v1/profiles", json={"display_name": "Answer owner"}
+    )
+    assert profile.status_code == 201
+    answers_url = f"/api/v1/profiles/{profile.json()['id']}/answer-bank"
     now_iso = datetime.now(UTC).isoformat()
 
     # 1. List initially empty
-    res = await applicant_client.get("/api/v1/answer-bank")
+    res = await applicant_client.get(answers_url)
     assert res.status_code == 200
     assert res.json()["items"] == []
 
@@ -329,7 +340,7 @@ async def test_answer_bank_endpoints(applicant_client: AsyncClient) -> None:
         "provenance": "owner_authored",
         "last_confirmed_at": now_iso,
     }
-    create_res = await applicant_client.post("/api/v1/answer-bank", json=ans_payload)
+    create_res = await applicant_client.post(answers_url, json=ans_payload)
     assert create_res.status_code == 201
     ans_data = create_res.json()
     assert ans_data["answer_id"] == "ans_auth_br"
@@ -337,7 +348,7 @@ async def test_answer_bank_endpoints(applicant_client: AsyncClient) -> None:
 
     # 3. Filter list by intent
     list_res = await applicant_client.get(
-        "/api/v1/answer-bank?question_intent=work_authorization"
+        f"{answers_url}?question_intent=work_authorization"
     )
     assert list_res.status_code == 200
     assert len(list_res.json()["items"]) == 1
@@ -354,7 +365,7 @@ async def test_answer_bank_endpoints(applicant_client: AsyncClient) -> None:
         "last_confirmed_at": now_iso,
     }
     update_res = await applicant_client.put(
-        "/api/v1/answer-bank/ans_auth_br", json=update_payload
+        f"{answers_url}/ans_auth_br", json=update_payload
     )
     assert update_res.status_code == 200
     assert update_res.json()["version"] == 2
@@ -363,12 +374,30 @@ async def test_answer_bank_endpoints(applicant_client: AsyncClient) -> None:
     # 5. Stale version returns 409
     update_payload["expected_version"] = 1
     conflict_res = await applicant_client.put(
-        "/api/v1/answer-bank/ans_auth_br", json=update_payload
+        f"{answers_url}/ans_auth_br", json=update_payload
     )
     assert conflict_res.status_code == 409
 
     # 6. Delete answer -> 204
     del_res = await applicant_client.delete(
-        "/api/v1/answer-bank/ans_auth_br?expected_version=2"
+        f"{answers_url}/ans_auth_br?expected_version=2"
     )
     assert del_res.status_code == 204
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    (
+        ("GET", "/api/v1/applicant-profile"),
+        ("PUT", "/api/v1/applicant-profile"),
+        ("GET", "/api/v1/resumes"),
+        ("POST", "/api/v1/resumes"),
+        ("GET", "/api/v1/answer-bank"),
+        ("POST", "/api/v1/answer-bank"),
+    ),
+)
+async def test_implicit_profile_routes_are_not_exposed(
+    applicant_client: AsyncClient, method: str, path: str
+) -> None:
+    response = await applicant_client.request(method, path, json={})
+    assert response.status_code == 404

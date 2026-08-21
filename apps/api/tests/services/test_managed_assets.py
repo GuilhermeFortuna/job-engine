@@ -180,6 +180,20 @@ async def test_managed_assets_rejects_magic_byte_mismatch(tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
+async def test_managed_assets_rejects_declared_mime_mismatch(tmp_path: Path) -> None:
+    service = ManagedAssetService(tmp_path)
+
+    with pytest.raises(InvalidAssetTypeError, match="does not match"):
+        await service.store_asset_stream(
+            profile_id=uuid4(),
+            asset_type=ManagedAssetType.DOCUMENT,
+            filename="actually-a-pdf.pdf",
+            declared_content_type="image/png",
+            content_stream=_stream_bytes(_make_pdf("MIME mismatch")),
+        )
+
+
+@pytest.mark.asyncio
 async def test_managed_assets_rejects_oversized_file(tmp_path: Path) -> None:
     service = ManagedAssetService(tmp_path)
     profile_id = uuid4()

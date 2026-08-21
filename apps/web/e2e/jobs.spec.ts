@@ -222,6 +222,13 @@ test.describe("Job Search and Resilience", () => {
     await expect(
       page.getByRole("heading", { level: 2, name: "Senior Backend Engineer" }),
     ).toBeVisible();
+
+    await page.getByRole("button", { name: /dismiss catalog notice/i }).click();
+    await expect(
+      page.getByRole("heading", {
+        name: /catalog notice: partial source degraded/i,
+      }),
+    ).toBeHidden();
   });
 
   test("9. Responsive layout: zero horizontal overflow at 360px, 768px, and 1280px", async ({

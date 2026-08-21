@@ -377,6 +377,7 @@ async def register_or_upload_resume(
         # request.form() yields starlette.datastructures.UploadFile, which is not a
         # subclass of fastapi.UploadFile — isinstance must use the Starlette type.
         if file is not None and isinstance(file, StarletteUploadFile):
+            asset = None
 
             async def file_stream() -> AsyncIterator[bytes]:
                 while chunk := await file.read(65536):
@@ -414,6 +415,8 @@ async def register_or_upload_resume(
                     detail=str(err),
                 ) from err
             except Exception as err:
+                if asset is not None:
+                    managed_assets.delete_asset_file(asset.relative_path)
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=str(err),
@@ -600,6 +603,7 @@ async def upload_document(
         while chunk := await file.read(65536):
             yield chunk
 
+    asset = None
     try:
         asset = await managed_assets.store_asset_stream(
             profile_id=profile_id,
@@ -620,6 +624,10 @@ async def upload_document(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(err),
         ) from err
+    except Exception:
+        if asset is not None:
+            managed_assets.delete_asset_file(asset.relative_path)
+        raise
 
 
 @router.delete(
@@ -698,6 +706,7 @@ async def upload_avatar(
         while chunk := await file.read(65536):
             yield chunk
 
+    asset = None
     try:
         asset = await managed_assets.store_asset_stream(
             profile_id=profile_id,
@@ -731,6 +740,10 @@ async def upload_avatar(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(err),
         ) from err
+    except Exception:
+        if asset is not None:
+            managed_assets.delete_asset_file(asset.relative_path)
+        raise
 
 
 @router.post("/profiles/{profile_id}/avatar/crop", response_model=AvatarResponse)
@@ -1027,17 +1040,12 @@ async def delete_answer_for_profile(
         ) from err
 
 
-# --- Backward Compatibility Singular Routes (Operating on Active Profile) ---
-
-
-@router.get("/applicant-profile", response_model=ApplicantProfileRead)
 async def get_legacy_applicant_profile(
     service: Annotated[ApplicantService, Depends(get_applicant_service)],
 ) -> ApplicantProfileRead:
     return await get_active_profile(service)
 
 
-@router.put("/applicant-profile", response_model=ApplicantProfileRead)
 async def upsert_legacy_applicant_profile(
     request: ApplicantProfileUpsertRequest,
     service: Annotated[ApplicantService, Depends(get_applicant_service)],
@@ -1088,10 +1096,6 @@ async def upsert_legacy_applicant_profile(
     return ApplicantProfileRead.model_validate(updated, from_attributes=True)
 
 
-@router.post(
-    "/applicant-profile/import-resume",
-    response_model=ResumeImportProposalResponse,
-)
 async def import_legacy_resume_preview(
     request: ResumeImportRequest,
     service: Annotated[ApplicantService, Depends(get_applicant_service)],
@@ -1129,7 +1133,6 @@ async def import_legacy_resume_preview(
     )
 
 
-@router.get("/resumes", response_model=ResumeListResponse)
 async def list_legacy_resumes(
     service: Annotated[ApplicantService, Depends(get_applicant_service)],
 ) -> ResumeListResponse:
@@ -1139,11 +1142,6 @@ async def list_legacy_resumes(
     return await list_resumes_for_profile(active_id, service)
 
 
-@router.post(
-    "/resumes",
-    response_model=ResumeAssetRead,
-    status_code=status.HTTP_201_CREATED,
-)
 async def register_legacy_resume(
     request: ResumeAssetCreateRequest,
     service: Annotated[ApplicantService, Depends(get_applicant_service)],
@@ -1187,7 +1185,6 @@ async def register_legacy_resume(
     return ResumeAssetRead.model_validate(created, from_attributes=True)
 
 
-@router.patch("/resumes/{resume_id}", response_model=ResumeAssetRead)
 async def patch_legacy_resume(
     resume_id: str,
     request: ResumeAssetPatchRequest,
@@ -1202,7 +1199,6 @@ async def patch_legacy_resume(
     return await patch_resume_for_profile(active_id, resume_id, request, service)
 
 
-@router.delete("/resumes/{resume_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_legacy_resume(
     resume_id: str,
     expected_version: Annotated[int, Query(...)],
@@ -1217,7 +1213,6 @@ async def delete_legacy_resume(
     await delete_resume_for_profile(active_id, resume_id, expected_version, service)
 
 
-@router.get("/answer-bank", response_model=AnswerBankListResponse)
 async def list_legacy_answers(
     service: Annotated[ApplicantService, Depends(get_applicant_service)],
     question_intent: QuestionIntent | None = None,
@@ -1232,11 +1227,6 @@ async def list_legacy_answers(
     )
 
 
-@router.post(
-    "/answer-bank",
-    response_model=ReusableAnswerRead,
-    status_code=status.HTTP_201_CREATED,
-)
 async def create_legacy_answer(
     request: ReusableAnswerCreateRequest,
     service: Annotated[ApplicantService, Depends(get_applicant_service)],
@@ -1250,7 +1240,6 @@ async def create_legacy_answer(
     return await create_answer_for_profile(active_id, request, service)
 
 
-@router.put("/answer-bank/{answer_id}", response_model=ReusableAnswerRead)
 async def update_legacy_answer(
     answer_id: str,
     request: ReusableAnswerUpdateRequest,
@@ -1265,7 +1254,6 @@ async def update_legacy_answer(
     return await update_answer_for_profile(active_id, answer_id, request, service)
 
 
-@router.delete("/answer-bank/{answer_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_legacy_answer(
     answer_id: str,
     expected_version: Annotated[int, Query(...)],

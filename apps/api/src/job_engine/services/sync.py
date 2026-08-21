@@ -24,8 +24,10 @@ from job_engine.domain.jobs import (
     ErrorSummary,
     IngestionRunCompletion,
 )
+from job_engine.services.application_targets import sync_application_target_for_posting
 from job_engine.services.deduplication import apply_to_catalog
 from job_engine.services.ingestion import (
+    _adapter_board_errors,
     _error_summary,
     _mark_stale_absences,
     _recompute_groups,
@@ -261,6 +263,9 @@ class LiveSyncService:
                         if candidate.status is JobStatus.CLOSED:
                             marked_closed += 1
                         affected_groups.add(result.group.id)
+                        await sync_application_target_for_posting(
+                            repo, result.posting, verified_at=observed_at
+                        )
                         await nested.commit()
                     except RecordValidationError as exc:
                         await nested.rollback()
@@ -274,6 +279,11 @@ class LiveSyncService:
                 cursor = page.next_cursor
                 if cursor is None:
                     break
+
+            board_errors = _adapter_board_errors(adapter)
+            if board_errors:
+                errors.extend(board_errors)
+                fetch_failed = True
 
             run_status = _run_status(
                 pages_ok=pages_ok, fetch_failed=fetch_failed, rejected=rejected
