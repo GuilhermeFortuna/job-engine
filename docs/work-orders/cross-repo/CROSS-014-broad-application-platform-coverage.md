@@ -153,5 +153,5 @@ git diff --check
 - Evidence: [`docs/automation/application-platform-coverage.md`](../../automation/application-platform-coverage.md), [`apps/api/tests/fixtures/application_platform_inventory.json`](../../apps/api/tests/fixtures/application_platform_inventory.json)
 - Independent reviewer: Pending platform-coverage review
 - Measurability: Owner option (b) applied via planning AskQuestion; vacuous resolvable slice triggers option (c) escalation — ≥95% not published
-- Integration: `RuntimeCoordinator` private `selectAdapter` delegates to `adapters/selection.ts` after rebase onto CROSS-012 (`c3ebbb8`)
+- Integration: `RuntimeCoordinator` private `selectAdapter` delegates to `adapters/selection.ts` after rebase onto `development` (`4a45110`, includes post-FRONT-006 CI repairs)
 - Production numerator: 3/3 standard-form families via `test:production` (4 passed); feed inventory remains option (c)
