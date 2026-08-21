@@ -1,6 +1,6 @@
 # CROSS-017: Integrated local-first product acceptance
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Product direction:** [`../../local-first-product-direction.md`](../../local-first-product-direction.md)  
 **Depends on:** BACK-015, BACK-016, BACK-017, CROSS-016, FRONT-007, FRONT-008  
 **Implementation plan:** [`../plans/CROSS-017-local-first-product-acceptance-plan.md`](../plans/CROSS-017-local-first-product-acceptance-plan.md)
@@ -63,4 +63,3 @@ Acceptance requires all eleven outcomes in `local-first-product-direction.md`:
   owner-visible proof.
 - The verdict is `GO`, `CONDITIONAL_GO`, or `NO_GO`. Only the owner may record the
   final acceptance decision; agents record evidence and blockers.
-

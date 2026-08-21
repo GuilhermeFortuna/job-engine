@@ -1,6 +1,6 @@
 # BACK-017: Durable, frozen application batches
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Product direction:** [`../../local-first-product-direction.md`](../../local-first-product-direction.md)  
 **Depends on:** BACK-014, BACK-016  
 **Implementation plan:** [`../plans/BACK-017-durable-application-batches-plan.md`](../plans/BACK-017-durable-application-batches-plan.md)
@@ -69,4 +69,3 @@ profile edits cannot change authorized applications.
    restart, and submission-unknown reconciliation.
 5. Existing single-run history remains readable after migration and is assigned
    to a synthetic one-item legacy batch without changing run IDs.
-

@@ -1,6 +1,6 @@
 # CROSS-017 implementation plan: Local-first product acceptance
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Specification:** [`../specs/CROSS-017-local-first-product-acceptance-spec.md`](../specs/CROSS-017-local-first-product-acceptance-spec.md)  
 **Depends on:** All preceding local-first alignment pairs
 
@@ -76,5 +76,5 @@ the exact behavior left unverified.
 
 Handoff includes the named commit, environment versions, commands/results,
 traceability report, sanitized artifacts, unresolved conditions, and owner
-verdict. It must not upgrade Draft/Review state or claim human approval itself.
-
+verdict. It must not change the authoritative status or claim human approval
+itself.

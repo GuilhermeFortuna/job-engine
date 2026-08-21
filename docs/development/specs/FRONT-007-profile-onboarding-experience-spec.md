@@ -1,6 +1,6 @@
 # FRONT-007: Guided onboarding and Profile experience
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Product direction:** [`../../local-first-product-direction.md`](../../local-first-product-direction.md)  
 **Depends on:** BACK-014, BACK-015  
 **Implementation plan:** [`../plans/FRONT-007-profile-onboarding-experience-plan.md`](../plans/FRONT-007-profile-onboarding-experience-plan.md)
@@ -85,4 +85,3 @@ readiness without editing files or structured data.
    and do not block unrelated profile editing or search.
 5. Automated component tests plus real-browser keyboard/responsive checks cover
    the full flow; owner-visible acceptance demonstrates a non-developer path.
-

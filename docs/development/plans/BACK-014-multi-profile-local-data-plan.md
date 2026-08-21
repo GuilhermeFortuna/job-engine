@@ -1,6 +1,6 @@
 # BACK-014 implementation plan: Multi-profile local data
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Specification:** [`../specs/BACK-014-multi-profile-local-data-spec.md`](../specs/BACK-014-multi-profile-local-data-spec.md)
 
 ## Current-system context
@@ -91,4 +91,3 @@ Handoff must include migration row counts before/after, two-profile isolation
 test names, managed-root sample tree with private names redacted, validation
 results, and any unavailable legacy asset diagnostics. Do not claim onboarding,
 AI extraction, batch authorization, or concurrent runtime completion.
-

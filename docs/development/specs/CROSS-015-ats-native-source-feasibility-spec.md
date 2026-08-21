@@ -1,6 +1,6 @@
 # CROSS-015: Greenhouse and Lever source feasibility register
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Product direction:** [`../../local-first-product-direction.md`](../../local-first-product-direction.md)  
 **Implementation plan:** [`../plans/CROSS-015-ats-native-source-feasibility-plan.md`](../plans/CROSS-015-ats-native-source-feasibility-plan.md)
 

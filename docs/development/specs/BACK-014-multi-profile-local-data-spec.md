@@ -1,6 +1,6 @@
 # BACK-014: Multi-profile applicant data and managed local assets
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Product direction:** [`../../local-first-product-direction.md`](../../local-first-product-direction.md)  
 **Implementation plan:** [`../plans/BACK-014-multi-profile-local-data-plan.md`](../plans/BACK-014-multi-profile-local-data-plan.md)
 
@@ -95,4 +95,3 @@ be read or used through another profile.
    identifiers and associates them with exactly one profile.
 5. Active-profile switching is durable and visible through the API, and archive
    guards protect profiles with active work.
-

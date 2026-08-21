@@ -1,6 +1,6 @@
 # CROSS-015 implementation plan: ATS-native source feasibility
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Specification:** [`../specs/CROSS-015-ats-native-source-feasibility-spec.md`](../specs/CROSS-015-ats-native-source-feasibility-spec.md)
 
 ## Research boundary

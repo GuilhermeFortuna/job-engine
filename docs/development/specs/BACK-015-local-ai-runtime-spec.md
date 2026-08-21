@@ -1,6 +1,6 @@
 # BACK-015: Shared local-AI runtime, profile extraction, and readiness
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Product direction:** [`../../local-first-product-direction.md`](../../local-first-product-direction.md)  
 **Depends on:** BACK-014  
 **Implementation plan:** [`../plans/BACK-015-local-ai-runtime-plan.md`](../plans/BACK-015-local-ai-runtime-plan.md)
@@ -85,4 +85,3 @@ uploads files, authorizes submission, or invents personal facts.
    or timed-out model results become specific review exceptions.
 5. Status and failure responses contain no private source text, prompts, paths,
    credentials, or raw model payloads.
-

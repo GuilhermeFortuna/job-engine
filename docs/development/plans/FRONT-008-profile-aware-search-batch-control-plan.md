@@ -1,6 +1,6 @@
 # FRONT-008 implementation plan: Profile-aware batch control
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Specification:** [`../specs/FRONT-008-profile-aware-search-batch-control-spec.md`](../specs/FRONT-008-profile-aware-search-batch-control-spec.md)  
 **Depends on:** BACK-014, BACK-016, BACK-017, CROSS-016
 
@@ -83,4 +83,3 @@ Provide target/action matrix, exact authorized batch request/response with priva
 values redacted, concurrent progress screenshots/video, ordinary-browser proof,
 accessibility results, and validation output. A success toast is not batch or
 submission proof; durable state and receipts are required.
-

@@ -103,6 +103,18 @@ docs/development/plans/FRONT-012-application-automation-control-center-plan.md
 
 The shared identifier is the canonical link between the two artifacts.
 
+### Status authority
+
+[`docs/development/STATUS.md`](docs/development/STATUS.md) is the sole source of
+truth for live Specification + Plan status and owner approvals. Artifact headers,
+indexes, dependency notes, implementation handoffs, and deprecated Work Order
+statuses are secondary context and must not override it.
+
+The valid statuses are `BLOCKED`, `READY`, `IMPLEMENTING`, `REVIEW`, and `DONE`.
+Only the repository owner may approve a pair by changing its status to `READY`
+or record final acceptance by changing it to `DONE`. Executors and reviewers may
+report the evidence needed for a transition but must not self-authorize it.
+
 ### Specification responsibility
 
 The Specification is the source of truth for **what must exist and why**.

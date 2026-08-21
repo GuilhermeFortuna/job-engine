@@ -1,6 +1,6 @@
 # BACK-017 implementation plan: Durable application batches
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Specification:** [`../specs/BACK-017-durable-application-batches-spec.md`](../specs/BACK-017-durable-application-batches-spec.md)  
 **Depends on:** BACK-014, BACK-016
 

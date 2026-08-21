@@ -1,6 +1,6 @@
 # BACK-016 implementation plan: Executable targets and ATS discovery
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Specification:** [`../specs/BACK-016-executable-application-targets-spec.md`](../specs/BACK-016-executable-application-targets-spec.md)  
 **Depends on:** Owner-approved CROSS-015 register revision
 
@@ -88,4 +88,3 @@ corepack pnpm --filter @job-engine/desktop run test
 Report register revision, source run counts, direct-target rows by provider,
 aggregator unresolved counts, public API example, cross-runtime contract result,
 and all validation. Explicitly separate fixture support from live target discovery.
-

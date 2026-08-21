@@ -1,6 +1,6 @@
 # FRONT-007 implementation plan: Profile onboarding experience
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Specification:** [`../specs/FRONT-007-profile-onboarding-experience-spec.md`](../specs/FRONT-007-profile-onboarding-experience-spec.md)  
 **Depends on:** BACK-014, BACK-015
 
@@ -79,4 +79,3 @@ corepack pnpm --filter @job-engine/web run build
 Provide route/component test results, real-browser screenshots for every step and
 Profile sections, keyboard/mobile checks, two-profile redaction proof, and the
 three readiness states. Do not claim batch selection or concurrent queue UX.
-

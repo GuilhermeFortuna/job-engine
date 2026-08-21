@@ -1,6 +1,6 @@
 # BACK-015 implementation plan: Local-AI runtime
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Specification:** [`../specs/BACK-015-local-ai-runtime-spec.md`](../specs/BACK-015-local-ai-runtime-spec.md)  
 **Depends on:** BACK-014
 

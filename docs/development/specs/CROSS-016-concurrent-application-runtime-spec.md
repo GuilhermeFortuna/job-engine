@@ -1,6 +1,6 @@
 # CROSS-016: Concurrent desktop application worker pool
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Product direction:** [`../../local-first-product-direction.md`](../../local-first-product-direction.md)  
 **Depends on:** BACK-015, BACK-017  
 **Implementation plan:** [`../plans/CROSS-016-concurrent-application-runtime-plan.md`](../plans/CROSS-016-concurrent-application-runtime-plan.md)
@@ -72,4 +72,3 @@ mixing profiles, pages, resumes, evidence, leases, or receipts.
    retained exception views, and restart.
 5. Submission-unknown and already-attempted runs are reconciled without a second
    blind submit under concurrent load.
-

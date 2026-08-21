@@ -1,6 +1,6 @@
 # CROSS-016 implementation plan: Concurrent application runtime
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Specification:** [`../specs/CROSS-016-concurrent-application-runtime-spec.md`](../specs/CROSS-016-concurrent-application-runtime-spec.md)  
 **Depends on:** BACK-015, BACK-017
 
@@ -79,4 +79,3 @@ Include a sanitized concurrent timeline with slot/run/batch IDs, configured and
 effective limits, isolation assertions, restart/reconciliation trace, compiled
 entrypoint proof, and validation results. Fixture concurrency alone is not
 production acceptance.
-

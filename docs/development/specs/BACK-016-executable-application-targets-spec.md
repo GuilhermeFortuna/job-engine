@@ -1,6 +1,6 @@
 # BACK-016: Executable application targets and ATS-native discovery
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Product direction:** [`../../local-first-product-direction.md`](../../local-first-product-direction.md)  
 **Depends on:** CROSS-015  
 **Implementation plan:** [`../plans/BACK-016-executable-application-targets-plan.md`](../plans/BACK-016-executable-application-targets-plan.md)
@@ -73,4 +73,3 @@ aggregator listing as Auto Apply merely because it is the catalog's only URL.
    one ATS source leaves persisted results from healthy sources searchable.
 5. Existing Greenhouse/Lever desktop selection tests and a backend-to-desktop
    contract test agree on provider ID, URL, and capability state.
-

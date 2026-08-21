@@ -1,6 +1,6 @@
 # FRONT-008: Profile-aware search and batch Auto Apply control
 
-**Status:** Draft  
+**Status:** `BLOCKED` (authoritative: [`../STATUS.md`](../STATUS.md))  
 **Product direction:** [`../../local-first-product-direction.md`](../../local-first-product-direction.md)  
 **Depends on:** BACK-014, BACK-016, BACK-017, CROSS-016  
 **Implementation plan:** [`../plans/FRONT-008-profile-aware-search-batch-control-plan.md`](../plans/FRONT-008-profile-aware-search-batch-control-plan.md)
@@ -85,4 +85,3 @@ every job and supporting roles beyond software engineering.
 5. Browser and Electron E2E tests cover back/forward, pagination, profile switch,
    mixed capability, batch authorization, concurrent progress, restart, and
    ordinary-browser fallback.
-
