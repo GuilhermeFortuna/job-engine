@@ -1,5 +1,5 @@
 {
-  "evidence_revision": "cross-014-v4",
+  "evidence_revision": "cross-014-v5",
   "owner_inventory_decision": "option_b_dual_number_reporting_with_vacuous_slice_fallback_to_c",
   "owner_decision_source": "CROSS-014 planning session AskQuestion confirmation (2026-08-20)",
   "total_distinct_application_urls": 9,
@@ -7,8 +7,10 @@
   "total_source_url_count": 9,
   "resolvable_application_url_count": 0,
   "unresolvable_feed_listing_count": 9,
-  "auto_supported_resolvable_count": 0,
-  "pct_of_resolvable_application_urls": null,
+  "eligible_application_url_count": 0,
+  "excluded_resolvable_application_url_count": 0,
+  "auto_supported_eligible_url_count": 0,
+  "pct_of_eligible_application_urls": null,
   "measurability_verdict": "option_c_escalation",
   "measurability_note": "All catalog application URLs in the committed source fixtures are feed listing hosts (himalayas.app, jobicy.com, remoteok.com). The >=95% criterion is unmeasurable against the current ingestion contract until downstream ATS URLs are stored or resolved. CROSS-014 is not acceptance-complete while that prerequisite remains.",
   "family_decisions": {
@@ -56,7 +58,7 @@
       "provider": "feed_listing",
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v4",
+      "evidence_revision": "cross-014-v5",
       "count": 3,
       "share": 0.333333
     },
@@ -67,7 +69,7 @@
       "provider": "feed_listing",
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v4",
+      "evidence_revision": "cross-014-v5",
       "count": 3,
       "share": 0.333333
     },
@@ -78,7 +80,7 @@
       "provider": "feed_listing",
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v4",
+      "evidence_revision": "cross-014-v5",
       "count": 3,
       "share": 0.333333
     }
@@ -93,7 +95,7 @@
       "eligible": false,
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v4",
+      "evidence_revision": "cross-014-v5",
       "observation_count": 1
     },
     {
@@ -105,7 +107,7 @@
       "eligible": false,
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v4",
+      "evidence_revision": "cross-014-v5",
       "observation_count": 1
     },
     {
@@ -117,7 +119,7 @@
       "eligible": false,
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v4",
+      "evidence_revision": "cross-014-v5",
       "observation_count": 1
     },
     {
@@ -129,7 +131,7 @@
       "eligible": false,
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v4",
+      "evidence_revision": "cross-014-v5",
       "observation_count": 1
     },
     {
@@ -141,7 +143,7 @@
       "eligible": false,
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v4",
+      "evidence_revision": "cross-014-v5",
       "observation_count": 1
     },
     {
@@ -153,7 +155,7 @@
       "eligible": false,
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v4",
+      "evidence_revision": "cross-014-v5",
       "observation_count": 1
     },
     {
@@ -165,7 +167,7 @@
       "eligible": false,
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v4",
+      "evidence_revision": "cross-014-v5",
       "observation_count": 1
     },
     {
@@ -177,7 +179,7 @@
       "eligible": false,
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v4",
+      "evidence_revision": "cross-014-v5",
       "observation_count": 1
     },
     {
@@ -189,7 +191,7 @@
       "eligible": false,
       "support_tier": "UNSUPPORTED",
       "reason": "FEED_LISTING_UNRESOLVED",
-      "evidence_revision": "cross-014-v4",
+      "evidence_revision": "cross-014-v5",
       "observation_count": 1
     }
   ]

@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { HARD_VETO_REASON_CODES } from "../../src/main/adapters/coverage";
+import { summarizeCoverage } from "../../scripts/platform-coverage-metrics.mjs";
 
 const INVENTORY_PATH = path.resolve(
   __dirname,
@@ -43,8 +44,10 @@ interface InventoryFile {
   total_source_url_count: number;
   resolvable_application_url_count: number;
   unresolvable_feed_listing_count: number;
-  auto_supported_resolvable_count: number;
-  pct_of_resolvable_application_urls: number | null;
+  eligible_application_url_count: number;
+  excluded_resolvable_application_url_count: number;
+  auto_supported_eligible_url_count: number;
+  pct_of_eligible_application_urls: number | null;
   measurability_verdict: string;
   family_decisions: Record<string, { support_tier: string; reason: string | null }>;
   path_families: PathFamilyRow[];
@@ -111,22 +114,25 @@ describe("frozen application platform inventory", () => {
       inventory.rows.reduce((sum, row) => sum + row.observation_count, 0),
     );
 
-    const feedListing = inventory.rows
-      .filter((row) => row.reason === "FEED_LISTING_UNRESOLVED")
-      .reduce((sum, row) => sum + row.observation_count, 0);
+    const feedListing = inventory.rows.filter(
+      (row) => row.reason === "FEED_LISTING_UNRESOLVED",
+    ).length;
     expect(inventory.unresolvable_feed_listing_count).toBe(feedListing);
     expect(inventory.resolvable_application_url_count).toBe(
-      observationTotal - feedListing,
+      inventory.rows.length - feedListing,
     );
 
-    const autoSupported = inventory.rows
-      .filter(
-        (row) =>
-          row.reason !== "FEED_LISTING_UNRESOLVED" &&
-          row.support_tier === "AUTO_SUPPORTED",
-      )
-      .reduce((sum, row) => sum + row.observation_count, 0);
-    expect(inventory.auto_supported_resolvable_count).toBe(autoSupported);
+    const eligible = inventory.rows.filter((row) => row.eligible);
+    const autoSupportedEligible = eligible.filter(
+      (row) => row.support_tier === "AUTO_SUPPORTED",
+    );
+    expect(inventory.eligible_application_url_count).toBe(eligible.length);
+    expect(inventory.excluded_resolvable_application_url_count).toBe(
+      inventory.resolvable_application_url_count - eligible.length,
+    );
+    expect(inventory.auto_supported_eligible_url_count).toBe(
+      autoSupportedEligible.length,
+    );
 
     for (const family of inventory.path_families) {
       const expectedShare =
@@ -136,18 +142,66 @@ describe("frozen application platform inventory", () => {
       expect(family.share).toBe(expectedShare);
     }
 
-    if (inventory.resolvable_application_url_count === 0) {
-      expect(inventory.pct_of_resolvable_application_urls).toBeNull();
+    if (inventory.eligible_application_url_count === 0) {
+      expect(inventory.pct_of_eligible_application_urls).toBeNull();
       expect(inventory.measurability_verdict).toBe("option_c_escalation");
     } else {
       const expectedPct = Number(
         (
-          (autoSupported / inventory.resolvable_application_url_count) *
+          (autoSupportedEligible.length /
+            inventory.eligible_application_url_count) *
           100
         ).toFixed(2),
       );
-      expect(inventory.pct_of_resolvable_application_urls).toBe(expectedPct);
+      expect(inventory.pct_of_eligible_application_urls).toBe(expectedPct);
     }
+  });
+
+  it("keeps missing-adapter URLs eligible and excludes only documented gates", () => {
+    const metrics = summarizeCoverage([
+      {
+        eligible: false,
+        support_tier: "UNSUPPORTED",
+        reason: "FEED_LISTING_UNRESOLVED",
+      },
+      { eligible: true, support_tier: "AUTO_SUPPORTED", reason: null },
+      {
+        eligible: true,
+        support_tier: "UNSUPPORTED",
+        reason: "MISSING_ADAPTER_EVIDENCE",
+      },
+      {
+        eligible: false,
+        support_tier: "UNSUPPORTED",
+        reason: "UNSUPPORTED_CONTROL",
+      },
+      {
+        eligible: false,
+        support_tier: "UNSUPPORTED",
+        reason: "LEGAL_GATE",
+      },
+    ]);
+
+    expect(metrics).toEqual({
+      resolvableCount: 4,
+      unresolvableFeedListingCount: 1,
+      eligibleCount: 2,
+      excludedResolvableCount: 2,
+      autoSupportedEligibleCount: 1,
+      percentage: 50,
+    });
+  });
+
+  it("rejects exclusions that the Work Order does not permit", () => {
+    expect(() =>
+      summarizeCoverage([
+        {
+          eligible: false,
+          support_tier: "UNSUPPORTED",
+          reason: "MISSING_ADAPTER_EVIDENCE",
+        },
+      ]),
+    ).toThrow(/invalid cross-014 eligibility exclusion/i);
   });
 
   it("groups path families with templated segments", () => {
@@ -181,7 +235,7 @@ describe("frozen application platform inventory", () => {
     expect(inventory.owner_inventory_decision).toContain("option_b");
     expect(inventory.unresolvable_feed_listing_count).toBeGreaterThan(0);
     if (inventory.resolvable_application_url_count === 0) {
-      expect(inventory.pct_of_resolvable_application_urls).toBeNull();
+      expect(inventory.pct_of_eligible_application_urls).toBeNull();
     }
   });
 

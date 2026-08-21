@@ -1,6 +1,6 @@
 # Application Platform Coverage (CROSS-014)
 
-**Evidence revision:** `cross-014-v4`
+**Evidence revision:** `cross-014-v5`
 **Owner inventory decision:** Option (b) — dual-number reporting with vacuous-slice fallback to (c), confirmed in the CROSS-014 planning session (2026-08-20 AskQuestion)
 **Work order:** [CROSS-014](../work-orders/cross-repo/CROSS-014-broad-application-platform-coverage.md)
 **Authoritative status:** `READY` in [`docs/work-orders/STATUS.md`](../work-orders/STATUS.md) (Work Order header text that still says `BLOCKED` is stale secondary documentation)
@@ -22,6 +22,12 @@ Under the owner-approved honesty rule, **do not publish a percentage from a zero
 
 **CROSS-014 is not acceptance-complete** while the measured ≥95% criterion and required provider exception scenarios against a resolvable inventory remain absent.
 
+The option (b) resolvable/unresolvable split remains published separately. For
+the Work Order's ≥95% acceptance calculation, the denominator is the eligible
+subset of distinct resolvable URLs. Missing adapter evidence is not a permitted
+exclusion and therefore lowers measured coverage once such URLs enter the
+inventory.
+
 ## Dual-number inventory summary
 
 These numbers are **not blended**. Do not read them as “coverage of what the owner would actually apply to.”
@@ -33,8 +39,10 @@ These numbers are **not blended**. Do not read them as “coverage of what the o
 | Distinct path families (templated) | 3 |
 | Unresolvable feed-listing URLs (`FEED_LISTING_UNRESOLVED`) | 9 |
 | Resolvable application URLs | 0 |
-| Auto-supported resolvable URLs | 0 |
-| **% of resolvable application URLs** | **not published** (vacuous slice) |
+| Eligible application URLs | 0 |
+| Excluded resolvable application URLs | 0 |
+| Auto-supported eligible URLs | 0 |
+| **% of eligible application URLs** | **not published** (vacuous slice) |
 
 Frozen data: [`apps/api/tests/fixtures/application_platform_inventory.json`](../../apps/api/tests/fixtures/application_platform_inventory.json)
 
@@ -115,9 +123,9 @@ Downstream application URLs must be **resolved and stored** from approved job so
 
 ## CROSS-013 bindings
 
-- Inventory path: `apps/api/tests/fixtures/application_platform_inventory.json` (`cross-014-v4`)
+- Inventory path: `apps/api/tests/fixtures/application_platform_inventory.json` (`cross-014-v5`)
 - Recalculate from frozen per-URL rows; do not copy the measurability verdict without re-counting
-- Publish resolvable vs unresolvable counts separately; label any percentage **"% of resolvable application URLs"** only
+- Publish resolvable vs unresolvable counts separately; calculate the acceptance percentage over the eligible resolvable subset and publish its numerator, denominator, and exclusions
 - Production-entrypoint family traces: generic / Greenhouse / Lever only; Ashby / SmartRecruiters / Workday excluded from the numerator
 - Do not invent a feed-listing percentage from production family traces
 

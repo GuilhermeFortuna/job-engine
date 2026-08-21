@@ -394,6 +394,6 @@ result=PASS cleanup=complete
 
 **Measurability (2026-08-20):** Committed source fixtures yield 0 resolvable / 9 feed-listing URLs (3 templated families). Owner option (b) dual-number reporting applies; ≥95% criterion escalates as unmeasurable (option c) until ingestion stores downstream apply URLs.
 
-**Inventory (option c):** 9 distinct feed-listing URLs / 3 path families / 0 resolvable; ≥95% unmeasurable. See [application-platform-coverage.md](application-platform-coverage.md) (`cross-014-v4`).
+**Inventory (option c):** 9 distinct feed-listing URLs / 3 path families / 0 resolvable; ≥95% unmeasurable. See [application-platform-coverage.md](application-platform-coverage.md) (`cross-014-v5`).
 
 **Production numerator:** 3/3 standard-form families (generic, Greenhouse, Lever) via `test:production`. Ashby/SmartRecruiters/Workday excluded. CROSS-014 is **not** acceptance-complete while resolvable catalog URLs remain absent.

@@ -150,7 +150,7 @@ git diff --check
 ## Completion record
 
 - Commit: Pending owner review (PR remains draft; CROSS-014 is **not** acceptance-complete)
-- Evidence: [`docs/automation/application-platform-coverage.md`](../../automation/application-platform-coverage.md) (`cross-014-v4`), [`apps/api/tests/fixtures/application_platform_inventory.json`](../../apps/api/tests/fixtures/application_platform_inventory.json)
+- Evidence: [`docs/automation/application-platform-coverage.md`](../../automation/application-platform-coverage.md) (`cross-014-v5`), [`apps/api/tests/fixtures/application_platform_inventory.json`](../../apps/api/tests/fixtures/application_platform_inventory.json)
 - Independent reviewer: Pending platform-coverage review
 - Measurability: Owner option (b) → vacuous resolvable slice → option (c); **9 distinct URLs / 3 path families / 0 resolvable**; ≥95% **not published**
 - Integration: `RuntimeCoordinator` retains embedded view on coverage/manual pauses; `selectAdapter` hard-vetoes Ashby/SmartRecruiters/Workday/lookalikes/feed listings/platform drift

@@ -332,15 +332,51 @@ export function selectDurableRunAction(
   };
 }
 
-// Mirrors the coordinator view lifecycle. Coverage/manual pauses retain the
-// embedded WebContentsView; armed/queued/terminal/idle do not own one.
-export function inferViewAttached(phase: RuntimePhase): boolean {
+// Mirrors the coordinator view lifecycle. Only coverage/manual pauses retain
+// the embedded WebContentsView; crash, mismatch, lease, and terminal pauses
+// close it before the paused state is published.
+export function inferViewAttached(
+  phase: RuntimePhase,
+  reasonCode: RuntimeReasonCode = null,
+): boolean {
   switch (phase) {
     case "claiming":
     case "filling":
     case "submitting":
-    case "paused":
       return true;
+    case "paused":
+      switch (reasonCode) {
+        case "LOOKALIKE_HOST":
+        case "AMBIGUOUS_DETECTION":
+        case "MISSING_ADAPTER_EVIDENCE":
+        case "LEGAL_GATE":
+        case "PLATFORM_DRIFT":
+        case "FEED_LISTING_UNRESOLVED":
+        case "AUTH_REQUIRED":
+        case "CAPTCHA_REQUIRED":
+        case "UNSUPPORTED_CONTROL":
+        case "ADAPTER_UNAVAILABLE":
+        case "NEEDS_INPUT":
+        case "STEP_RETRYABLE":
+        case "STEP_EXHAUSTED":
+          return true;
+        case "UNAUTHORIZED_FULL_AUTO":
+        case "UNSUPPORTED_AUTOMATION_MODE":
+        case "VIEW_LOCKED_SUBMITTING":
+        case "URL_MISMATCH":
+        case "CLAIM_REFUSED":
+        case "LEASE_LOST":
+        case "RENDERER_CRASHED":
+        case "SUBMISSION_UNKNOWN":
+        case null:
+          return false;
+        default: {
+          const exhaustive: never = reasonCode;
+          throw new Error(
+            `Unhandled paused runtime reason: ${String(exhaustive)}`,
+          );
+        }
+      }
     case "idle":
     case "armed":
     case "queued":
@@ -370,6 +406,9 @@ export function applyRuntimeState(
   }
   return {
     runtimeState,
-    viewAttached: inferViewAttached(runtimeState.phase),
+    viewAttached: inferViewAttached(
+      runtimeState.phase,
+      runtimeState.reasonCode,
+    ),
   };
 }

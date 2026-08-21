@@ -9,13 +9,15 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { summarizeCoverage } from "./platform-coverage-metrics.mjs";
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const OUT = path.join(
   ROOT,
   "apps/api/tests/fixtures/application_platform_inventory.json",
 );
 
-const EVIDENCE_REVISION = "cross-014-v4";
+const EVIDENCE_REVISION = "cross-014-v5";
 
 const FEED_LISTING_HOSTS = new Set([
   "himalayas.app",
@@ -134,7 +136,7 @@ function classifyListingUrl(sourceId, rawUrl) {
       normalized_host: host,
       path_family: family,
       provider: unproven,
-      eligible: false,
+      eligible: true,
       support_tier: "UNSUPPORTED",
       reason: "MISSING_ADAPTER_EVIDENCE",
       evidence_revision: EVIDENCE_REVISION,
@@ -165,7 +167,7 @@ function classifyListingUrl(sourceId, rawUrl) {
     normalized_host: host,
     path_family: family,
     provider: "unknown",
-    eligible: false,
+    eligible: true,
     support_tier: "UNSUPPORTED",
     reason: "MISSING_ADAPTER_EVIDENCE",
     evidence_revision: EVIDENCE_REVISION,
@@ -263,20 +265,7 @@ const rows = distinctUrlRows(observations);
 const { aggregated: pathFamilies, total: sourceObservationCount } =
   aggregatePathFamilies(observations);
 
-const unresolvable = observations.filter(
-  (row) => row.reason === "FEED_LISTING_UNRESOLVED",
-).length;
-const resolvableObservations = observations.filter(
-  (row) => row.reason !== "FEED_LISTING_UNRESOLVED",
-);
-const resolvableCount = resolvableObservations.length;
-const autoSupportedResolvable = resolvableObservations.filter(
-  (row) => row.support_tier === "AUTO_SUPPORTED",
-).length;
-const pct =
-  resolvableCount > 0
-    ? Number(((autoSupportedResolvable / resolvableCount) * 100).toFixed(2))
-    : null;
+const coverage = summarizeCoverage(rows);
 
 const inventory = {
   evidence_revision: EVIDENCE_REVISION,
@@ -287,16 +276,21 @@ const inventory = {
   total_distinct_application_urls: rows.length,
   total_distinct_path_families: pathFamilies.length,
   total_source_url_count: sourceObservationCount,
-  resolvable_application_url_count: resolvableCount,
-  unresolvable_feed_listing_count: unresolvable,
-  auto_supported_resolvable_count: autoSupportedResolvable,
-  pct_of_resolvable_application_urls: pct,
+  resolvable_application_url_count: coverage.resolvableCount,
+  unresolvable_feed_listing_count: coverage.unresolvableFeedListingCount,
+  eligible_application_url_count: coverage.eligibleCount,
+  excluded_resolvable_application_url_count:
+    coverage.excludedResolvableCount,
+  auto_supported_eligible_url_count: coverage.autoSupportedEligibleCount,
+  pct_of_eligible_application_urls: coverage.percentage,
   measurability_verdict:
-    resolvableCount === 0 ? "option_c_escalation" : "measured_resolvable_slice",
+    coverage.eligibleCount === 0
+      ? "option_c_escalation"
+      : "measured_eligible_slice",
   measurability_note:
-    resolvableCount === 0
+    coverage.eligibleCount === 0
       ? "All catalog application URLs in the committed source fixtures are feed listing hosts (himalayas.app, jobicy.com, remoteok.com). The >=95% criterion is unmeasurable against the current ingestion contract until downstream ATS URLs are stored or resolved. CROSS-014 is not acceptance-complete while that prerequisite remains."
-      : "Resolvable slice present; percentage is auto_supported_resolvable_count / resolvable_application_url_count.",
+      : "Eligible slice present; percentage is auto_supported_eligible_url_count / eligible_application_url_count. Resolvable URLs with missing adapter evidence remain eligible and lower coverage.",
   family_decisions: {
     generic_standard_html: {
       support_tier: "AUTO_SUPPORTED",
@@ -346,5 +340,5 @@ const inventory = {
 
 writeFileSync(OUT, `${JSON.stringify(inventory, null, 2)}\n`);
 console.log(
-  `Wrote ${OUT} (${rows.length} distinct URLs, ${pathFamilies.length} path families, ${sourceObservationCount} observations, resolvable=${resolvableCount}, pct=${pct})`,
+  `Wrote ${OUT} (${rows.length} distinct URLs, ${pathFamilies.length} path families, ${sourceObservationCount} observations, resolvable=${coverage.resolvableCount}, eligible=${coverage.eligibleCount}, pct=${coverage.percentage})`,
 );

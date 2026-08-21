@@ -298,7 +298,7 @@ describe("runtime projections", () => {
     ["filling", true],
     ["armed", false],
     ["submitting", true],
-    ["paused", true],
+    ["paused", false],
     ["queued", false],
     ["terminal", false],
   ] satisfies Array<[RuntimePhase, boolean]>)(
@@ -307,6 +307,34 @@ describe("runtime projections", () => {
       expect(inferViewAttached(phase)).toBe(attached);
     },
   );
+
+  it.each([
+    "LOOKALIKE_HOST",
+    "MISSING_ADAPTER_EVIDENCE",
+    "AUTH_REQUIRED",
+    "CAPTCHA_REQUIRED",
+    "UNSUPPORTED_CONTROL",
+    "NEEDS_INPUT",
+    "STEP_RETRYABLE",
+  ] as const)("retains the embedded view for a %s pause", (reasonCode) => {
+    expect(inferViewAttached("paused", reasonCode)).toBe(true);
+  });
+
+  it.each([
+    "URL_MISMATCH",
+    "CLAIM_REFUSED",
+    "LEASE_LOST",
+    "RENDERER_CRASHED",
+    "SUBMISSION_UNKNOWN",
+  ] as const)("does not invent an attached view for a %s pause", (reasonCode) => {
+    expect(inferViewAttached("paused", reasonCode)).toBe(false);
+    expect(
+      applyRuntimeState(
+        run(),
+        runtime({ phase: "paused", reasonCode, status: "needs_input" }),
+      ).viewAttached,
+    ).toBe(false);
+  });
 
   it.each([
     [
