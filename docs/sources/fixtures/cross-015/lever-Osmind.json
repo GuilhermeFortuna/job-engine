@@ -1,0 +1,47 @@
+{
+  "register_revision": "CROSS-015-REG-2026-08-21.1",
+  "retrieved_at": "2026-08-21T11:19:19Z",
+  "provider": "lever",
+  "site": "Osmind",
+  "region": "global",
+  "api_base": "https://api.lever.co/v0/postings",
+  "employer": "Osmind",
+  "jobs": [
+    {
+      "id": "c2db6fec-bf06-48c0-acc9-77a08fce5745",
+      "title": "Credentialing Coordinator",
+      "categories": {
+        "commitment": "Full-time",
+        "location": "United States",
+        "team": "Go-to-Market (GTM)",
+        "allLocations": [
+          "United States"
+        ]
+      },
+      "country": "US",
+      "workplaceType": "remote",
+      "hostedUrl": "https://jobs.lever.co/Osmind/c2db6fec-bf06-48c0-acc9-77a08fce5745",
+      "applyUrl": "https://jobs.lever.co/Osmind/c2db6fec-bf06-48c0-acc9-77a08fce5745/apply",
+      "content_excerpt": "About Osmind Osmind is a healthcare technology company purpose-built for psychiatric practices offering interventional treatments — including Spravato (esketamine), TMS, and ketamine. We're building the infrastructure t…",
+      "title_class": "ambiguous"
+    },
+    {
+      "id": "dae8a673-4645-47ea-8e07-511f0cea18d1",
+      "title": "Senior Software Engineer, Mexico",
+      "categories": {
+        "commitment": "Full-time",
+        "location": "Mexico",
+        "team": "Engineering",
+        "allLocations": [
+          "Mexico"
+        ]
+      },
+      "country": "MX",
+      "workplaceType": "remote",
+      "hostedUrl": "https://jobs.lever.co/Osmind/dae8a673-4645-47ea-8e07-511f0cea18d1",
+      "applyUrl": "https://jobs.lever.co/Osmind/dae8a673-4645-47ea-8e07-511f0cea18d1/apply",
+      "content_excerpt": "About Osmind Osmind is a technology, services, and data company focused exclusively on psychiatry. We serve 800+ independent psychiatry practices across 49 states with a purpose-built EHR, software solutions, and manage…",
+      "title_class": "software"
+    }
+  ]
+}

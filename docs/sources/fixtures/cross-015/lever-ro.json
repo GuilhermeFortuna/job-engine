@@ -1,0 +1,47 @@
+{
+  "register_revision": "CROSS-015-REG-2026-08-21.1",
+  "retrieved_at": "2026-08-21T11:19:19Z",
+  "provider": "lever",
+  "site": "ro",
+  "region": "global",
+  "api_base": "https://api.lever.co/v0/postings",
+  "employer": "Ro",
+  "jobs": [
+    {
+      "id": "f25a6c49-5ed4-4aa0-a5bb-b30e9790f90c",
+      "title": "Compounding Pharmacy Technician -  Romeoville, IL",
+      "categories": {
+        "commitment": "Full-time",
+        "location": "Romeoville, IL",
+        "team": "Pharmacy",
+        "allLocations": [
+          "Romeoville, IL"
+        ]
+      },
+      "country": "US",
+      "workplaceType": "onsite",
+      "hostedUrl": "https://jobs.lever.co/ro/f25a6c49-5ed4-4aa0-a5bb-b30e9790f90c",
+      "applyUrl": "https://jobs.lever.co/ro/f25a6c49-5ed4-4aa0-a5bb-b30e9790f90c/apply",
+      "content_excerpt": "Ro is a direct-to-patient healthcare company with a mission of helping patients achieve their health goals by delivering the easiest, most effective care possible. Ro is the only company to offer nationwide telehealth, …",
+      "title_class": "non_software"
+    },
+    {
+      "id": "8eb28ce3-d850-4a0a-8bbf-ff7452e80803",
+      "title": "Fulfillment Associate - Boynton Beach, FL",
+      "categories": {
+        "commitment": "Full-time",
+        "location": "Boynton Beach, FL",
+        "team": "Operations",
+        "allLocations": [
+          "Boynton Beach, FL"
+        ]
+      },
+      "country": "US",
+      "workplaceType": "onsite",
+      "hostedUrl": "https://jobs.lever.co/ro/8eb28ce3-d850-4a0a-8bbf-ff7452e80803",
+      "applyUrl": "https://jobs.lever.co/ro/8eb28ce3-d850-4a0a-8bbf-ff7452e80803/apply",
+      "content_excerpt": "Ro is a direct-to-patient healthcare company with a mission of helping patients achieve their health goals by delivering the easiest, most effective care possible. Ro is the only company to offer nationwide telehealth, …",
+      "title_class": "non_software"
+    }
+  ]
+}

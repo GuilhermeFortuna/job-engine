@@ -1,0 +1,35 @@
+{
+  "register_revision": "CROSS-015-REG-2026-08-21.1",
+  "retrieved_at": "2026-08-21T11:19:19Z",
+  "provider": "greenhouse",
+  "board_token": "nationalpublicradioinc",
+  "employer": "NPR",
+  "api_list_url": "https://boards-api.greenhouse.io/v1/boards/nationalpublicradioinc/jobs?content=true",
+  "meta_total": 14,
+  "jobs": [
+    {
+      "id": 4692729005,
+      "title": "Assistant General Counsel, Nonprofit Tax & Governance Practice",
+      "location": "Washington, District of Columbia, United States",
+      "departments": [
+        "Office of General Counsel - OFFOGC"
+      ],
+      "absolute_url": "https://job-boards.greenhouse.io/nationalpublicradioinc/jobs/4692729005",
+      "updated_at": "2026-06-29T10:19:51-04:00",
+      "content_excerpt": "&lt;div class=&quot;content-intro&quot;&gt;&lt;p&gt;&lt;strong&gt;OVERVIEW&lt;/strong&gt;&lt;/p&gt; &lt;p&gt;&lt;em&gt;A thriving, mission-driven multimedia organization, NPR produces award-winning news, information, an…",
+      "title_class": "non_software"
+    },
+    {
+      "id": 4710775005,
+      "title": "DevOps Engineer",
+      "location": "Washington, District of Columbia, United States",
+      "departments": [
+        "IT Services Delivery - ISRVDV"
+      ],
+      "absolute_url": "https://job-boards.greenhouse.io/nationalpublicradioinc/jobs/4710775005",
+      "updated_at": "2026-07-01T17:22:03-04:00",
+      "content_excerpt": "&lt;div class=&quot;content-intro&quot;&gt;&lt;p&gt;&lt;strong&gt;OVERVIEW&lt;/strong&gt;&lt;/p&gt; &lt;p&gt;&lt;em&gt;A thriving, mission-driven multimedia organization, NPR produces award-winning news, information, an…",
+      "title_class": "software"
+    }
+  ]
+}

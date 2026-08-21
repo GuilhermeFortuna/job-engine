@@ -1,0 +1,35 @@
+{
+  "register_revision": "CROSS-015-REG-2026-08-21.1",
+  "retrieved_at": "2026-08-21T11:19:19Z",
+  "provider": "greenhouse",
+  "board_token": "thenewyorktimes",
+  "employer": "The New York Times",
+  "api_list_url": "https://boards-api.greenhouse.io/v1/boards/thenewyorktimes/jobs?content=true",
+  "meta_total": 174,
+  "jobs": [
+    {
+      "id": 4705028005,
+      "title": "Assistant Editor, Fine Arts",
+      "location": "New York, NY",
+      "departments": [
+        "Editing"
+      ],
+      "absolute_url": "https://job-boards.greenhouse.io/thenewyorktimes/jobs/4705028005",
+      "updated_at": "2026-08-12T11:48:28-04:00",
+      "content_excerpt": "&lt;div class=&quot;content-intro&quot;&gt;&lt;div id=&quot;labeledImage.LOCATION&quot; class=&quot;WIFG&quot; data-automation-id=&quot;decorationWrapper&quot;&gt; &lt;div class=&quot;WNHJ&quot;&gt; &lt;div id=&quot;lab…",
+      "title_class": "non_software"
+    },
+    {
+      "id": 4636765005,
+      "title": "Associate Android Engineer",
+      "location": "New York, NY",
+      "departments": [
+        "Software Engineering"
+      ],
+      "absolute_url": "https://job-boards.greenhouse.io/thenewyorktimes/jobs/4636765005",
+      "updated_at": "2026-08-12T11:48:28-04:00",
+      "content_excerpt": "&lt;div class=&quot;content-intro&quot;&gt;&lt;div id=&quot;labeledImage.LOCATION&quot; class=&quot;WIFG&quot; data-automation-id=&quot;decorationWrapper&quot;&gt; &lt;div class=&quot;WNHJ&quot;&gt; &lt;div id=&quot;lab…",
+      "title_class": "software"
+    }
+  ]
+}

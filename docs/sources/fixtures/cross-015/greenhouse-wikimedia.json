@@ -1,0 +1,35 @@
+{
+  "register_revision": "CROSS-015-REG-2026-08-21.1",
+  "retrieved_at": "2026-08-21T11:19:19Z",
+  "provider": "greenhouse",
+  "board_token": "wikimedia",
+  "employer": "Wikimedia Foundation",
+  "api_list_url": "https://boards-api.greenhouse.io/v1/boards/wikimedia/jobs?content=true",
+  "meta_total": 18,
+  "jobs": [
+    {
+      "id": 8023197,
+      "title": "Italian Translator / Linguist (Contract)",
+      "location": "Remote",
+      "departments": [
+        "Advancement"
+      ],
+      "absolute_url": "https://job-boards.greenhouse.io/wikimedia/jobs/8023197",
+      "updated_at": "2026-07-07T11:41:00-04:00",
+      "content_excerpt": "&lt;p&gt;&lt;strong&gt;Purpose/Background information&lt;/strong&gt;&lt;/p&gt; &lt;p&gt;The Wikimedia Fundraising team runs annual fundraising campaigns in Italy. The team requires a linguist experienced in translation …",
+      "title_class": "ambiguous"
+    },
+    {
+      "id": 8105376,
+      "title": "Fundraising Support Specialist (Contract)",
+      "location": "Remote",
+      "departments": [
+        "Advancement"
+      ],
+      "absolute_url": "https://job-boards.greenhouse.io/wikimedia/jobs/8105376",
+      "updated_at": "2026-08-05T13:10:41-04:00",
+      "content_excerpt": "&lt;p&gt;&lt;strong&gt;Summary&lt;/strong&gt;&lt;/p&gt; &lt;p&gt;The Wikimedia Foundation seeks a Fundraising Support Specialist to join our Online Fundraising team, reporting to the Senior Manager of Fundraising Produc…",
+      "title_class": "ambiguous"
+    }
+  ]
+}

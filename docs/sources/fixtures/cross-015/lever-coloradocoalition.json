@@ -1,0 +1,47 @@
+{
+  "register_revision": "CROSS-015-REG-2026-08-21.1",
+  "retrieved_at": "2026-08-21T11:19:19Z",
+  "provider": "lever",
+  "site": "coloradocoalition",
+  "region": "global",
+  "api_base": "https://api.lever.co/v0/postings",
+  "employer": "Colorado Coalition for the Homeless",
+  "jobs": [
+    {
+      "id": "633ff702-de1b-4c43-ae66-bb2859b349c7",
+      "title": "Case Manager - Riverfront Lofts - 10884",
+      "categories": {
+        "commitment": "Full-Time",
+        "location": "Denver, CO",
+        "team": "Housing Supportive Services",
+        "allLocations": [
+          "Denver, CO"
+        ]
+      },
+      "country": "US",
+      "workplaceType": "onsite",
+      "hostedUrl": "https://jobs.lever.co/coloradocoalition/633ff702-de1b-4c43-ae66-bb2859b349c7",
+      "applyUrl": "https://jobs.lever.co/coloradocoalition/633ff702-de1b-4c43-ae66-bb2859b349c7/apply",
+      "content_excerpt": "This position will be posted for a minimum of 5 days The mission of the Colorado Coalition for the Homeless is to work collaboratively toward the prevention of homelessness and the creation of lasting solutions for home…",
+      "title_class": "ambiguous"
+    },
+    {
+      "id": "d16e5617-e87e-49ce-8093-3a8997c0a936",
+      "title": "Behavioral Health Clinician I",
+      "categories": {
+        "commitment": "Full-Time",
+        "location": "Denver, CO",
+        "team": "Behavioral Health Services - BHS",
+        "allLocations": [
+          "Denver, CO"
+        ]
+      },
+      "country": "US",
+      "workplaceType": "onsite",
+      "hostedUrl": "https://jobs.lever.co/coloradocoalition/d16e5617-e87e-49ce-8093-3a8997c0a936",
+      "applyUrl": "https://jobs.lever.co/coloradocoalition/d16e5617-e87e-49ce-8093-3a8997c0a936/apply",
+      "content_excerpt": "This position will be posted for a minimum of 5 days The mission of the Colorado Coalition for the Homeless is to work collaboratively toward the prevention of homelessness and the creation of lasting solutions for home…",
+      "title_class": "ambiguous"
+    }
+  ]
+}

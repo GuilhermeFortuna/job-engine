@@ -1,0 +1,48 @@
+{
+  "register_revision": "CROSS-015-REG-2026-08-21.1",
+  "retrieved_at": "2026-08-21T11:19:19Z",
+  "provider": "lever",
+  "site": "lucasmuseum",
+  "region": "global",
+  "api_base": "https://api.lever.co/v0/postings",
+  "employer": "Lucas Museum of Narrative Art",
+  "jobs": [
+    {
+      "id": "25363dd0-a26e-487d-8375-8e91faa65183",
+      "title": "Visitor Services Associate",
+      "categories": {
+        "commitment": "Open to Full-time or Part-time",
+        "location": "Los Angeles",
+        "team": "Visitor Services",
+        "allLocations": [
+          "Los Angeles"
+        ]
+      },
+      "country": "US",
+      "workplaceType": "onsite",
+      "hostedUrl": "https://jobs.lever.co/lucasmuseum/25363dd0-a26e-487d-8375-8e91faa65183",
+      "applyUrl": "https://jobs.lever.co/lucasmuseum/25363dd0-a26e-487d-8375-8e91faa65183/apply",
+      "content_excerpt": "ABOUT THE LUCAS MUSEUM OF NARRATIVE ART Opening in September 2026, the Lucas Museum of Narrative Art is dedicated to illustrated storytelling. Founded by George Lucas and Mellody Hobson, the museum’s collection features…",
+      "title_class": "non_software"
+    },
+    {
+      "id": "764b899e-9c86-4651-af65-9493bc118a9b",
+      "title": "E-Commerce Merchandiser",
+      "categories": {
+        "commitment": "Full-time",
+        "department": "Revenue & Engagement",
+        "location": "Los Angeles",
+        "team": "Retail",
+        "allLocations": [
+          "Los Angeles"
+        ]
+      },
+      "country": "US",
+      "workplaceType": "onsite",
+      "hostedUrl": "https://jobs.lever.co/lucasmuseum/764b899e-9c86-4651-af65-9493bc118a9b",
+      "applyUrl": "https://jobs.lever.co/lucasmuseum/764b899e-9c86-4651-af65-9493bc118a9b/apply",
+      "content_excerpt": "ABOUT THE LUCAS MUSEUM OF NARRATIVE ART Opening in September 2026, the Lucas Museum of Narrative Art is dedicated to illustrated storytelling. Founded by George Lucas and Mellody Hobson, the museum’s collection features…",
+      "title_class": "non_software"
+    }
+  ]
+}

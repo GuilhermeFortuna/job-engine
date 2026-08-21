@@ -1,0 +1,35 @@
+{
+  "register_revision": "CROSS-015-REG-2026-08-21.1",
+  "retrieved_at": "2026-08-21T11:19:19Z",
+  "provider": "greenhouse",
+  "board_token": "khanacademy",
+  "employer": "Khan Academy",
+  "api_list_url": "https://boards-api.greenhouse.io/v1/boards/khanacademy/jobs?content=true",
+  "meta_total": 27,
+  "jobs": [
+    {
+      "id": 7957057,
+      "title": "District Coordinator",
+      "location": "Nashik, Raigad/Thane, Mumbai, Nagpur (Candidates to specify preferred location in the application)",
+      "departments": [
+        "International India"
+      ],
+      "absolute_url": "https://job-boards.greenhouse.io/khanacademy/jobs/7957057",
+      "updated_at": "2026-06-02T14:16:58-04:00",
+      "content_excerpt": "&lt;p&gt;&lt;strong&gt;ABOUT KHAN ACADEMY&lt;/strong&gt;&lt;/p&gt; &lt;p&gt;Khan Academy is a fast-paced, nonprofit on a mission to provide free, world-class education for anyone, anywhere. We reach millions of students…",
+      "title_class": "non_software"
+    },
+    {
+      "id": 7156991,
+      "title": "English Chemistry Video Content Creator, Grade 11- 12 (Freelancer), India",
+      "location": "India (Remote)",
+      "departments": [
+        "International India"
+      ],
+      "absolute_url": "https://job-boards.greenhouse.io/khanacademy/jobs/7156991",
+      "updated_at": "2026-06-02T14:16:58-04:00",
+      "content_excerpt": "&lt;p&gt;&lt;strong&gt;ABOUT KHAN ACADEMY&lt;/strong&gt;&lt;/p&gt; &lt;p&gt;Khan Academy is a fast-paced nonprofit on a mission to provide free, world-class education for anyone, anywhere. We reach millions of students …",
+      "title_class": "non_software"
+    }
+  ]
+}
