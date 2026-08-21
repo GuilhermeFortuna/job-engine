@@ -101,8 +101,9 @@ function workspaceRunDetail(runId = WORKSPACE_RUN_ID) {
   const base = {
     id: runId,
     job_group_id: sampleJobDetail.id,
-    canonical_application_url: sampleJobDetail.preferred_application_target.listing_url,
-    application_url: sampleJobDetail.preferred_application_target.listing_url,
+    canonical_application_url:
+      sampleJobDetail.preferred_application_target.target_url,
+    application_url: sampleJobDetail.preferred_application_target.target_url,
     platform_adapter_id: "greenhouse",
     resume_asset_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
     resume_sha256: "cc".repeat(32),
@@ -356,15 +357,15 @@ export const sampleJobDetail = {
   ],
   preferred_application_target: {
     id: "target-1",
-    target_url: "https://himalayas.app/jobs/apex-senior-backend",
+    target_url: "https://boards.greenhouse.io/apex/jobs/101",
     listing_url: "https://himalayas.app/jobs/apex-senior-backend",
-    provider: null,
-    desktop_adapter_id: null,
-    status: "unresolved",
-    resolution_method: null,
-    verified_at: null,
-    source_posting_id: null,
-    assisted_reason: "No verified executable application target is available yet.",
+    provider: "greenhouse",
+    desktop_adapter_id: "greenhouse",
+    status: "executable",
+    resolution_method: "ats_native_listing",
+    verified_at: "2026-08-14T12:00:00Z",
+    source_posting_id: "22222222-2222-4222-8222-222222222221",
+    assisted_reason: null,
   },
   description:
     "Apex Global is seeking a Senior Backend Engineer to build high-throughput data processing pipelines and resilient APIs.\n\nResponsibilities:\n- Design and implement scalable Python services.\n- Optimize PostgreSQL queries and maintain schema migrations.\n- Collaborate with frontend teams to deliver clean APIs.\n\nQualifications:\n- 5+ years of production experience with Python.\n- Deep understanding of relational databases and async programming.",
@@ -890,7 +891,8 @@ const server = http.createServer((req, res) => {
             conflicts: [
               {
                 job_group_id: sampleJobDetail.id,
-                canonical_application_url: sampleJobDetail.preferred_application_target.listing_url,
+                canonical_application_url:
+                  sampleJobDetail.preferred_application_target.target_url,
                 existing_run_id: EXISTING_RUN_ID,
                 existing_status: "queued",
                 message: "An active application run already exists for this job.",

@@ -92,16 +92,24 @@ test.describe("Job Search and Resilience", () => {
   }) => {
     await page.goto(`/jobs/${SAMPLE_JOB_ID}`);
 
+    // Executable preferred target uses the ATS URL; listing URLs remain on provenance.
     const primaryApply = page
       .getByRole("link", { name: /apply on himalayas/i })
       .first();
     await expect(primaryApply).toBeVisible();
     await expect(primaryApply).toHaveAttribute(
       "href",
-      "https://himalayas.app/jobs/apex-senior-backend",
+      "https://boards.greenhouse.io/apex/jobs/101",
     );
     await expect(primaryApply).toHaveAttribute("target", "_blank");
     await expect(primaryApply).toHaveAttribute("rel", "noopener noreferrer");
+
+    const listingApply = page
+      .getByRole("link", { name: /apply on himalayas/i })
+      .and(page.locator('[href="https://himalayas.app/jobs/apex-senior-backend"]'));
+    await expect(listingApply).toBeVisible();
+    await expect(listingApply).toHaveAttribute("target", "_blank");
+    await expect(listingApply).toHaveAttribute("rel", "noopener noreferrer");
 
     const remoteOkApply = page.getByRole("link", {
       name: /apply on remote ok/i,
