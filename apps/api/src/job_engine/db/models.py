@@ -316,10 +316,77 @@ class JobGroupRoleFamily(Base):
     job_group: Mapped[JobGroup] = relationship(back_populates="role_families")
 
 
+class InstallationState(Base):
+    __tablename__ = "installation_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    active_profile_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("applicant_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    active_profile: Mapped["ApplicantProfile | None"] = relationship(
+        foreign_keys=[active_profile_id]
+    )
+
+
+class ManagedAsset(Base):
+    __tablename__ = "managed_assets"
+    __table_args__ = (
+        Index("ix_managed_assets_profile_type", "profile_id", "asset_type"),
+        Index("ix_managed_assets_sha256", "sha256"),
+    )
+
+    id: Mapped[UUID] = _uuid_pk()
+    profile_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("applicant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    asset_type: Mapped[str] = mapped_column(Text, nullable=False)
+    file_name: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str] = mapped_column(Text, nullable=False)
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    relative_path: Mapped[str] = mapped_column(Text, nullable=False)
+    crop_coordinates: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    extracted_text: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    profile: Mapped["ApplicantProfile"] = relationship(
+        back_populates="managed_assets", foreign_keys=[profile_id]
+    )
+
+
 class ApplicantProfile(Base):
     __tablename__ = "applicant_profiles"
 
     id: Mapped[UUID] = _uuid_pk()
+    display_name: Mapped[str] = mapped_column(
+        Text, nullable=False, default="Default Applicant"
+    )
+    avatar_asset_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("managed_assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    onboarding_step: Mapped[str] = mapped_column(
+        Text, nullable=False, default="profile"
+    )
+    onboarding_completed_at: Mapped[datetime | None] = _optional_aware_dt()
+    archived_at: Mapped[datetime | None] = _optional_aware_dt()
+    automation_preferences: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
@@ -329,6 +396,23 @@ class ApplicantProfile(Base):
     )
 
     fields: Mapped[list["ApplicantProfileField"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan"
+    )
+    avatar_asset: Mapped["ManagedAsset | None"] = relationship(
+        foreign_keys=[avatar_asset_id]
+    )
+    managed_assets: Mapped[list["ManagedAsset"]] = relationship(
+        back_populates="profile",
+        cascade="all, delete-orphan",
+        foreign_keys="ManagedAsset.profile_id",
+    )
+    resumes: Mapped[list["ResumeAsset"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan"
+    )
+    answers: Mapped[list["ReusableAnswer"]] = relationship(
+        back_populates="profile", cascade="all, delete-orphan"
+    )
+    runs: Mapped[list["ApplicationRun"]] = relationship(
         back_populates="profile", cascade="all, delete-orphan"
     )
 
@@ -367,9 +451,14 @@ class ApplicantProfileField(Base):
 class ResumeAsset(Base):
     __tablename__ = "resume_assets"
     __table_args__ = (
-        UniqueConstraint("resume_id", name="uq_resume_assets_resume_id"),
+        UniqueConstraint(
+            "applicant_profile_id",
+            "resume_id",
+            name="uq_resume_assets_profile_resume_id",
+        ),
         Index(
-            "uq_resume_assets_single_default",
+            "uq_resume_assets_profile_default",
+            "applicant_profile_id",
             "is_default",
             unique=True,
             postgresql_where=text("is_default IS TRUE"),
@@ -377,11 +466,21 @@ class ResumeAsset(Base):
     )
 
     id: Mapped[UUID] = _uuid_pk()
+    applicant_profile_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("applicant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    managed_asset_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("managed_assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     resume_id: Mapped[str] = mapped_column(Text, nullable=False)
     label: Mapped[str] = mapped_column(Text, nullable=False)
-    source_markdown_path: Mapped[str] = mapped_column(Text, nullable=False)
-    upload_pdf_path: Mapped[str] = mapped_column(Text, nullable=False)
-    preview_html_path: Mapped[str | None] = mapped_column(Text)
+    source_markdown_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    upload_pdf_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    preview_html_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     language: Mapped[str] = mapped_column(Text, nullable=False, default="en")
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -395,15 +494,31 @@ class ResumeAsset(Base):
         DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
     )
 
+    profile: Mapped[ApplicantProfile] = relationship(back_populates="resumes")
+    managed_asset: Mapped["ManagedAsset | None"] = relationship()
+
 
 class ReusableAnswer(Base):
     __tablename__ = "reusable_answers"
     __table_args__ = (
-        UniqueConstraint("answer_id", name="uq_reusable_answers_answer_id"),
-        Index("ix_reusable_answers_question_intent", "question_intent"),
+        UniqueConstraint(
+            "applicant_profile_id",
+            "answer_id",
+            name="uq_reusable_answers_profile_answer_id",
+        ),
+        Index(
+            "ix_reusable_answers_profile_intent",
+            "applicant_profile_id",
+            "question_intent",
+        ),
     )
 
     id: Mapped[UUID] = _uuid_pk()
+    applicant_profile_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("applicant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     answer_id: Mapped[str] = mapped_column(Text, nullable=False)
     question_intent: Mapped[str] = mapped_column(Text, nullable=False)
     jurisdiction: Mapped[str | None] = mapped_column(Text)
@@ -423,6 +538,8 @@ class ReusableAnswer(Base):
         DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
     )
 
+    profile: Mapped[ApplicantProfile] = relationship(back_populates="answers")
+
 
 class ApplicationRun(Base):
     __tablename__ = "application_runs"
@@ -431,8 +548,10 @@ class ApplicationRun(Base):
         Index("ix_application_runs_canonical_url", "canonical_application_url"),
         Index("ix_application_runs_queue_order", "status", "created_at"),
         Index("ix_application_runs_lease_expires", "lease_expires_at"),
+        Index("ix_application_runs_profile_status", "applicant_profile_id", "status"),
         Index(
             "uq_application_runs_active_or_submitted_url",
+            "applicant_profile_id",
             "canonical_application_url",
             unique=True,
             postgresql_where=text(
@@ -443,6 +562,7 @@ class ApplicationRun(Base):
         ),
         Index(
             "uq_application_runs_active_or_submitted_job_group",
+            "applicant_profile_id",
             "job_group_id",
             unique=True,
             postgresql_where=text(
@@ -454,6 +574,11 @@ class ApplicationRun(Base):
     )
 
     id: Mapped[UUID] = _uuid_pk()
+    applicant_profile_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("applicant_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     job_group_id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("job_groups.id"), nullable=False
     )
@@ -501,6 +626,7 @@ class ApplicationRun(Base):
     started_at: Mapped[datetime | None] = _optional_aware_dt()
     completed_at: Mapped[datetime | None] = _optional_aware_dt()
 
+    profile: Mapped[ApplicantProfile] = relationship(back_populates="runs")
     job_group: Mapped[JobGroup] = relationship()
     resume_asset: Mapped[ResumeAsset] = relationship()
     events: Mapped[list["ApplicationRunEvent"]] = relationship(

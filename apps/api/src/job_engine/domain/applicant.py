@@ -220,7 +220,53 @@ class DemographicPreferences(FrozenModel):
     decline_all_optional: bool = True
 
 
+class AvatarCrop(FrozenModel):
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+    width: float = Field(gt=0.0, le=1.0)
+    height: float = Field(gt=0.0, le=1.0)
+
+
+class ManagedAssetType(StrEnum):
+    RESUME = "resume"
+    DOCUMENT = "document"
+    AVATAR = "avatar"
+
+
+class ManagedAsset(FrozenModel):
+    id: UUID = Field(default_factory=uuid4)
+    profile_id: UUID
+    asset_type: ManagedAssetType
+    file_name: str
+    content_type: str
+    byte_size: int
+    sha256: str
+    relative_path: str
+    crop_coordinates: dict[str, Any] | None = None
+    extracted_text: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    @field_validator("created_at", "updated_at")
+    @classmethod
+    def timestamps_must_be_utc(cls, value: datetime) -> datetime:
+        return _require_aware_utc(value)
+
+    @field_validator("sha256")
+    @classmethod
+    def validate_sha256(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if len(cleaned) != 64 or not all(c in "0123456789abcdef" for c in cleaned):
+            raise ValueError("sha256 must be a 64-character lowercase hex string")
+        return cleaned
+
+
 class ApplicantProfileInput(FrozenModel):
+    display_name: str = "Default Applicant"
+    avatar_asset_id: UUID | None = None
+    onboarding_step: str = "profile"
+    onboarding_completed_at: datetime | None = None
+    automation_preferences: dict[str, Any] = Field(default_factory=dict)
     first_name: ConfirmedField[str] = Field(
         default_factory=lambda: ConfirmedField[str]()
     )
@@ -278,24 +324,61 @@ class ApplicantProfileInput(FrozenModel):
         default_factory=lambda: ConfirmedField[DemographicPreferences]()
     )
 
+    @field_validator("onboarding_completed_at")
+    @classmethod
+    def validate_onboarding_completed_at(
+        cls, value: datetime | None
+    ) -> datetime | None:
+        if value is None:
+            return None
+        return _require_aware_utc(value)
+
 
 class ApplicantProfile(ApplicantProfileInput):
     id: UUID = Field(default_factory=uuid4)
+    archived_at: datetime | None = None
     version: int = 1
     created_at: datetime
     updated_at: datetime
 
-    @field_validator("created_at", "updated_at")
+    @field_validator("created_at", "updated_at", "archived_at")
     @classmethod
-    def timestamps_must_be_utc(cls, value: datetime) -> datetime:
+    def timestamps_must_be_utc(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return _require_aware_utc(value)
+
+
+class ProfileSummary(FrozenModel):
+    id: UUID
+    display_name: str
+    avatar_asset_id: UUID | None = None
+    onboarding_step: str = "profile"
+    onboarding_completed_at: datetime | None = None
+    archived_at: datetime | None = None
+    automation_preferences: dict[str, Any] = Field(default_factory=dict)
+    version: int = 1
+    created_at: datetime
+    updated_at: datetime
+    is_active: bool = False
+
+    @field_validator(
+        "created_at", "updated_at", "onboarding_completed_at", "archived_at"
+    )
+    @classmethod
+    def timestamps_must_be_utc(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
         return _require_aware_utc(value)
 
 
 class ResumeAssetInput(FrozenModel):
+    applicant_profile_id: UUID | None = None
     resume_id: str
     label: str
-    source_markdown_path: str
-    upload_pdf_path: str
+    managed_asset_id: UUID | None = None
+    source_markdown_path: str | None = None
+    upload_pdf_path: str | None = None
     preview_html_path: str | None = None
     language: str = "en"
     is_default: bool = False
@@ -311,6 +394,7 @@ class ResumeAssetInput(FrozenModel):
 
 class ResumeAsset(ResumeAssetInput):
     id: UUID = Field(default_factory=uuid4)
+    applicant_profile_id: UUID = Field(default_factory=uuid4)
     sha256: str
     file_size_bytes: int | None = None
     last_verified_at: datetime | None = None
@@ -335,6 +419,7 @@ class ResumeAsset(ResumeAssetInput):
 
 
 class ReusableAnswerInput(FrozenModel):
+    applicant_profile_id: UUID | None = None
     answer_id: str
     question_intent: QuestionIntent
     jurisdiction: str | None = None
@@ -385,6 +470,7 @@ class ReusableAnswerInput(FrozenModel):
 
 class ReusableAnswer(ReusableAnswerInput):
     id: UUID = Field(default_factory=uuid4)
+    applicant_profile_id: UUID = Field(default_factory=uuid4)
     version: int = 1
     created_at: datetime
     updated_at: datetime

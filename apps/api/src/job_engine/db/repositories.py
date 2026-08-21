@@ -38,7 +38,10 @@ from job_engine.domain.applicant import (
     FieldSource,
     LanguageProficiency,
     LocationPreferences,
+    ManagedAsset,
+    ManagedAssetType,
     PolicyCategory,
+    ProfileSummary,
     QuestionIntent,
     ResumeAsset,
     ResumeAssetInput,
@@ -940,6 +943,10 @@ def _deserialize_field_value(field_name: str, payload: Any) -> Any:
     return payload
 
 
+class ProfileArchiveGuardError(Exception):
+    """Raised when an attempt is made to archive a profile with active work."""
+
+
 def _applicant_profile_from_row(row: orm.ApplicantProfile) -> ApplicantProfile:
     fields_by_path = {f.field_path: f for f in row.fields}
     field_kwargs: dict[str, Any] = {}
@@ -965,6 +972,14 @@ def _applicant_profile_from_row(row: orm.ApplicantProfile) -> ApplicantProfile:
             )
     return ApplicantProfile(
         id=row.id,
+        display_name=row.display_name,
+        avatar_asset_id=row.avatar_asset_id,
+        onboarding_step=row.onboarding_step,
+        onboarding_completed_at=row.onboarding_completed_at,
+        archived_at=row.archived_at,
+        automation_preferences=dict(row.automation_preferences)
+        if row.automation_preferences
+        else {},
         version=row.version,
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -972,9 +987,48 @@ def _applicant_profile_from_row(row: orm.ApplicantProfile) -> ApplicantProfile:
     )
 
 
+def _profile_summary_from_row(
+    row: orm.ApplicantProfile, is_active: bool = False
+) -> ProfileSummary:
+    return ProfileSummary(
+        id=row.id,
+        display_name=row.display_name,
+        avatar_asset_id=row.avatar_asset_id,
+        onboarding_step=row.onboarding_step,
+        onboarding_completed_at=row.onboarding_completed_at,
+        archived_at=row.archived_at,
+        automation_preferences=dict(row.automation_preferences)
+        if row.automation_preferences
+        else {},
+        version=row.version,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        is_active=is_active,
+    )
+
+
+def _managed_asset_from_row(row: orm.ManagedAsset) -> ManagedAsset:
+    return ManagedAsset(
+        id=row.id,
+        profile_id=row.profile_id,
+        asset_type=ManagedAssetType(row.asset_type),
+        file_name=row.file_name,
+        content_type=row.content_type,
+        byte_size=row.byte_size,
+        sha256=row.sha256,
+        relative_path=row.relative_path,
+        crop_coordinates=dict(row.crop_coordinates) if row.crop_coordinates else None,
+        extracted_text=row.extracted_text,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
 def _resume_asset_from_row(row: orm.ResumeAsset) -> ResumeAsset:
     return ResumeAsset(
         id=row.id,
+        applicant_profile_id=row.applicant_profile_id,
+        managed_asset_id=row.managed_asset_id,
         resume_id=row.resume_id,
         label=row.label,
         source_markdown_path=row.source_markdown_path,
@@ -994,6 +1048,7 @@ def _resume_asset_from_row(row: orm.ResumeAsset) -> ResumeAsset:
 def _reusable_answer_from_row(row: orm.ReusableAnswer) -> ReusableAnswer:
     return ReusableAnswer(
         id=row.id,
+        applicant_profile_id=row.applicant_profile_id,
         answer_id=row.answer_id,
         question_intent=QuestionIntent(row.question_intent),
         jurisdiction=row.jurisdiction,
@@ -1013,9 +1068,79 @@ class ApplicantVaultRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_profile(self) -> ApplicantProfile | None:
+    async def get_active_profile_id(self) -> UUID | None:
+        state = await self._session.get(orm.InstallationState, 1)
+        if state is not None and state.active_profile_id is not None:
+            # Verify active profile is not archived
+            prof = await self._session.get(
+                orm.ApplicantProfile, state.active_profile_id
+            )
+            if prof is not None and prof.archived_at is None:
+                return state.active_profile_id
+
+        first_profile = await self._session.scalar(
+            select(orm.ApplicantProfile.id)
+            .where(orm.ApplicantProfile.archived_at.is_(None))
+            .order_by(orm.ApplicantProfile.created_at.asc())
+            .limit(1)
+        )
+        if first_profile is not None:
+            await self.set_active_profile(first_profile)
+            return first_profile
+        return None
+
+    async def set_active_profile(self, profile_id: UUID) -> None:
+        profile = await self.get_profile(profile_id)
+        if profile is None:
+            raise ResourceNotFoundError(
+                f"Applicant profile {profile_id} does not exist"
+            )
+        if profile.archived_at is not None:
+            raise ValueError(
+                f"Cannot set archived profile {profile_id} as active profile"
+            )
+
+        now = _utcnow()
+        state = await self._session.get(orm.InstallationState, 1)
+        if state is None:
+            state = orm.InstallationState(
+                id=1, active_profile_id=profile_id, updated_at=now
+            )
+            self._session.add(state)
+        else:
+            state.active_profile_id = profile_id
+            state.updated_at = now
+        await self._session.flush()
+
+    async def get_active_profile(self) -> ApplicantProfile | None:
+        active_id = await self.get_active_profile_id()
+        if active_id is None:
+            return None
+        return await self.get_profile(active_id)
+
+    async def list_profiles(
+        self, include_archived: bool = True
+    ) -> tuple[ProfileSummary, ...]:
+        active_id = await self.get_active_profile_id()
+        stmt = select(orm.ApplicantProfile).order_by(
+            orm.ApplicantProfile.created_at.asc()
+        )
+        if not include_archived:
+            stmt = stmt.where(orm.ApplicantProfile.archived_at.is_(None))
+        rows = (await self._session.scalars(stmt)).all()
+        return tuple(
+            _profile_summary_from_row(row, is_active=(row.id == active_id))
+            for row in rows
+        )
+
+    async def get_profile(
+        self, profile_id: UUID | None = None
+    ) -> ApplicantProfile | None:
+        if profile_id is None:
+            return await self.get_active_profile()
         stmt = (
             select(orm.ApplicantProfile)
+            .where(orm.ApplicantProfile.id == profile_id)
             .options(selectinload(orm.ApplicantProfile.fields))
             .execution_options(populate_existing=True)
         )
@@ -1025,71 +1150,110 @@ class ApplicantVaultRepository:
         return _applicant_profile_from_row(row)
 
     async def replace_profile(
-        self, profile_input: ApplicantProfileInput, expected_version: int | None
+        self,
+        profile_input: ApplicantProfileInput,
+        expected_version: int | None = None,
+    ) -> ApplicantProfile:
+        active_id = await self.get_active_profile_id()
+        if expected_version is None:
+            if active_id is not None:
+                raise OptimisticLockError("Applicant profile already exists")
+            return await self.create_profile(profile_input)
+
+        if active_id is None:
+            raise OptimisticLockError(
+                "Optimistic lock conflict on applicant profile with "
+                f"expected version {expected_version}: profile does not exist"
+            )
+        return await self.update_profile(active_id, profile_input, expected_version)
+
+    async def create_profile(
+        self, profile_input: ApplicantProfileInput
     ) -> ApplicantProfile:
         now = _utcnow()
-        if expected_version is None:
-            existing = await self._session.scalar(select(orm.ApplicantProfile.id))
-            if existing is not None:
-                raise OptimisticLockError(
-                    "Applicant profile already exists; expected_version required"
+        profile_id = uuid4()
+        profile_row = orm.ApplicantProfile(
+            id=profile_id,
+            display_name=profile_input.display_name or "Default Applicant",
+            avatar_asset_id=profile_input.avatar_asset_id,
+            onboarding_step=profile_input.onboarding_step or "profile",
+            onboarding_completed_at=profile_input.onboarding_completed_at,
+            archived_at=None,
+            automation_preferences=profile_input.automation_preferences,
+            version=1,
+            created_at=now,
+            updated_at=now,
+        )
+        self._session.add(profile_row)
+        for name in _PROFILE_FIELD_NAMES:
+            field: ConfirmedField[Any] = getattr(profile_input, name)
+            profile_row.fields.append(
+                orm.ApplicantProfileField(
+                    profile_id=profile_id,
+                    field_path=name,
+                    value_state=field.state.value,
+                    value_payload=_serialize_field_value(name, field.value),
+                    source=field.source.value if field.source else None,
+                    last_confirmed_at=field.last_confirmed_at,
+                    policy_category=field.policy_category.value,
+                    created_at=now,
+                    updated_at=now,
                 )
-            profile_row = orm.ApplicantProfile(
-                id=uuid4(),
-                version=1,
-                created_at=now,
-                updated_at=now,
             )
-            self._session.add(profile_row)
-            for name in _PROFILE_FIELD_NAMES:
-                field: ConfirmedField[Any] = getattr(profile_input, name)
-                profile_row.fields.append(
-                    orm.ApplicantProfileField(
-                        profile_id=profile_row.id,
-                        field_path=name,
-                        value_state=field.state.value,
-                        value_payload=_serialize_field_value(name, field.value),
-                        source=field.source.value if field.source else None,
-                        last_confirmed_at=field.last_confirmed_at,
-                        policy_category=field.policy_category.value,
-                        created_at=now,
-                        updated_at=now,
-                    )
-                )
-            await self._session.flush()
-            loaded = await self.get_profile()
-            if loaded is None:
-                raise RuntimeError("Failed to load created applicant profile")
-            return loaded
 
+        active_id = await self.get_active_profile_id()
+        if active_id is None:
+            await self.set_active_profile(profile_id)
+
+        await self._session.flush()
+        loaded = await self.get_profile(profile_id)
+        if loaded is None:
+            raise RuntimeError("Failed to load created applicant profile")
+        return loaded
+
+    async def update_profile(
+        self,
+        profile_id: UUID,
+        profile_input: ApplicantProfileInput,
+        expected_version: int,
+    ) -> ApplicantProfile:
+        now = _utcnow()
         stmt = (
             update(orm.ApplicantProfile)
-            .where(orm.ApplicantProfile.version == expected_version)
+            .where(
+                orm.ApplicantProfile.id == profile_id,
+                orm.ApplicantProfile.version == expected_version,
+            )
             .values(
+                display_name=profile_input.display_name or "Default Applicant",
+                avatar_asset_id=profile_input.avatar_asset_id,
+                onboarding_step=profile_input.onboarding_step or "profile",
+                onboarding_completed_at=profile_input.onboarding_completed_at,
+                automation_preferences=profile_input.automation_preferences,
                 version=orm.ApplicantProfile.version + 1,
                 updated_at=now,
             )
-            .returning(orm.ApplicantProfile.id, orm.ApplicantProfile.version)
+            .returning(orm.ApplicantProfile.id)
         )
         result = await self._session.execute(stmt)
-        updated_row = result.first()
-        if updated_row is None:
-            existing = await self._session.scalar(select(orm.ApplicantProfile.id))
+        if result.scalar() is None:
+            existing = await self.get_profile(profile_id)
             if existing is None:
-                raise ResourceNotFoundError("Applicant profile does not exist")
+                raise ResourceNotFoundError(
+                    f"Applicant profile {profile_id} does not exist"
+                )
             raise OptimisticLockError(
-                "Optimistic lock conflict on applicant profile with "
-                f"expected version {expected_version}"
+                f"Optimistic lock conflict on applicant profile {profile_id} "
+                f"with expected version {expected_version}"
             )
 
-        profile_id = updated_row.id
         await self._session.execute(
             delete(orm.ApplicantProfileField).where(
                 orm.ApplicantProfileField.profile_id == profile_id
             )
         )
         for name in _PROFILE_FIELD_NAMES:
-            field_val: ConfirmedField[Any] = getattr(profile_input, name)
+            field_val = getattr(profile_input, name)
             self._session.add(
                 orm.ApplicantProfileField(
                     profile_id=profile_id,
@@ -1097,31 +1261,161 @@ class ApplicantVaultRepository:
                     value_state=field_val.state.value,
                     value_payload=_serialize_field_value(name, field_val.value),
                     source=field_val.source.value if field_val.source else None,
+                    policy_category=(
+                        field_val.policy_category.value
+                        if field_val.policy_category
+                        else None
+                    ),
                     last_confirmed_at=field_val.last_confirmed_at,
-                    policy_category=field_val.policy_category.value,
                     created_at=now,
                     updated_at=now,
                 )
             )
         await self._session.flush()
-        loaded = await self.get_profile()
+        loaded = await self.get_profile(profile_id)
         if loaded is None:
             raise RuntimeError("Failed to load updated applicant profile")
         return loaded
 
-    async def list_resumes(self) -> tuple[ResumeAsset, ...]:
+    async def archive_profile(
+        self, profile_id: UUID, expected_version: int
+    ) -> ApplicantProfile:
+        from job_engine.db.repositories import ApplicationRepository
+
+        now = _utcnow()
+        app_repo = ApplicationRepository(self._session)
+        if await app_repo.has_active_runs(profile_id):
+            raise ProfileArchiveGuardError(
+                f"Cannot archive profile {profile_id} with active application runs"
+            )
+
+        stmt = (
+            update(orm.ApplicantProfile)
+            .where(
+                orm.ApplicantProfile.id == profile_id,
+                orm.ApplicantProfile.version == expected_version,
+            )
+            .values(
+                archived_at=now,
+                version=orm.ApplicantProfile.version + 1,
+                updated_at=now,
+            )
+            .returning(orm.ApplicantProfile.id)
+        )
+        result = await self._session.execute(stmt)
+        if result.scalar() is None:
+            existing = await self.get_profile(profile_id)
+            if existing is None:
+                raise ResourceNotFoundError(
+                    f"Applicant profile {profile_id} does not exist"
+                )
+            raise OptimisticLockError(
+                f"Optimistic lock conflict on applicant profile {profile_id} "
+                f"with expected version {expected_version}"
+            )
+
+        # If this profile was active, set another profile as active if available
+        active_id = await self.get_active_profile_id()
+        if active_id == profile_id:
+            next_active = await self._session.scalar(
+                select(orm.ApplicantProfile.id)
+                .where(
+                    orm.ApplicantProfile.id != profile_id,
+                    orm.ApplicantProfile.archived_at.is_(None),
+                )
+                .order_by(orm.ApplicantProfile.created_at.asc())
+                .limit(1)
+            )
+            if next_active is not None:
+                await self.set_active_profile(next_active)
+            else:
+                state = await self._session.get(orm.InstallationState, 1)
+                if state:
+                    state.active_profile_id = None
+                    state.updated_at = now
+
+        await self._session.flush()
+        loaded = await self.get_profile(profile_id)
+        if loaded is None:
+            raise RuntimeError("Failed to load archived applicant profile")
+        return loaded
+
+    async def list_resumes(
+        self, profile_id: UUID | None = None
+    ) -> tuple[ResumeAsset, ...]:
+        if profile_id is None:
+            profile_id = await self.get_active_profile_id()
+            if profile_id is None:
+                stmt = (
+                    select(orm.ResumeAsset)
+                    .order_by(
+                        orm.ResumeAsset.is_default.desc(), orm.ResumeAsset.label.asc()
+                    )
+                    .execution_options(populate_existing=True)
+                )
+                rows = (await self._session.scalars(stmt)).all()
+                return tuple(_resume_asset_from_row(row) for row in rows)
+
+        # Ensure profile exists
+        prof = await self._session.get(orm.ApplicantProfile, profile_id)
+        if prof is None:
+            raise ResourceNotFoundError(
+                f"Applicant profile {profile_id} does not exist"
+            )
+
         stmt = (
             select(orm.ResumeAsset)
+            .where(orm.ResumeAsset.applicant_profile_id == profile_id)
             .order_by(orm.ResumeAsset.is_default.desc(), orm.ResumeAsset.label.asc())
             .execution_options(populate_existing=True)
         )
         rows = (await self._session.scalars(stmt)).all()
         return tuple(_resume_asset_from_row(row) for row in rows)
 
-    async def get_resume(self, resume_id: str) -> ResumeAsset | None:
+    async def get_resume(
+        self, profile_id_or_resume_id: UUID | str, resume_id: str | None = None
+    ) -> ResumeAsset | None:
+        if isinstance(profile_id_or_resume_id, UUID) and resume_id is not None:
+            profile_id = profile_id_or_resume_id
+            r_id = resume_id
+            stmt = (
+                select(orm.ResumeAsset)
+                .where(
+                    orm.ResumeAsset.applicant_profile_id == profile_id,
+                    orm.ResumeAsset.resume_id == r_id,
+                )
+                .execution_options(populate_existing=True)
+            )
+        else:
+            r_id = str(profile_id_or_resume_id)
+            active_id = await self.get_active_profile_id()
+            if active_id is not None:
+                stmt = (
+                    select(orm.ResumeAsset)
+                    .where(
+                        orm.ResumeAsset.applicant_profile_id == active_id,
+                        orm.ResumeAsset.resume_id == r_id,
+                    )
+                    .execution_options(populate_existing=True)
+                )
+            else:
+                stmt = (
+                    select(orm.ResumeAsset)
+                    .where(orm.ResumeAsset.resume_id == r_id)
+                    .execution_options(populate_existing=True)
+                )
+        row = await self._session.scalar(stmt)
+        if row is None:
+            return None
+        return _resume_asset_from_row(row)
+
+    async def get_resume_by_id(self, profile_id: UUID, id: UUID) -> ResumeAsset | None:
         stmt = (
             select(orm.ResumeAsset)
-            .where(orm.ResumeAsset.resume_id == resume_id)
+            .where(
+                orm.ResumeAsset.applicant_profile_id == profile_id,
+                orm.ResumeAsset.id == id,
+            )
             .execution_options(populate_existing=True)
         )
         row = await self._session.scalar(stmt)
@@ -1131,32 +1425,72 @@ class ApplicantVaultRepository:
 
     async def create_resume(
         self,
-        resume: ResumeAssetInput,
-        sha256: str,
+        profile_id_or_resume: UUID | ResumeAssetInput,
+        resume_or_sha: ResumeAssetInput | str | None = None,
+        sha256: str | None = None,
         *,
         file_size_bytes: int | None = None,
         last_verified_at: datetime | None = None,
     ) -> ResumeAsset:
+        profile_id: UUID
+        resume: ResumeAssetInput
+        if isinstance(profile_id_or_resume, UUID):
+            profile_id = profile_id_or_resume
+            if not isinstance(resume_or_sha, ResumeAssetInput):
+                raise ValueError("Expected ResumeAssetInput")
+            resume = resume_or_sha
+            actual_sha = sha256 or ""
+        else:
+            resume = profile_id_or_resume
+            actual_sha = (
+                resume_or_sha if isinstance(resume_or_sha, str) else sha256
+            ) or ""
+            p_id = resume.applicant_profile_id
+            if p_id is None:
+                active_id = await self.get_active_profile_id()
+                if active_id is None:
+                    prof_created = await self.create_profile(
+                        ApplicantProfileInput(display_name="Default Applicant")
+                    )
+                    profile_id = prof_created.id
+                else:
+                    profile_id = active_id
+            else:
+                profile_id = p_id
+
+        prof = await self._session.get(orm.ApplicantProfile, profile_id)
+        if prof is None:
+            raise ResourceNotFoundError(
+                f"Applicant profile {profile_id} does not exist"
+            )
+
         now = _utcnow()
         count = await self._session.scalar(
-            select(func.count()).select_from(orm.ResumeAsset)
+            select(func.count())
+            .select_from(orm.ResumeAsset)
+            .where(orm.ResumeAsset.applicant_profile_id == profile_id)
         )
         is_default = resume.is_default or (count == 0)
         if is_default and count and count > 0:
             await self._session.execute(
                 update(orm.ResumeAsset)
-                .where(orm.ResumeAsset.is_default.is_(True))
+                .where(
+                    orm.ResumeAsset.applicant_profile_id == profile_id,
+                    orm.ResumeAsset.is_default.is_(True),
+                )
                 .values(is_default=False, updated_at=now)
             )
 
         row = orm.ResumeAsset(
             id=uuid4(),
+            applicant_profile_id=profile_id,
+            managed_asset_id=resume.managed_asset_id,
             resume_id=resume.resume_id,
             label=resume.label,
             source_markdown_path=resume.source_markdown_path,
             upload_pdf_path=resume.upload_pdf_path,
             preview_html_path=resume.preview_html_path,
-            sha256=sha256,
+            sha256=actual_sha,
             language=resume.language,
             is_default=is_default,
             file_size_bytes=file_size_bytes,
@@ -1171,7 +1505,8 @@ class ApplicantVaultRepository:
 
     async def update_resume(
         self,
-        resume_id: str,
+        profile_id_or_resume_id: UUID | str,
+        resume_id_or_none: str | None = None,
         *,
         label: str | None = None,
         is_default: bool | None = None,
@@ -1181,14 +1516,37 @@ class ApplicantVaultRepository:
         expected_version: int,
     ) -> ResumeAsset:
         now = _utcnow()
-        current = await self.get_resume(resume_id)
+        if isinstance(profile_id_or_resume_id, UUID) and resume_id_or_none is not None:
+            profile_id = profile_id_or_resume_id
+            resume_id = resume_id_or_none
+        else:
+            resume_id = str(profile_id_or_resume_id)
+            active_id = await self.get_active_profile_id()
+            if active_id is None:
+                existing_res = await self._session.scalar(
+                    select(orm.ResumeAsset).where(
+                        orm.ResumeAsset.resume_id == resume_id
+                    )
+                )
+                if existing_res is None:
+                    raise ResourceNotFoundError(
+                        f"Resume asset {resume_id} does not exist"
+                    )
+                profile_id = existing_res.applicant_profile_id
+            else:
+                profile_id = active_id
+
+        current = await self.get_resume(profile_id, resume_id)
         if current is None:
-            raise ResourceNotFoundError(f"Resume asset {resume_id} does not exist")
+            raise ResourceNotFoundError(
+                f"Resume asset {resume_id} does not exist for profile {profile_id}"
+            )
 
         if is_default is True:
             await self._session.execute(
                 update(orm.ResumeAsset)
                 .where(
+                    orm.ResumeAsset.applicant_profile_id == profile_id,
                     orm.ResumeAsset.resume_id != resume_id,
                     orm.ResumeAsset.is_default.is_(True),
                 )
@@ -1196,7 +1554,9 @@ class ApplicantVaultRepository:
             )
         elif is_default is False and current.is_default:
             count = await self._session.scalar(
-                select(func.count()).select_from(orm.ResumeAsset)
+                select(func.count())
+                .select_from(orm.ResumeAsset)
+                .where(orm.ResumeAsset.applicant_profile_id == profile_id)
             )
             if count and count > 1:
                 raise DefaultResumeConflictError(
@@ -1221,6 +1581,7 @@ class ApplicantVaultRepository:
         stmt = (
             update(orm.ResumeAsset)
             .where(
+                orm.ResumeAsset.applicant_profile_id == profile_id,
                 orm.ResumeAsset.resume_id == resume_id,
                 orm.ResumeAsset.version == expected_version,
             )
@@ -1234,17 +1595,54 @@ class ApplicantVaultRepository:
                 f"expected version {expected_version}"
             )
         await self._session.flush()
-        loaded = await self.get_resume(resume_id)
+        loaded = await self.get_resume(profile_id, resume_id)
         if loaded is None:
             raise RuntimeError("Failed to load updated resume asset")
         return loaded
 
-    async def delete_resume(self, resume_id: str, expected_version: int) -> None:
-        current = await self.get_resume(resume_id)
+    async def delete_resume(
+        self,
+        profile_id_or_resume_id: UUID | str,
+        resume_id_or_version: str | int | None = None,
+        expected_version: int | None = None,
+    ) -> None:
+        if isinstance(profile_id_or_resume_id, UUID) and isinstance(
+            resume_id_or_version, str
+        ):
+            profile_id = profile_id_or_resume_id
+            resume_id = resume_id_or_version
+            version = expected_version or 1
+        else:
+            resume_id = str(profile_id_or_resume_id)
+            version = (
+                int(resume_id_or_version)
+                if isinstance(resume_id_or_version, int)
+                else (expected_version or 1)
+            )
+            active_id = await self.get_active_profile_id()
+            if active_id is None:
+                existing_res = await self._session.scalar(
+                    select(orm.ResumeAsset).where(
+                        orm.ResumeAsset.resume_id == resume_id
+                    )
+                )
+                if existing_res is None:
+                    raise ResourceNotFoundError(
+                        f"Resume asset {resume_id} does not exist"
+                    )
+                profile_id = existing_res.applicant_profile_id
+            else:
+                profile_id = active_id
+
+        current = await self.get_resume(profile_id, resume_id)
         if current is None:
-            raise ResourceNotFoundError(f"Resume asset {resume_id} does not exist")
+            raise ResourceNotFoundError(
+                f"Resume asset {resume_id} does not exist for profile {profile_id}"
+            )
         count = await self._session.scalar(
-            select(func.count()).select_from(orm.ResumeAsset)
+            select(func.count())
+            .select_from(orm.ResumeAsset)
+            .where(orm.ResumeAsset.applicant_profile_id == profile_id)
         )
         if current.is_default and count and count > 1:
             raise DefaultResumeConflictError(
@@ -1255,8 +1653,9 @@ class ApplicantVaultRepository:
         stmt = (
             delete(orm.ResumeAsset)
             .where(
+                orm.ResumeAsset.applicant_profile_id == profile_id,
                 orm.ResumeAsset.resume_id == resume_id,
-                orm.ResumeAsset.version == expected_version,
+                orm.ResumeAsset.version == version,
             )
             .returning(orm.ResumeAsset.id)
         )
@@ -1264,18 +1663,55 @@ class ApplicantVaultRepository:
         if result.scalar() is None:
             raise OptimisticLockError(
                 f"Optimistic lock conflict on resume asset {resume_id} with "
-                f"expected version {expected_version}"
+                f"expected version {version}"
             )
         await self._session.flush()
 
     async def list_answers(
         self,
+        profile_id: UUID | None = None,
         *,
         question_intent: QuestionIntent | str | None = None,
         jurisdiction: str | None = None,
         platform_scope: str | None = None,
     ) -> tuple[ReusableAnswer, ...]:
-        stmt = select(orm.ReusableAnswer).execution_options(populate_existing=True)
+        if profile_id is None:
+            profile_id = await self.get_active_profile_id()
+            if profile_id is None:
+                stmt = select(orm.ReusableAnswer).execution_options(
+                    populate_existing=True
+                )
+                if question_intent is not None:
+                    intent_val = (
+                        question_intent.value
+                        if isinstance(question_intent, QuestionIntent)
+                        else str(question_intent)
+                    )
+                    stmt = stmt.where(orm.ReusableAnswer.question_intent == intent_val)
+                if jurisdiction is not None:
+                    stmt = stmt.where(orm.ReusableAnswer.jurisdiction == jurisdiction)
+                if platform_scope is not None:
+                    stmt = stmt.where(
+                        orm.ReusableAnswer.platform_scope == platform_scope
+                    )
+                stmt = stmt.order_by(
+                    orm.ReusableAnswer.question_intent.asc(),
+                    orm.ReusableAnswer.answer_id.asc(),
+                )
+                rows = (await self._session.scalars(stmt)).all()
+                return tuple(_reusable_answer_from_row(row) for row in rows)
+
+        prof = await self._session.get(orm.ApplicantProfile, profile_id)
+        if prof is None:
+            raise ResourceNotFoundError(
+                f"Applicant profile {profile_id} does not exist"
+            )
+
+        stmt = (
+            select(orm.ReusableAnswer)
+            .where(orm.ReusableAnswer.applicant_profile_id == profile_id)
+            .execution_options(populate_existing=True)
+        )
         if question_intent is not None:
             intent_val = (
                 question_intent.value
@@ -1295,40 +1731,99 @@ class ApplicantVaultRepository:
         rows = (await self._session.scalars(stmt)).all()
         return tuple(_reusable_answer_from_row(row) for row in rows)
 
-    async def get_answer(self, answer_id: str) -> ReusableAnswer | None:
-        stmt = (
-            select(orm.ReusableAnswer)
-            .where(orm.ReusableAnswer.answer_id == answer_id)
-            .execution_options(populate_existing=True)
-        )
+    async def get_answer(
+        self, profile_id_or_answer_id: UUID | str, answer_id: str | None = None
+    ) -> ReusableAnswer | None:
+        if isinstance(profile_id_or_answer_id, UUID) and answer_id is not None:
+            profile_id = profile_id_or_answer_id
+            a_id = answer_id
+            stmt = (
+                select(orm.ReusableAnswer)
+                .where(
+                    orm.ReusableAnswer.applicant_profile_id == profile_id,
+                    orm.ReusableAnswer.answer_id == a_id,
+                )
+                .execution_options(populate_existing=True)
+            )
+        else:
+            a_id = str(profile_id_or_answer_id)
+            active_id = await self.get_active_profile_id()
+            if active_id is not None:
+                stmt = (
+                    select(orm.ReusableAnswer)
+                    .where(
+                        orm.ReusableAnswer.applicant_profile_id == active_id,
+                        orm.ReusableAnswer.answer_id == a_id,
+                    )
+                    .execution_options(populate_existing=True)
+                )
+            else:
+                stmt = (
+                    select(orm.ReusableAnswer)
+                    .where(orm.ReusableAnswer.answer_id == a_id)
+                    .execution_options(populate_existing=True)
+                )
         row = await self._session.scalar(stmt)
         if row is None:
             return None
         return _reusable_answer_from_row(row)
 
-    async def create_answer(self, answer: ReusableAnswerInput) -> ReusableAnswer:
+    async def create_answer(
+        self,
+        profile_id_or_answer: UUID | ReusableAnswerInput,
+        answer: ReusableAnswerInput | None = None,
+    ) -> ReusableAnswer:
+        profile_id: UUID
+        ans: ReusableAnswerInput
+        if isinstance(profile_id_or_answer, UUID) and answer is not None:
+            profile_id = profile_id_or_answer
+            ans = answer
+        elif isinstance(profile_id_or_answer, ReusableAnswerInput):
+            ans = profile_id_or_answer
+            p_id = ans.applicant_profile_id
+            if p_id is None:
+                active_id = await self.get_active_profile_id()
+                if active_id is None:
+                    prof = await self.create_profile(
+                        ApplicantProfileInput(display_name="Default Applicant")
+                    )
+                    profile_id = prof.id
+                else:
+                    profile_id = active_id
+            else:
+                profile_id = p_id
+        else:
+            raise ValueError("Invalid arguments for create_answer")
+
+        prof_row = await self._session.get(orm.ApplicantProfile, profile_id)
+        if prof_row is None:
+            raise ResourceNotFoundError(
+                f"Applicant profile {profile_id} does not exist"
+            )
+
         now = _utcnow()
         intent_val = (
-            answer.question_intent.value
-            if isinstance(answer.question_intent, QuestionIntent)
-            else str(answer.question_intent)
+            ans.question_intent.value
+            if isinstance(ans.question_intent, QuestionIntent)
+            else str(ans.question_intent)
         )
         policy_val = (
-            answer.policy_category.value
-            if isinstance(answer.policy_category, PolicyCategory)
-            else str(answer.policy_category)
+            ans.policy_category.value
+            if isinstance(ans.policy_category, PolicyCategory)
+            else str(ans.policy_category)
         )
         row = orm.ReusableAnswer(
             id=uuid4(),
-            answer_id=answer.answer_id,
+            applicant_profile_id=profile_id,
+            answer_id=ans.answer_id,
             question_intent=intent_val,
-            jurisdiction=answer.jurisdiction,
-            platform_scope=answer.platform_scope,
-            answer_text=answer.answer_text,
+            jurisdiction=ans.jurisdiction,
+            platform_scope=ans.platform_scope,
+            answer_text=ans.answer_text,
             policy_category=policy_val,
-            provenance=answer.provenance,
-            last_confirmed_at=answer.last_confirmed_at,
-            expires_at=answer.expires_at,
+            provenance=ans.provenance,
+            last_confirmed_at=ans.last_confirmed_at,
+            expires_at=ans.expires_at,
             version=1,
             created_at=now,
             updated_at=now,
@@ -1339,37 +1834,72 @@ class ApplicantVaultRepository:
 
     async def update_answer(
         self,
-        answer_id: str,
-        answer: ReusableAnswerInput,
-        expected_version: int,
+        profile_id_or_answer_id: UUID | str,
+        answer_id_or_input: str | ReusableAnswerInput | None = None,
+        answer: ReusableAnswerInput | None = None,
+        expected_version: int | None = None,
     ) -> ReusableAnswer:
         now = _utcnow()
+        profile_id: UUID
+        answer_id: str
+        ans: ReusableAnswerInput
+        if isinstance(profile_id_or_answer_id, UUID) and isinstance(
+            answer_id_or_input, str
+        ):
+            profile_id = profile_id_or_answer_id
+            answer_id = answer_id_or_input
+            if not isinstance(answer, ReusableAnswerInput):
+                raise ValueError("Expected ReusableAnswerInput")
+            ans = answer
+            version = expected_version or 1
+        else:
+            answer_id = str(profile_id_or_answer_id)
+            if not isinstance(answer_id_or_input, ReusableAnswerInput):
+                raise ValueError("Expected ReusableAnswerInput")
+            ans = answer_id_or_input
+            version = expected_version or 1
+            active_id = await self.get_active_profile_id()
+            if active_id is None:
+                existing_ans = await self._session.scalar(
+                    select(orm.ReusableAnswer).where(
+                        orm.ReusableAnswer.answer_id == answer_id
+                    )
+                )
+                if existing_ans is None:
+                    raise ResourceNotFoundError(
+                        f"Reusable answer {answer_id} does not exist"
+                    )
+                profile_id = existing_ans.applicant_profile_id
+            else:
+                profile_id = active_id
+
         intent_val = (
-            answer.question_intent.value
-            if isinstance(answer.question_intent, QuestionIntent)
-            else str(answer.question_intent)
+            ans.question_intent.value
+            if isinstance(ans.question_intent, QuestionIntent)
+            else str(ans.question_intent)
         )
         policy_val = (
-            answer.policy_category.value
-            if isinstance(answer.policy_category, PolicyCategory)
-            else str(answer.policy_category)
+            ans.policy_category.value
+            if isinstance(ans.policy_category, PolicyCategory)
+            else str(ans.policy_category)
         )
 
         stmt = (
             update(orm.ReusableAnswer)
             .where(
+                orm.ReusableAnswer.applicant_profile_id == profile_id,
                 orm.ReusableAnswer.answer_id == answer_id,
-                orm.ReusableAnswer.version == expected_version,
+                orm.ReusableAnswer.version == version,
             )
             .values(
                 question_intent=intent_val,
-                jurisdiction=answer.jurisdiction,
-                platform_scope=answer.platform_scope,
-                answer_text=answer.answer_text,
+                jurisdiction=ans.jurisdiction,
+                platform_scope=ans.platform_scope,
+                answer_text=ans.answer_text,
                 policy_category=policy_val,
-                provenance=answer.provenance,
-                last_confirmed_at=answer.last_confirmed_at,
-                expires_at=answer.expires_at,
+                provenance=ans.provenance,
+                last_confirmed_at=ans.last_confirmed_at,
+                expires_at=ans.expires_at,
                 version=orm.ReusableAnswer.version + 1,
                 updated_at=now,
             )
@@ -1377,50 +1907,178 @@ class ApplicantVaultRepository:
         )
         result = await self._session.execute(stmt)
         if result.scalar() is None:
-            existing = await self._session.scalar(
-                select(orm.ReusableAnswer.id).where(
-                    orm.ReusableAnswer.answer_id == answer_id
-                )
-            )
+            existing = await self.get_answer(profile_id, answer_id)
             if existing is None:
                 raise ResourceNotFoundError(
-                    f"Reusable answer {answer_id} does not exist"
+                    f"Reusable answer {answer_id} does not exist "
+                    f"for profile {profile_id}"
                 )
             raise OptimisticLockError(
                 f"Optimistic lock conflict on reusable answer {answer_id} with "
-                f"expected version {expected_version}"
+                f"expected version {version}"
             )
         await self._session.flush()
-        loaded = await self.get_answer(answer_id)
+        loaded = await self.get_answer(profile_id, answer_id)
         if loaded is None:
             raise RuntimeError("Failed to load updated reusable answer")
         return loaded
 
-    async def delete_answer(self, answer_id: str, expected_version: int) -> None:
+    async def delete_answer(
+        self,
+        profile_id_or_answer_id: UUID | str,
+        answer_id_or_version: str | int | None = None,
+        expected_version: int | None = None,
+    ) -> None:
+        if isinstance(profile_id_or_answer_id, UUID) and isinstance(
+            answer_id_or_version, str
+        ):
+            profile_id = profile_id_or_answer_id
+            answer_id = answer_id_or_version
+            version = expected_version or 1
+        else:
+            answer_id = str(profile_id_or_answer_id)
+            version = (
+                int(answer_id_or_version)
+                if isinstance(answer_id_or_version, int)
+                else (expected_version or 1)
+            )
+            active_id = await self.get_active_profile_id()
+            if active_id is None:
+                existing_ans = await self._session.scalar(
+                    select(orm.ReusableAnswer).where(
+                        orm.ReusableAnswer.answer_id == answer_id
+                    )
+                )
+                if existing_ans is None:
+                    raise ResourceNotFoundError(
+                        f"Reusable answer {answer_id} does not exist"
+                    )
+                profile_id = existing_ans.applicant_profile_id
+            else:
+                profile_id = active_id
+
         stmt = (
             delete(orm.ReusableAnswer)
             .where(
+                orm.ReusableAnswer.applicant_profile_id == profile_id,
                 orm.ReusableAnswer.answer_id == answer_id,
-                orm.ReusableAnswer.version == expected_version,
+                orm.ReusableAnswer.version == version,
             )
             .returning(orm.ReusableAnswer.id)
         )
         result = await self._session.execute(stmt)
         if result.scalar() is None:
-            existing = await self._session.scalar(
-                select(orm.ReusableAnswer.id).where(
-                    orm.ReusableAnswer.answer_id == answer_id
-                )
-            )
+            existing = await self.get_answer(profile_id, answer_id)
             if existing is None:
                 raise ResourceNotFoundError(
-                    f"Reusable answer {answer_id} does not exist"
+                    f"Reusable answer {answer_id} does not exist "
+                    f"for profile {profile_id}"
                 )
             raise OptimisticLockError(
                 f"Optimistic lock conflict on reusable answer {answer_id} with "
-                f"expected version {expected_version}"
+                f"expected version {version}"
             )
         await self._session.flush()
+
+    async def create_managed_asset(self, asset: ManagedAsset) -> ManagedAsset:
+        now = _utcnow()
+        row = orm.ManagedAsset(
+            id=asset.id,
+            profile_id=asset.profile_id,
+            asset_type=asset.asset_type.value
+            if isinstance(asset.asset_type, ManagedAssetType)
+            else str(asset.asset_type),
+            file_name=asset.file_name,
+            content_type=asset.content_type,
+            byte_size=asset.byte_size,
+            sha256=asset.sha256,
+            relative_path=asset.relative_path,
+            crop_coordinates=asset.crop_coordinates,
+            extracted_text=asset.extracted_text,
+            created_at=asset.created_at or now,
+            updated_at=asset.updated_at or now,
+        )
+        self._session.add(row)
+        await self._session.flush()
+        return _managed_asset_from_row(row)
+
+    async def get_managed_asset(
+        self, profile_id: UUID, asset_id: UUID
+    ) -> ManagedAsset | None:
+        stmt = (
+            select(orm.ManagedAsset)
+            .where(
+                orm.ManagedAsset.profile_id == profile_id,
+                orm.ManagedAsset.id == asset_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+        row = await self._session.scalar(stmt)
+        if row is None:
+            return None
+        return _managed_asset_from_row(row)
+
+    async def list_managed_assets(
+        self, profile_id: UUID, asset_type: ManagedAssetType | str | None = None
+    ) -> tuple[ManagedAsset, ...]:
+        stmt = (
+            select(orm.ManagedAsset)
+            .where(orm.ManagedAsset.profile_id == profile_id)
+            .order_by(orm.ManagedAsset.created_at.desc())
+            .execution_options(populate_existing=True)
+        )
+        if asset_type is not None:
+            val = (
+                asset_type.value
+                if isinstance(asset_type, ManagedAssetType)
+                else str(asset_type)
+            )
+            stmt = stmt.where(orm.ManagedAsset.asset_type == val)
+        rows = (await self._session.scalars(stmt)).all()
+        return tuple(_managed_asset_from_row(row) for row in rows)
+
+    async def delete_managed_asset(self, profile_id: UUID, asset_id: UUID) -> None:
+        stmt = (
+            delete(orm.ManagedAsset)
+            .where(
+                orm.ManagedAsset.profile_id == profile_id,
+                orm.ManagedAsset.id == asset_id,
+            )
+            .returning(orm.ManagedAsset.id)
+        )
+        result = await self._session.execute(stmt)
+        if result.scalar() is None:
+            raise ResourceNotFoundError(
+                f"Managed asset {asset_id} does not exist for profile {profile_id}"
+            )
+        await self._session.flush()
+
+    async def update_managed_asset_crop(
+        self, profile_id: UUID, asset_id: UUID, crop_coordinates: dict[str, Any]
+    ) -> ManagedAsset:
+        now = _utcnow()
+        stmt = (
+            update(orm.ManagedAsset)
+            .where(
+                orm.ManagedAsset.profile_id == profile_id,
+                orm.ManagedAsset.id == asset_id,
+            )
+            .values(
+                crop_coordinates=crop_coordinates,
+                updated_at=now,
+            )
+            .returning(orm.ManagedAsset.id)
+        )
+        result = await self._session.execute(stmt)
+        if result.scalar() is None:
+            raise ResourceNotFoundError(
+                f"Managed asset {asset_id} does not exist for profile {profile_id}"
+            )
+        await self._session.flush()
+        loaded = await self.get_managed_asset(profile_id, asset_id)
+        if loaded is None:
+            raise RuntimeError("Failed to reload updated managed asset")
+        return loaded
 
 
 class ApplicationRunNotFoundError(LookupError):
@@ -1473,6 +2131,7 @@ class ApplicationRunInput:
     answer_bank_hash: str
     automation_mode: AutomationMode
     idempotency_key: str
+    applicant_profile_id: UUID | None = None
     automatic_submission_authorized_at: datetime | None = None
     policy_snapshot: dict[str, Any] | None = None
     duplicate_override_confirmed_at: datetime | None = None
@@ -1481,6 +2140,7 @@ class ApplicationRunInput:
 
 @dataclass(frozen=True)
 class ApplicationRunFilterCriteria:
+    applicant_profile_id: UUID | None = None
     statuses: tuple[ApplicationRunStatus, ...] = ()
     modes: tuple[AutomationMode, ...] = ()
     job_group_id: UUID | None = None
@@ -1511,9 +2171,7 @@ def _receipt_summary_from_payload(
         final_url=payload.get("final_url"),
         platform_receipt_id=payload.get("platform_receipt_id"),
         confirmation_signal=payload["confirmation_signal"],
-        capture_timestamp=datetime.fromisoformat(payload["capture_timestamp"])
-        if isinstance(payload["capture_timestamp"], str)
-        else payload["capture_timestamp"],
+        capture_timestamp=datetime.fromisoformat(payload["capture_timestamp"]),
         artifact_hash=payload["artifact_hash"],
         summary_notes=payload.get("summary_notes"),
     )
@@ -1551,7 +2209,9 @@ def _application_exception_from_row(
     )
 
 
-def _evidence_artifact_from_row(row: orm.ApplicationRunEvidence) -> EvidenceArtifact:
+def _evidence_artifact_from_row(
+    row: orm.ApplicationRunEvidence,
+) -> EvidenceArtifact:
     return EvidenceArtifact(
         id=row.id,
         run_id=row.run_id,
@@ -1599,7 +2259,7 @@ def _application_run_from_row(row: orm.ApplicationRun) -> ApplicationRun:
         else ()
     )
     resume_grants = (
-        tuple(_resume_grant_from_row(g) for g in row.resume_grants)
+        tuple(_resume_grant_from_row(rg) for rg in row.resume_grants)
         if "resume_grants" not in unloaded
         and hasattr(row, "resume_grants")
         and row.resume_grants
@@ -1608,6 +2268,7 @@ def _application_run_from_row(row: orm.ApplicationRun) -> ApplicationRun:
 
     return ApplicationRun(
         id=row.id,
+        applicant_profile_id=row.applicant_profile_id,
         job_group_id=row.job_group_id,
         source_posting_id=row.source_posting_id,
         canonical_application_url=row.canonical_application_url,
@@ -1665,9 +2326,25 @@ class ApplicationRepository:
 
     async def create_run(self, input_data: ApplicationRunInput) -> ApplicationRun:
         now = _utcnow()
+        profile_id = input_data.applicant_profile_id
+        if profile_id is None:
+            vault = ApplicantVaultRepository(self._session)
+            profile_id = await vault.get_active_profile_id()
+            if profile_id is None:
+                resume_row = await self._session.get(
+                    orm.ResumeAsset, input_data.resume_asset_id
+                )
+                if resume_row is not None:
+                    profile_id = resume_row.applicant_profile_id
+                else:
+                    prof = await vault.create_profile(
+                        ApplicantProfileInput(display_name="Default Applicant")
+                    )
+                    profile_id = prof.id
+
         # Check active or submitted duplicate
         existing = await self.find_active_or_submitted_by_url(
-            input_data.canonical_application_url
+            profile_id, input_data.canonical_application_url
         )
         if existing is not None and input_data.duplicate_override_confirmed_at is None:
             raise DuplicateApplicationError(
@@ -1701,10 +2378,10 @@ class ApplicationRepository:
                     sequence_num=prior_seq,
                     event_type=AuditEventType.DUPLICATE_OVERRIDE.value,
                     event_payload={
-                        "override_confirmed_at": (
+                        "reason": input_data.duplicate_override_reason,
+                        "confirmed_at": (
                             input_data.duplicate_override_confirmed_at.isoformat()
                         ),
-                        "reason": input_data.duplicate_override_reason,
                     },
                     created_at=now,
                 )
@@ -1713,6 +2390,7 @@ class ApplicationRepository:
         run_id = uuid4()
         run_row = orm.ApplicationRun(
             id=run_id,
+            applicant_profile_id=profile_id,
             job_group_id=input_data.job_group_id,
             source_posting_id=input_data.source_posting_id,
             canonical_application_url=input_data.canonical_application_url,
@@ -1794,7 +2472,9 @@ class ApplicationRepository:
             raise RuntimeError("Failed to load created application run")
         return loaded
 
-    async def get_run(self, run_id: UUID) -> ApplicationRun | None:
+    async def get_run(
+        self, run_id: UUID, profile_id: UUID | None = None
+    ) -> ApplicationRun | None:
         stmt = (
             select(orm.ApplicationRun)
             .where(orm.ApplicationRun.id == run_id)
@@ -1806,6 +2486,9 @@ class ApplicationRepository:
             )
             .execution_options(populate_existing=True)
         )
+        if profile_id is not None:
+            stmt = stmt.where(orm.ApplicationRun.applicant_profile_id == profile_id)
+
         row = await self._session.scalar(stmt)
         if row is None:
             return None
@@ -1817,6 +2500,13 @@ class ApplicationRepository:
         stmt = select(orm.ApplicationRun).execution_options(populate_existing=True)
         count_stmt = select(func.count()).select_from(orm.ApplicationRun)
 
+        if criteria.applicant_profile_id is not None:
+            stmt = stmt.where(
+                orm.ApplicationRun.applicant_profile_id == criteria.applicant_profile_id
+            )
+            count_stmt = count_stmt.where(
+                orm.ApplicationRun.applicant_profile_id == criteria.applicant_profile_id
+            )
         if criteria.statuses:
             status_vals = [s.value for s in criteria.statuses]
             stmt = stmt.where(orm.ApplicationRun.status.in_(status_vals))
@@ -1862,29 +2552,44 @@ class ApplicationRepository:
         return tuple(_application_run_from_row(r) for r in rows), total
 
     async def find_active_or_submitted_by_url(
-        self, canonical_url: str
+        self, profile_id_or_url: UUID | str, canonical_url: str | None = None
     ) -> ApplicationRun | None:
         active_and_submitted = [s.value for s in ACTIVE_STATUSES] + [
             ApplicationRunStatus.SUBMITTED.value
         ]
-        stmt = (
-            select(orm.ApplicationRun)
-            .where(
-                orm.ApplicationRun.canonical_application_url == canonical_url,
-                orm.ApplicationRun.status.in_(active_and_submitted),
-                orm.ApplicationRun.duplicate_override_confirmed_at.is_(None),
+        if isinstance(profile_id_or_url, UUID) and canonical_url is not None:
+            stmt = (
+                select(orm.ApplicationRun)
+                .where(
+                    orm.ApplicationRun.applicant_profile_id == profile_id_or_url,
+                    orm.ApplicationRun.canonical_application_url == canonical_url,
+                    orm.ApplicationRun.status.in_(active_and_submitted),
+                    orm.ApplicationRun.duplicate_override_confirmed_at.is_(None),
+                )
+                .order_by(orm.ApplicationRun.created_at.desc())
+                .limit(1)
+                .execution_options(populate_existing=True)
             )
-            .order_by(orm.ApplicationRun.created_at.desc())
-            .limit(1)
-            .execution_options(populate_existing=True)
-        )
+        else:
+            stmt = (
+                select(orm.ApplicationRun)
+                .where(
+                    orm.ApplicationRun.canonical_application_url
+                    == str(profile_id_or_url),
+                    orm.ApplicationRun.status.in_(active_and_submitted),
+                    orm.ApplicationRun.duplicate_override_confirmed_at.is_(None),
+                )
+                .order_by(orm.ApplicationRun.created_at.desc())
+                .limit(1)
+                .execution_options(populate_existing=True)
+            )
         row = await self._session.scalar(stmt)
         if row is None:
             return None
         return _application_run_from_row(row)
 
     async def find_active_or_submitted_by_job_group(
-        self, job_group_id: UUID
+        self, profile_id: UUID, job_group_id: UUID
     ) -> ApplicationRun | None:
         active_and_submitted = [s.value for s in ACTIVE_STATUSES] + [
             ApplicationRunStatus.SUBMITTED.value
@@ -1892,6 +2597,7 @@ class ApplicationRepository:
         stmt = (
             select(orm.ApplicationRun)
             .where(
+                orm.ApplicationRun.applicant_profile_id == profile_id,
                 orm.ApplicationRun.job_group_id == job_group_id,
                 orm.ApplicationRun.status.in_(active_and_submitted),
                 orm.ApplicationRun.duplicate_override_confirmed_at.is_(None),
@@ -1904,6 +2610,15 @@ class ApplicationRepository:
         if row is None:
             return None
         return _application_run_from_row(row)
+
+    async def has_active_runs(self, profile_id: UUID) -> bool:
+        stmt = select(
+            exists().where(
+                orm.ApplicationRun.applicant_profile_id == profile_id,
+                orm.ApplicationRun.status.in_([s.value for s in ACTIVE_STATUSES]),
+            )
+        )
+        return bool(await self._session.scalar(stmt))
 
     async def count_active_leases(self) -> int:
         now = _utcnow()
@@ -2313,7 +3028,9 @@ class ApplicationRepository:
             raise SubmissionDeniedError("Frozen answer-bank binding is stale")
 
         current_profile_version = await self._session.scalar(
-            select(orm.ApplicantProfile.version)
+            select(orm.ApplicantProfile.version).where(
+                orm.ApplicantProfile.id == row.applicant_profile_id
+            )
         )
         if current_profile_version != row.applicant_profile_version:
             raise SubmissionDeniedError("Applicant profile changed after authorization")
@@ -2326,7 +3043,11 @@ class ApplicationRepository:
                         select(
                             orm.ReusableAnswer.answer_id,
                             orm.ReusableAnswer.version,
-                        ).where(orm.ReusableAnswer.answer_id.in_(snapshot))
+                        ).where(
+                            orm.ReusableAnswer.applicant_profile_id
+                            == row.applicant_profile_id,
+                            orm.ReusableAnswer.answer_id.in_(snapshot),
+                        )
                     )
                 ).all()
             }

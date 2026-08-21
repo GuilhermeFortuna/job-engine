@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=None, extra="ignore")
 
     database_url: str = DOCUMENTED_DATABASE_URL
+    data_root: Path = Field(
+        default=Path.home() / ".job-engine" / "data",
+        validation_alias=AliasChoices("job_engine_data_root", "data_root"),
+    )
     resume_root: Path = Field(
         default=Path("docs/resume"),
         validation_alias=AliasChoices("job_engine_resume_root", "resume_root"),
@@ -65,6 +69,27 @@ class Settings(BaseSettings):
         if source_id == "remoteok":
             return self.remoteok_stale_after_successful_misses
         return 2
+
+    @property
+    def resolved_data_root(self) -> Path:
+        raw = Path(self.data_root).expanduser()
+        if raw.is_absolute():
+            return raw.resolve()
+        return (REPO_ROOT / raw).resolve()
+
+    def ensure_data_root(self) -> Path:
+        resolved = self.resolved_data_root
+        resolved.mkdir(parents=True, exist_ok=True)
+        return resolved
+
+    def ensure_resume_root(self) -> Path:
+        raw = Path(self.resume_root)
+        if raw.is_absolute():
+            resolved = raw.resolve()
+        else:
+            resolved = (REPO_ROOT / raw).resolve()
+        resolved.mkdir(parents=True, exist_ok=True)
+        return resolved
 
     @property
     def resolved_resume_root(self) -> Path:

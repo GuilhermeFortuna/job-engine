@@ -313,6 +313,7 @@ class ReceiptSummary(FrozenModel):
 
 class ApplicationRun(FrozenModel):
     id: UUID = Field(default_factory=uuid4)
+    applicant_profile_id: UUID = Field(default_factory=uuid4)
     job_group_id: UUID
     source_posting_id: UUID | None = None
     canonical_application_url: str

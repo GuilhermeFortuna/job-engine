@@ -300,6 +300,7 @@ def _map_evidence_read(ev: EvidenceArtifact) -> EvidenceArtifactRead:
 def _map_run_read(run: ApplicationRun) -> ApplicationRunRead:
     return ApplicationRunRead(
         id=run.id,
+        applicant_profile_id=run.applicant_profile_id,
         job_group_id=run.job_group_id,
         source_posting_id=run.source_posting_id,
         canonical_application_url=run.canonical_application_url,
@@ -362,9 +363,10 @@ def _map_run_detail(
 async def create_application_runs(
     request: ApplicationRunCreateRequest,
     service: Annotated[ApplicationService, Depends(get_application_service)],
+    profile_id: Annotated[UUID | None, Query()] = None,
 ) -> Any:
     try:
-        created, conflicts = await service.create_runs(request)
+        created, conflicts = await service.create_runs(request, profile_id=profile_id)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
@@ -395,6 +397,7 @@ async def list_application_runs(
     mode_filter: Annotated[list[AutomationMode] | None, Query(alias="mode")] = None,
     job_group_id: Annotated[UUID | None, Query()] = None,
     platform_adapter_id: Annotated[str | None, Query()] = None,
+    profile_id: Annotated[UUID | None, Query(alias="profile_id")] = None,
     created_after: Annotated[datetime | None, Query()] = None,
     created_before: Annotated[datetime | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -403,6 +406,7 @@ async def list_application_runs(
 ) -> ApplicationRunListResponse:
     offset = (page - 1) * page_size
     criteria = ApplicationRunFilterCriteria(
+        applicant_profile_id=profile_id,
         statuses=tuple(status_filter) if status_filter else (),
         modes=tuple(mode_filter) if mode_filter else (),
         job_group_id=job_group_id,

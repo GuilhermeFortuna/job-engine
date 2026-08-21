@@ -56,6 +56,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "JOB_ENGINE_RUNNER_SECRET must be explicitly configured with at least "
             "32 characters"
         )
+    resolved.ensure_data_root()
+    resolved.ensure_resume_root()
     engine = create_engine(resolved.database_url)
     app = FastAPI(lifespan=_lifespan, title="Job Engine API")
     app.state.settings = resolved

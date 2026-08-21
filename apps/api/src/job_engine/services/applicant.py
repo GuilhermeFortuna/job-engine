@@ -4,17 +4,19 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pypdf
 
 from job_engine.db.repositories import (
+    _PROFILE_FIELD_NAMES,
     ApplicantVaultRepository,
     ResourceNotFoundError,
 )
 from job_engine.domain.applicant import (
     ApplicantProfile,
     ApplicantProfileInput,
+    AvatarCrop,
     CertificationEntry,
     ConfirmedField,
     EducationEntry,
@@ -22,8 +24,11 @@ from job_engine.domain.applicant import (
     FieldDiffStatus,
     FieldSource,
     LanguageProficiency,
+    ManagedAsset,
+    ManagedAssetType,
     PolicyCategory,
     ProfileFieldDiff,
+    ProfileSummary,
     QuestionIntent,
     ResumeAsset,
     ResumeAssetInput,
@@ -32,6 +37,7 @@ from job_engine.domain.applicant import (
     ReusableAnswerInput,
     ValueState,
 )
+from job_engine.services.managed_assets import ManagedAssetService
 
 
 class ResumeFileValidationError(ValueError):
@@ -569,55 +575,118 @@ def generate_import_proposal(
 
 
 class ApplicantService:
-    def __init__(self, repo: ApplicantVaultRepository, resume_root: Path) -> None:
+    def __init__(
+        self,
+        repo: ApplicantVaultRepository,
+        resume_root: Path,
+        managed_assets: ManagedAssetService | None = None,
+    ) -> None:
         self._repo = repo
         self._resume_root = resume_root
+        self._managed_assets = managed_assets
 
-    async def get_profile(self) -> ApplicantProfile | None:
-        return await self._repo.get_profile()
+    async def get_active_profile_id(self) -> UUID | None:
+        return await self._repo.get_active_profile_id()
 
-    async def replace_profile(
-        self, profile_input: ApplicantProfileInput, expected_version: int | None
+    async def set_active_profile(self, profile_id: UUID) -> None:
+        await self._repo.set_active_profile(profile_id)
+
+    async def get_active_profile(self) -> ApplicantProfile | None:
+        return await self._repo.get_active_profile()
+
+    async def list_profiles(
+        self, include_archived: bool = True
+    ) -> tuple[ProfileSummary, ...]:
+        return await self._repo.list_profiles(include_archived=include_archived)
+
+    async def get_profile(self, profile_id: UUID) -> ApplicantProfile | None:
+        return await self._repo.get_profile(profile_id)
+
+    async def create_profile(
+        self, profile_input: ApplicantProfileInput
     ) -> ApplicantProfile:
-        return await self._repo.replace_profile(profile_input, expected_version)
+        return await self._repo.create_profile(profile_input)
+
+    async def update_profile(
+        self,
+        profile_id: UUID,
+        profile_input: ApplicantProfileInput,
+        expected_version: int,
+    ) -> ApplicantProfile:
+        return await self._repo.update_profile(
+            profile_id, profile_input, expected_version
+        )
+
+    async def archive_profile(
+        self, profile_id: UUID, expected_version: int
+    ) -> ApplicantProfile:
+        return await self._repo.archive_profile(profile_id, expected_version)
 
     async def import_resume_preview(
-        self, source_markdown_path: str
+        self, profile_id: UUID | None, source_markdown_path: str
     ) -> ResumeImportProposal:
         canonical_md = resolve_and_verify_subpath(
             self._resume_root, source_markdown_path, {".md"}
         )
         content = canonical_md.read_text(encoding="utf-8")
         parsed = parse_markdown_resume(content)
-        current = await self._repo.get_profile()
+        current = await self._repo.get_profile(profile_id) if profile_id else None
         return generate_import_proposal(current, source_markdown_path, parsed)
 
-    async def list_resumes(self) -> tuple[ResumeAsset, ...]:
-        return await self._repo.list_resumes()
+    async def list_resumes(self, profile_id: UUID) -> tuple[ResumeAsset, ...]:
+        return await self._repo.list_resumes(profile_id)
 
-    async def get_resume(self, resume_id: str) -> ResumeAsset | None:
-        return await self._repo.get_resume(resume_id)
+    async def get_resume(self, profile_id: UUID, resume_id: str) -> ResumeAsset | None:
+        return await self._repo.get_resume(profile_id, resume_id)
 
-    async def register_resume(self, input_data: ResumeAssetInput) -> ResumeAsset:
-        existing = await self._repo.get_resume(input_data.resume_id)
+    async def register_resume(
+        self, profile_id: UUID, input_data: ResumeAssetInput
+    ) -> ResumeAsset:
+        existing = await self._repo.get_resume(profile_id, input_data.resume_id)
         if existing is not None:
             raise ResumeFileValidationError(
-                f"Resume with ID '{input_data.resume_id}' is already registered"
+                f"Resume with ID '{input_data.resume_id}' "
+                "is already registered for this profile"
             )
 
-        resolve_and_verify_subpath(
-            self._resume_root, input_data.source_markdown_path, {".md"}
-        )
-        pdf_path = resolve_and_verify_subpath(
-            self._resume_root, input_data.upload_pdf_path, {".pdf"}
-        )
+        if input_data.managed_asset_id is not None:
+            asset = await self._repo.get_managed_asset(
+                profile_id, input_data.managed_asset_id
+            )
+            if asset is None:
+                raise ResourceNotFoundError(
+                    f"Managed asset {input_data.managed_asset_id} "
+                    f"not found for profile {profile_id}"
+                )
+            return await self._repo.create_resume(
+                profile_id,
+                input_data,
+                sha256=asset.sha256,
+                file_size_bytes=asset.byte_size,
+                last_verified_at=_utcnow(),
+            )
+
+        if input_data.source_markdown_path:
+            resolve_and_verify_subpath(
+                self._resume_root, input_data.source_markdown_path, {".md"}
+            )
+        if input_data.upload_pdf_path:
+            pdf_path = resolve_and_verify_subpath(
+                self._resume_root, input_data.upload_pdf_path, {".pdf"}
+            )
+            file_size, sha256_hex = validate_pdf_text_layer(pdf_path)
+        else:
+            raise ResumeFileValidationError(
+                "upload_pdf_path or managed_asset_id is required"
+            )
+
         if input_data.preview_html_path:
             resolve_and_verify_subpath(
                 self._resume_root, input_data.preview_html_path, {".html"}
             )
 
-        file_size, sha256_hex = validate_pdf_text_layer(pdf_path)
         return await self._repo.create_resume(
+            profile_id,
             input_data,
             sha256=sha256_hex,
             file_size_bytes=file_size,
@@ -626,6 +695,7 @@ class ApplicantService:
 
     async def patch_resume(
         self,
+        profile_id: UUID,
         resume_id: str,
         *,
         label: str | None = None,
@@ -633,22 +703,34 @@ class ApplicantService:
         refresh_checksum: bool = False,
         expected_version: int,
     ) -> ResumeAsset:
-        current = await self._repo.get_resume(resume_id)
+        current = await self._repo.get_resume(profile_id, resume_id)
         if current is None:
-            raise ResourceNotFoundError(f"Resume asset {resume_id} does not exist")
+            raise ResourceNotFoundError(
+                f"Resume asset {resume_id} does not exist for profile {profile_id}"
+            )
 
         sha256_val: str | None = None
         size_val: int | None = None
         verified_at: datetime | None = None
 
         if refresh_checksum:
-            pdf_path = resolve_and_verify_subpath(
-                self._resume_root, current.upload_pdf_path, {".pdf"}
-            )
-            size_val, sha256_val = validate_pdf_text_layer(pdf_path)
-            verified_at = _utcnow()
+            if current.upload_pdf_path:
+                pdf_path = resolve_and_verify_subpath(
+                    self._resume_root, current.upload_pdf_path, {".pdf"}
+                )
+                size_val, sha256_val = validate_pdf_text_layer(pdf_path)
+                verified_at = _utcnow()
+            elif current.managed_asset_id and self._managed_assets:
+                asset = await self._repo.get_managed_asset(
+                    profile_id, current.managed_asset_id
+                )
+                if asset:
+                    sha256_val = asset.sha256
+                    size_val = asset.byte_size
+                    verified_at = _utcnow()
 
         return await self._repo.update_resume(
+            profile_id,
             resume_id,
             label=label,
             is_default=is_default,
@@ -658,40 +740,115 @@ class ApplicantService:
             expected_version=expected_version,
         )
 
-    async def delete_resume(self, resume_id: str, expected_version: int) -> None:
-        await self._repo.delete_resume(resume_id, expected_version)
+    async def delete_resume(
+        self, profile_id: UUID, resume_id: str, expected_version: int
+    ) -> None:
+        await self._repo.delete_resume(profile_id, resume_id, expected_version)
+
+    async def list_documents(self, profile_id: UUID) -> tuple[ManagedAsset, ...]:
+        return await self._repo.list_managed_assets(
+            profile_id, asset_type=ManagedAssetType.DOCUMENT
+        )
+
+    async def delete_document(self, profile_id: UUID, asset_id: UUID) -> None:
+        asset = await self._repo.get_managed_asset(profile_id, asset_id)
+        if asset is None:
+            raise ResourceNotFoundError(
+                f"Document {asset_id} not found for profile {profile_id}"
+            )
+        await self._repo.delete_managed_asset(profile_id, asset_id)
+        if self._managed_assets:
+            self._managed_assets.delete_asset_file(asset.relative_path)
+
+    async def get_avatar(self, profile_id: UUID) -> ManagedAsset | None:
+        prof = await self._repo.get_profile(profile_id)
+        if prof is None:
+            raise ResourceNotFoundError(
+                f"Applicant profile {profile_id} does not exist"
+            )
+        if prof.avatar_asset_id is None:
+            return None
+        return await self._repo.get_managed_asset(profile_id, prof.avatar_asset_id)
+
+    async def crop_avatar(self, profile_id: UUID, crop: AvatarCrop) -> ManagedAsset:
+        prof = await self._repo.get_profile(profile_id)
+        if prof is None:
+            raise ResourceNotFoundError(
+                f"Applicant profile {profile_id} does not exist"
+            )
+        if prof.avatar_asset_id is None:
+            raise ResourceNotFoundError(f"Profile {profile_id} has no avatar to crop")
+        crop_dict = crop.model_dump() if isinstance(crop, AvatarCrop) else crop
+        return await self._repo.update_managed_asset_crop(
+            profile_id, prof.avatar_asset_id, crop_dict
+        )
+
+    async def clear_avatar(self, profile_id: UUID) -> None:
+        prof = await self._repo.get_profile(profile_id)
+        if prof is None:
+            raise ResourceNotFoundError(
+                f"Applicant profile {profile_id} does not exist"
+            )
+        if prof.avatar_asset_id is not None:
+            old_asset_id = prof.avatar_asset_id
+            prof_input = ApplicantProfileInput(
+                display_name=prof.display_name,
+                avatar_asset_id=None,
+                onboarding_step=prof.onboarding_step,
+                onboarding_completed_at=prof.onboarding_completed_at,
+                automation_preferences=prof.automation_preferences,
+                **{name: getattr(prof, name) for name in _PROFILE_FIELD_NAMES},
+            )
+            await self._repo.update_profile(profile_id, prof_input, prof.version)
+            old_asset = await self._repo.get_managed_asset(profile_id, old_asset_id)
+            if old_asset:
+                await self._repo.delete_managed_asset(profile_id, old_asset_id)
+                if self._managed_assets:
+                    self._managed_assets.delete_asset_file(old_asset.relative_path)
 
     async def list_answers(
         self,
+        profile_id: UUID,
         *,
         question_intent: QuestionIntent | str | None = None,
         jurisdiction: str | None = None,
         platform_scope: str | None = None,
     ) -> tuple[ReusableAnswer, ...]:
         return await self._repo.list_answers(
+            profile_id,
             question_intent=question_intent,
             jurisdiction=jurisdiction,
             platform_scope=platform_scope,
         )
 
-    async def get_answer(self, answer_id: str) -> ReusableAnswer | None:
-        return await self._repo.get_answer(answer_id)
+    async def get_answer(
+        self, profile_id: UUID, answer_id: str
+    ) -> ReusableAnswer | None:
+        return await self._repo.get_answer(profile_id, answer_id)
 
-    async def create_answer(self, answer_input: ReusableAnswerInput) -> ReusableAnswer:
-        existing = await self._repo.get_answer(answer_input.answer_id)
+    async def create_answer(
+        self, profile_id: UUID, answer_input: ReusableAnswerInput
+    ) -> ReusableAnswer:
+        existing = await self._repo.get_answer(profile_id, answer_input.answer_id)
         if existing is not None:
             raise ValueError(
-                f"Answer with ID '{answer_input.answer_id}' already exists"
+                f"Answer with ID '{answer_input.answer_id}' "
+                f"already exists for profile {profile_id}"
             )
-        return await self._repo.create_answer(answer_input)
+        return await self._repo.create_answer(profile_id, answer_input)
 
     async def update_answer(
         self,
+        profile_id: UUID,
         answer_id: str,
         answer_input: ReusableAnswerInput,
         expected_version: int,
     ) -> ReusableAnswer:
-        return await self._repo.update_answer(answer_id, answer_input, expected_version)
+        return await self._repo.update_answer(
+            profile_id, answer_id, answer_input, expected_version
+        )
 
-    async def delete_answer(self, answer_id: str, expected_version: int) -> None:
-        await self._repo.delete_answer(answer_id, expected_version)
+    async def delete_answer(
+        self, profile_id: UUID, answer_id: str, expected_version: int
+    ) -> None:
+        await self._repo.delete_answer(profile_id, answer_id, expected_version)

@@ -96,8 +96,9 @@ async def seed(database_url: str, application_url: str, resume_root: Path) -> di
     factory = create_session_factory(engine)
     async with factory() as session:
         vault = ApplicantVaultRepository(session)
-        profile = await vault.replace_profile(
+        profile = await vault.create_profile(
             ApplicantProfileInput(
+                display_name="Ada Fixture",
                 first_name=_owner_field("Ada"),
                 last_name=_owner_field("Fixture"),
                 email=_owner_field("ada.fixture@example.test"),
@@ -105,10 +106,11 @@ async def seed(database_url: str, application_url: str, resume_root: Path) -> di
                 city=_owner_field("Lisbon"),
                 country=_owner_field("Portugal"),
             ),
-            expected_version=None,
         )
         resume = await vault.create_resume(
+            profile.id,
             ResumeAssetInput(
+                applicant_profile_id=profile.id,
                 resume_id="res_fixture_default",
                 label="Fixture resume",
                 source_markdown_path="synthetic-resume.md",
@@ -154,6 +156,7 @@ async def seed(database_url: str, application_url: str, resume_root: Path) -> di
         runs = ApplicationRepository(session)
         run = await runs.create_run(
             ApplicationRunInput(
+                applicant_profile_id=profile.id,
                 job_group_id=group.id,
                 source_posting_id=None,
                 canonical_application_url=application_url,

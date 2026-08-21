@@ -429,8 +429,83 @@ class ConfirmedFieldSchema[T](ApiModel):
     policy_category: PolicyCategory = PolicyCategory.VERIFIED_PROFILE
 
 
+class AvatarCropSchema(ApiModel):
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+    width: float = Field(gt=0.0, le=1.0)
+    height: float = Field(gt=0.0, le=1.0)
+
+
+class AvatarCropRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+    width: float = Field(gt=0.0, le=1.0)
+    height: float = Field(gt=0.0, le=1.0)
+
+
+class ManagedAssetRead(ApiModel):
+    id: UUID
+    profile_id: UUID
+    asset_type: str
+    file_name: str
+    content_type: str
+    byte_size: int
+    sha256: str
+    crop_coordinates: dict[str, Any] | None = None
+    extracted_text: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DocumentListResponse(ApiModel):
+    items: tuple[ManagedAssetRead, ...]
+
+
+class AvatarResponse(ApiModel):
+    asset: ManagedAssetRead | None = None
+
+
+class ProfileSummaryRead(ApiModel):
+    id: UUID
+    display_name: str
+    avatar_asset_id: UUID | None = None
+    onboarding_step: str = "profile"
+    onboarding_completed_at: datetime | None = None
+    archived_at: datetime | None = None
+    automation_preferences: dict[str, Any] = Field(default_factory=dict)
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    is_active: bool = False
+
+
+class ProfileListResponse(ApiModel):
+    items: tuple[ProfileSummaryRead, ...]
+    active_profile_id: UUID | None = None
+
+
+class SetActiveProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: UUID
+
+
+class ArchiveProfileRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_version: int
+
+
 class ApplicantProfileRead(ApiModel):
     id: UUID
+    display_name: str
+    avatar_asset_id: UUID | None = None
+    onboarding_step: str = "profile"
+    onboarding_completed_at: datetime | None = None
+    archived_at: datetime | None = None
+    automation_preferences: dict[str, Any] = Field(default_factory=dict)
     version: int
     created_at: datetime
     updated_at: datetime
@@ -460,10 +535,14 @@ class ApplicantProfileRead(ApiModel):
     demographics: ConfirmedFieldSchema[DemographicPreferencesSchema]
 
 
-class ApplicantProfileUpsertRequest(BaseModel):
+class ApplicantProfileCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    expected_version: int | None = None
+    display_name: str = "Default Applicant"
+    avatar_asset_id: UUID | None = None
+    onboarding_step: str = "profile"
+    onboarding_completed_at: datetime | None = None
+    automation_preferences: dict[str, Any] = Field(default_factory=dict)
     first_name: ConfirmedFieldSchema[str] = Field(
         default_factory=ConfirmedFieldSchema[str]
     )
@@ -530,6 +609,88 @@ class ApplicantProfileUpsertRequest(BaseModel):
     )
 
 
+class ApplicantProfileBaseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = None
+    avatar_asset_id: UUID | None = None
+    onboarding_step: str | None = None
+    onboarding_completed_at: datetime | None = None
+    automation_preferences: dict[str, Any] | None = None
+    first_name: ConfirmedFieldSchema[str] = Field(
+        default_factory=ConfirmedFieldSchema[str]
+    )
+    last_name: ConfirmedFieldSchema[str] = Field(
+        default_factory=ConfirmedFieldSchema[str]
+    )
+    email: ConfirmedFieldSchema[str] = Field(default_factory=ConfirmedFieldSchema[str])
+    phone: ConfirmedFieldSchema[str] = Field(default_factory=ConfirmedFieldSchema[str])
+    city: ConfirmedFieldSchema[str] = Field(default_factory=ConfirmedFieldSchema[str])
+    region: ConfirmedFieldSchema[str] = Field(default_factory=ConfirmedFieldSchema[str])
+    country: ConfirmedFieldSchema[str] = Field(
+        default_factory=ConfirmedFieldSchema[str]
+    )
+    timezone: ConfirmedFieldSchema[str] = Field(
+        default_factory=ConfirmedFieldSchema[str]
+    )
+    headline: ConfirmedFieldSchema[str] = Field(
+        default_factory=ConfirmedFieldSchema[str]
+    )
+    summary: ConfirmedFieldSchema[str] = Field(
+        default_factory=ConfirmedFieldSchema[str]
+    )
+    portfolio_url: ConfirmedFieldSchema[str] = Field(
+        default_factory=ConfirmedFieldSchema[str]
+    )
+    linkedin_url: ConfirmedFieldSchema[str] = Field(
+        default_factory=ConfirmedFieldSchema[str]
+    )
+    github_url: ConfirmedFieldSchema[str] = Field(
+        default_factory=ConfirmedFieldSchema[str]
+    )
+    custom_urls: ConfirmedFieldSchema[dict[str, str]] = Field(
+        default_factory=ConfirmedFieldSchema[dict[str, str]]
+    )
+    notice_period_days: ConfirmedFieldSchema[int] = Field(
+        default_factory=ConfirmedFieldSchema[int]
+    )
+    employment_history: ConfirmedFieldSchema[tuple[EmploymentEntrySchema, ...]] = Field(
+        default_factory=ConfirmedFieldSchema[tuple[EmploymentEntrySchema, ...]]
+    )
+    education_history: ConfirmedFieldSchema[tuple[EducationEntrySchema, ...]] = Field(
+        default_factory=ConfirmedFieldSchema[tuple[EducationEntrySchema, ...]]
+    )
+    skills: ConfirmedFieldSchema[tuple[str, ...]] = Field(
+        default_factory=ConfirmedFieldSchema[tuple[str, ...]]
+    )
+    languages: ConfirmedFieldSchema[tuple[LanguageProficiencySchema, ...]] = Field(
+        default_factory=ConfirmedFieldSchema[tuple[LanguageProficiencySchema, ...]]
+    )
+    certifications: ConfirmedFieldSchema[tuple[CertificationEntrySchema, ...]] = Field(
+        default_factory=ConfirmedFieldSchema[tuple[CertificationEntrySchema, ...]]
+    )
+    work_authorizations: ConfirmedFieldSchema[tuple[WorkAuthorizationSchema, ...]] = (
+        Field(default_factory=ConfirmedFieldSchema[tuple[WorkAuthorizationSchema, ...]])
+    )
+    compensation_expectation: ConfirmedFieldSchema[CompensationExpectationSchema] = (
+        Field(default_factory=ConfirmedFieldSchema[CompensationExpectationSchema])
+    )
+    location_preferences: ConfirmedFieldSchema[LocationPreferencesSchema] = Field(
+        default_factory=ConfirmedFieldSchema[LocationPreferencesSchema]
+    )
+    demographics: ConfirmedFieldSchema[DemographicPreferencesSchema] = Field(
+        default_factory=ConfirmedFieldSchema[DemographicPreferencesSchema]
+    )
+
+
+class ApplicantProfileUpdateRequest(ApplicantProfileBaseRequest):
+    expected_version: int
+
+
+class ApplicantProfileUpsertRequest(ApplicantProfileBaseRequest):
+    expected_version: int | None = None
+
+
 class ResumeImportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -552,10 +713,12 @@ class ResumeImportProposalResponse(ApiModel):
 
 class ResumeAssetRead(ApiModel):
     id: UUID
+    applicant_profile_id: UUID
+    managed_asset_id: UUID | None = None
     resume_id: str
     label: str
-    source_markdown_path: str
-    upload_pdf_path: str
+    source_markdown_path: str | None = None
+    upload_pdf_path: str | None = None
     preview_html_path: str | None = None
     sha256: str
     language: str
@@ -576,9 +739,10 @@ class ResumeAssetCreateRequest(BaseModel):
 
     resume_id: str
     label: str
-    source_markdown_path: str
-    upload_pdf_path: str
+    source_markdown_path: str | None = None
+    upload_pdf_path: str | None = None
     preview_html_path: str | None = None
+    managed_asset_id: UUID | None = None
     language: str = "en"
     is_default: bool = False
 
@@ -594,6 +758,7 @@ class ResumeAssetPatchRequest(BaseModel):
 
 class ReusableAnswerRead(ApiModel):
     id: UUID
+    applicant_profile_id: UUID
     answer_id: str
     question_intent: QuestionIntent
     jurisdiction: str | None = None
@@ -745,6 +910,7 @@ class EvidenceArtifactRead(ApiModel):
 
 class ApplicationRunRead(ApiModel):
     id: UUID
+    applicant_profile_id: UUID
     job_group_id: UUID
     source_posting_id: UUID | None = None
     canonical_application_url: str

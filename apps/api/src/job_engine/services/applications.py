@@ -60,6 +60,7 @@ from job_engine.domain.applications import (
     sanitize_dom_snapshot,
 )
 from job_engine.domain.enums import JobStatus
+from job_engine.services.managed_assets import ManagedAssetService
 
 
 def format_sse_run_event(event: ApplicationRunEvent) -> str:
@@ -135,7 +136,9 @@ class ApplicationService:
         self._broadcaster = broadcaster or get_global_broadcaster()
 
     async def create_runs(
-        self, request: ApplicationRunCreateRequest
+        self,
+        request: ApplicationRunCreateRequest,
+        profile_id: UUID | None = None,
     ) -> tuple[tuple[ApplicationRun, ...], tuple[ApplicationRunConflictItem, ...]]:
         automatic_submission_authorized_at = (
             datetime.now(UTC)
@@ -148,7 +151,15 @@ class ApplicationService:
             app_repo = ApplicationRepository(session)
 
             # 1. Profile must exist
-            profile = await vault_repo.get_profile()
+            target_profile_id = profile_id
+            if target_profile_id is None:
+                target_profile_id = await vault_repo.get_active_profile_id()
+            if target_profile_id is None:
+                raise ValueError(
+                    "Applicant profile does not exist. Please configure profile first."
+                )
+
+            profile = await vault_repo.get_profile(target_profile_id)
             if profile is None:
                 raise ValueError(
                     "Applicant profile does not exist. Please configure profile first."
@@ -168,29 +179,43 @@ class ApplicationService:
 
             # 3. Resolve resume asset & verify on disk
             if request.resume_id:
-                resume = await vault_repo.get_resume(request.resume_id)
+                resume = await vault_repo.get_resume(profile.id, request.resume_id)
                 if resume is None:
                     raise ValueError(f"Resume asset {request.resume_id} not found")
             else:
-                resumes = await vault_repo.list_resumes()
+                resumes = await vault_repo.list_resumes(profile.id)
                 default_res = next((r for r in resumes if r.is_default), None)
                 if default_res is None:
                     raise ValueError("No default resume found in catalog")
                 resume = default_res
 
-            resume_disk_path = (
-                self._settings.resolved_resume_root / resume.upload_pdf_path
-            )
-            if not resume_disk_path.is_file():
-                raise ValueError(
-                    f"Resume PDF file not found at {resume.upload_pdf_path}"
+            if resume.managed_asset_id is not None:
+                managed_asset = await vault_repo.get_managed_asset(
+                    profile.id, resume.managed_asset_id
                 )
+                if managed_asset is None:
+                    raise ValueError("Managed asset for resume not found")
+                managed_asset_service = ManagedAssetService(
+                    self._settings.resolved_data_root
+                )
+                resume_disk_path, _ = managed_asset_service.get_asset_file(
+                    managed_asset.relative_path
+                )
+            elif resume.upload_pdf_path:
+                resume_disk_path = (
+                    self._settings.resolved_resume_root / resume.upload_pdf_path
+                )
+            else:
+                raise ValueError("Resume file path is missing")
+
+            if not resume_disk_path.is_file():
+                raise ValueError(f"Resume PDF file not found at {resume_disk_path}")
             disk_sha256 = hashlib.sha256(resume_disk_path.read_bytes()).hexdigest()
             if disk_sha256 != resume.sha256:
                 raise ValueError("Resume file on disk does not match catalog checksum")
 
             # 4. Snapshot reusable answers
-            answers = await vault_repo.list_answers()
+            answers = await vault_repo.list_answers(profile.id)
             snapshot = {a.answer_id: a.version for a in answers}
             answer_bank_hash = calculate_answer_bank_hash(snapshot)
 
@@ -227,7 +252,7 @@ class ApplicationService:
 
                 # Check duplicate
                 existing_run = await app_repo.find_active_or_submitted_by_url(
-                    canonical_url
+                    profile.id, canonical_url
                 )
                 if existing_run is not None:
                     conflicts.append(
@@ -248,6 +273,7 @@ class ApplicationService:
                     continue
 
                 run_input = ApplicationRunInput(
+                    applicant_profile_id=profile.id,
                     job_group_id=job_group_id,
                     source_posting_id=posting.id,
                     canonical_application_url=canonical_url,
@@ -572,7 +598,9 @@ class ApplicationService:
                         )
                     answer_id = f"ans_{uuid4().hex[:12]}"
                     await vault_repo.create_answer(
+                        run.applicant_profile_id,
                         ReusableAnswerInput(
+                            applicant_profile_id=run.applicant_profile_id,
                             answer_id=answer_id,
                             question_intent=intent,
                             jurisdiction=ans_item.jurisdiction,
@@ -581,7 +609,7 @@ class ApplicationService:
                             policy_category=PolicyCategory.APPROVED_REUSABLE,
                             provenance="owner_authored",
                             last_confirmed_at=datetime.now(UTC),
-                        )
+                        ),
                     )
                     saved_to_answer_bank = True
 
@@ -843,26 +871,40 @@ class ApplicationService:
             if run is None:
                 raise ApplicationRunNotFoundError(f"Run {run_id} not found")
 
-            resume = await vault_repo.get_resume(str(grant.resume_asset_id))
-            if resume is None:
-                # Try finding by UUID
-                resumes = await vault_repo.list_resumes()
-                resume = next(
-                    (r for r in resumes if r.id == grant.resume_asset_id), None
-                )
+            resume = await vault_repo.get_resume_by_id(
+                run.applicant_profile_id, grant.resume_asset_id
+            )
             if resume is None:
                 raise ResourceNotFoundError(
                     f"Resume asset {grant.resume_asset_id} not found"
                 )
 
-            # Path confinement check
-            resume_path = (
-                self._settings.resolved_resume_root / resume.upload_pdf_path
-            ).resolve()
-            if not resume_path.is_file() or not str(resume_path).startswith(
-                str(self._settings.resolved_resume_root)
-            ):
-                raise ValueError("Resume file not confined within resolved resume root")
+            if resume.managed_asset_id is not None:
+                managed_asset = await vault_repo.get_managed_asset(
+                    run.applicant_profile_id, resume.managed_asset_id
+                )
+                if managed_asset is None:
+                    raise ResourceNotFoundError("Managed asset for resume not found")
+                managed_asset_service = ManagedAssetService(
+                    self._settings.resolved_data_root
+                )
+                resume_path, _ = managed_asset_service.get_asset_file(
+                    managed_asset.relative_path
+                )
+                file_name = managed_asset.file_name
+            elif resume.upload_pdf_path:
+                resume_path = (
+                    self._settings.resolved_resume_root / resume.upload_pdf_path
+                ).resolve()
+                if not resume_path.is_file() or not str(resume_path).startswith(
+                    str(self._settings.resolved_resume_root)
+                ):
+                    raise ValueError(
+                        "Resume file not confined within resolved resume root"
+                    )
+                file_name = resume_path.name
+            else:
+                raise ValueError("Resume file path is missing")
 
             disk_sha256 = hashlib.sha256(resume_path.read_bytes()).hexdigest()
             if disk_sha256 != grant.sha256:
@@ -871,7 +913,7 @@ class ApplicationService:
                 )
 
             await session.commit()
-            return resume_path, grant.sha256, resume_path.name
+            return resume_path, grant.sha256, file_name
 
     async def cleanup_expired_evidence(self, retention_days: int = 30) -> int:
         cutoff = datetime.now(UTC) - timedelta(days=retention_days)

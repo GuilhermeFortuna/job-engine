@@ -16,6 +16,7 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "pypdf>=5.0.0,<6.0.0",
+    "python-docx>=1.2.0",
     "python-multipart>=0.0.18",
     "sqlalchemy[asyncio]",
     "uvicorn[standard]",
