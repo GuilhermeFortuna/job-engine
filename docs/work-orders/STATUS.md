@@ -144,7 +144,7 @@ For Batch 04, `CROSS-011` is the only `READY` order. It freezes the owner-visibl
 | [CROSS-004](cross-repo/CROSS-004-live-search-acceptance.md)           | Antigravity agent | `development`                               | 2026-08-17T19:03:44-03:00 | Live search end-to-end integration and acceptance; GO decision in `/docs/evidence/live-search-acceptance.md`                                                            |
 | [CROSS-005](cross-repo/CROSS-005-high-automation-feasibility-spec.md) | Antigravity agent | `development`                               | 2026-08-17T23:30:13-03:00 | V2 specification, platform register, security model, and downstream Batch 03 bindings                                                                                   |
 | [CROSS-012](cross-repo/CROSS-012-production-runtime-integration.md)   | Cursor agent      | `development`                               | 2026-08-20T01:50:00-03:00 | Production Electron coordinator wired from `dist/main/index.js`; evidence in `/docs/evidence/cross-012-production-runtime.md`. Status remains owner-controlled `READY`. |
-| [CROSS-014](cross-repo/CROSS-014-broad-application-platform-coverage.md) | Cursor agent      | `cursor/cross-014-platform-coverage-833f`   | 2026-08-21T07:30:00+00:00 | Rebased onto `development` (`4a45110` CI/CORS/E2E fixes); `selectAdapter` wired into RuntimeCoordinator; `test:production` 4/4; coverage numerator 3/3 standard-form families |
+| [CROSS-014](cross-repo/CROSS-014-broad-application-platform-coverage.md) | Cursor agent      | `cursor/cross-014-platform-coverage-833f`   | 2026-08-21T09:00:00+00:00 | Remediation: web reason-code contract; retain-on-pause; Ashby/SR hard veto; inventory 9 URLs/3 families (`cross-014-v4`); not acceptance-complete |
 
 
 

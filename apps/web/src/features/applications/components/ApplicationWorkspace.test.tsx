@@ -730,7 +730,7 @@ describe("ApplicationWorkspace", () => {
         reasonCode: "AUTH_REQUIRED",
         blockingFieldCount: 0,
       } satisfies DesktopRuntimeState,
-      viewAttached: false,
+      viewAttached: true,
       isLoading: false,
       error: null,
     });

@@ -255,6 +255,18 @@ export function runtimeReasonText(
       return "The application contains a control that requires owner input.";
     case "SUBMISSION_UNKNOWN":
       return "Submission could not be confirmed; do not retry blindly.";
+    case "LOOKALIKE_HOST":
+      return "Automation unavailable — the page host looks like a known ATS but is not an approved origin.";
+    case "AMBIGUOUS_DETECTION":
+      return "Automation unavailable — more than one platform adapter matched this page.";
+    case "MISSING_ADAPTER_EVIDENCE":
+      return "Automation unavailable — this application platform has no proven adapter evidence yet.";
+    case "LEGAL_GATE":
+      return "Automation unavailable — this platform is blocked by a legal or policy gate.";
+    case "PLATFORM_DRIFT":
+      return "Automation unavailable — the visible page no longer matches the expected application platform.";
+    case "FEED_LISTING_UNRESOLVED":
+      return "Automation unavailable — this URL is a job-feed listing, not a resolved application form.";
     default: {
       const exhaustive: never = reasonCode;
       throw new Error(`Unhandled runtime reason: ${String(exhaustive)}`);
@@ -320,18 +332,17 @@ export function selectDurableRunAction(
   };
 }
 
-// Mirrors the coordinator's current view lifecycle until CROSS-012 projects
-// viewAttached explicitly. Paused, queued, armed, and terminal phases close or
-// do not own an embedded view.
+// Mirrors the coordinator view lifecycle. Coverage/manual pauses retain the
+// embedded WebContentsView; armed/queued/terminal/idle do not own one.
 export function inferViewAttached(phase: RuntimePhase): boolean {
   switch (phase) {
     case "claiming":
     case "filling":
     case "submitting":
+    case "paused":
       return true;
     case "idle":
     case "armed":
-    case "paused":
     case "queued":
     case "terminal":
       return false;

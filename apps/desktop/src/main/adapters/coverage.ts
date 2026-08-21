@@ -78,3 +78,42 @@ export function coverageReasonToRuntime(
     }
   }
 }
+
+/**
+ * Pauses that keep the embedded WebContentsView visible for assisted/manual
+ * continuation. Terminal, crash, mismatch, and armed paths still close the view.
+ */
+export function retainsEmbeddedViewOnPause(
+  reasonCode: RuntimeReasonCode,
+): boolean {
+  switch (reasonCode) {
+    case "LOOKALIKE_HOST":
+    case "AMBIGUOUS_DETECTION":
+    case "MISSING_ADAPTER_EVIDENCE":
+    case "LEGAL_GATE":
+    case "PLATFORM_DRIFT":
+    case "FEED_LISTING_UNRESOLVED":
+    case "AUTH_REQUIRED":
+    case "CAPTCHA_REQUIRED":
+    case "UNSUPPORTED_CONTROL":
+    case "ADAPTER_UNAVAILABLE":
+    case "NEEDS_INPUT":
+    case "STEP_RETRYABLE":
+    case "STEP_EXHAUSTED":
+      return true;
+    case "UNAUTHORIZED_FULL_AUTO":
+    case "UNSUPPORTED_AUTOMATION_MODE":
+    case "VIEW_LOCKED_SUBMITTING":
+    case "URL_MISMATCH":
+    case "CLAIM_REFUSED":
+    case "LEASE_LOST":
+    case "RENDERER_CRASHED":
+    case "SUBMISSION_UNKNOWN":
+    case null:
+      return false;
+    default: {
+      const exhaustive: never = reasonCode;
+      return exhaustive;
+    }
+  }
+}

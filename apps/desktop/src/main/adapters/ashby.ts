@@ -35,10 +35,10 @@ function isApprovedOrigin(url: URL): boolean {
 /**
  * Ashby host/path matcher module.
  *
- * Intentionally **not** registered in `createDefaultAdapterRegistry()` until a
- * production-entrypoint smoke proves AUTO_SUPPORTED. Unregistered hosts fall
- * through to the generic adapter (CROSS-014: do not add speculative adapters
- * that hard-veto coverage).
+ * Intentionally **not** registered in `createDefaultAdapterRegistry()`. Exact
+ * `jobs.ashbyhq.com` pages are hard-classified as UNSUPPORTED /
+ * MISSING_ADAPTER_EVIDENCE so they never fall through to generic AUTO_SUPPORTED
+ * until production-entrypoint evidence proves the family.
  */
 export class AshbyFormAdapter implements FormAdapter {
   readonly adapterId = ASHBY_ADAPTER_ID;

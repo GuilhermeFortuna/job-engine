@@ -8,6 +8,10 @@ import {
   normalizeClassificationUrl,
 } from "./registry";
 
+function isPlatformAdapter(adapter: FormAdapter | null): adapter is FormAdapter {
+  return adapter !== null && adapter.adapterId !== GENERIC_ADAPTER_ID;
+}
+
 export interface AdapterSelectionInput {
   platform_adapter_id: string;
   canonical_application_url?: string | null;
@@ -52,11 +56,24 @@ export function selectAdapter(
   }
 
   const visibleResolved = registry.resolve(visibleUrl);
-  if (visibleResolved && visibleResolved.adapterId !== GENERIC_ADAPTER_ID) {
+  const canonicalRaw = run.canonical_application_url;
+  const canonicalResolved = canonicalRaw
+    ? registry.resolve(canonicalRaw)
+    : null;
+
+  // Visible and canonical disagree on a proven platform family → fail closed.
+  if (
+    isPlatformAdapter(visibleResolved) &&
+    isPlatformAdapter(canonicalResolved) &&
+    visibleResolved.adapterId !== canonicalResolved.adapterId
+  ) {
+    return { adapter: null, vetoReason: "PLATFORM_DRIFT" };
+  }
+
+  if (isPlatformAdapter(visibleResolved)) {
     return { adapter: visibleResolved, vetoReason: null };
   }
 
-  const canonicalRaw = run.canonical_application_url;
   if (canonicalRaw) {
     const canonicalClass = registry.classify(canonicalRaw);
     if (classificationVetoesAutomation(canonicalClass)) {
@@ -65,8 +82,7 @@ export function selectAdapter(
         vetoReason: coverageReasonToRuntime(canonicalClass.reasonCode!),
       };
     }
-    const canonicalResolved = registry.resolve(canonicalRaw);
-    if (canonicalResolved && canonicalResolved.adapterId !== GENERIC_ADAPTER_ID) {
+    if (isPlatformAdapter(canonicalResolved)) {
       return { adapter: canonicalResolved, vetoReason: null };
     }
   }

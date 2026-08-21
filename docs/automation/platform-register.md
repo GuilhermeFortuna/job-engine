@@ -385,13 +385,15 @@ result=PASS cleanup=complete
 | --- | --- | --- |
 | `greenhouse` | `AUTO_SUPPORTED` | Exact-host matcher; `test:production` Greenhouse full-auto submitted |
 | `lever` | `AUTO_SUPPORTED` | Exact-host matcher; `/apply`-only detect; `test:production` Lever full-auto submitted |
-| `generic` | `AUTO_SUPPORTED` | HTTPS employer standard forms after platform matchers; also soft-fallback for `UNAPPROVED_ATS_PATH`; production full-auto + semi-auto |
-| `ashby` | `UNSUPPORTED` (`MISSING_ADAPTER_EVIDENCE`) | Matcher module present but **unregistered** — generic keeps handling |
-| `smartrecruiters` | `UNSUPPORTED` (`MISSING_ADAPTER_EVIDENCE`) | Matcher module present but **unregistered** — generic keeps handling |
-| `workday` | `UNSUPPORTED` (`LEGAL_GATE`) | Detector only; never generic fallback |
+| `generic` | `AUTO_SUPPORTED` | HTTPS employer standard forms after platform matchers; also soft-fallback for Greenhouse/Lever `UNAPPROVED_ATS_PATH`; production full-auto + semi-auto |
+| `ashby` | `UNSUPPORTED` (`MISSING_ADAPTER_EVIDENCE`) | Matcher module present but **unregistered**; exact `jobs.ashbyhq.com` hard-vetoed — does not fall through to generic; does not count toward auto-supported coverage |
+| `smartrecruiters` | `UNSUPPORTED` (`MISSING_ADAPTER_EVIDENCE`) | Matcher module present but **unregistered**; exact `jobs.smartrecruiters.com` hard-vetoed; does not count toward auto-supported coverage |
+| `workday` | `UNSUPPORTED` (`LEGAL_GATE`) | Detector only; never generic fallback; does not count toward auto-supported coverage |
 | unbound Lever EU | `UNSUPPORTED` (`MISSING_ADAPTER_EVIDENCE`) | `jobs.eu.lever.co` — not labelled lookalike |
 | feed listing hosts | `UNSUPPORTED` (`FEED_LISTING_UNRESOLVED`) | Catalog stores listing URLs, not ATS apply hosts |
 
 **Measurability (2026-08-20):** Committed source fixtures yield 0 resolvable / 9 feed-listing URLs (3 templated families). Owner option (b) dual-number reporting applies; ≥95% criterion escalates as unmeasurable (option c) until ingestion stores downstream apply URLs.
 
-**Production numerator (2026-08-21):** 3/3 standard-form families (generic, Greenhouse, Lever) auto-supported through `dist/main/index.js` (`test:production` 4 passed). See [application-platform-coverage.md](application-platform-coverage.md).
+**Inventory (option c):** 9 distinct feed-listing URLs / 3 path families / 0 resolvable; ≥95% unmeasurable. See [application-platform-coverage.md](application-platform-coverage.md) (`cross-014-v4`).
+
+**Production numerator:** 3/3 standard-form families (generic, Greenhouse, Lever) via `test:production`. Ashby/SmartRecruiters/Workday excluded. CROSS-014 is **not** acceptance-complete while resolvable catalog URLs remain absent.

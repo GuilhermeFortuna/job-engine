@@ -4,12 +4,14 @@ import type {
   PlatformCoverageReasonCode,
 } from "./contract";
 import { isHardVetoReason } from "./coverage";
+import { APPROVED_ASHBY_HOST } from "./ashby";
 import { GENERIC_ADAPTER_ID, GenericFormAdapter } from "./generic";
 import {
   APPROVED_GREENHOUSE_HOSTS,
   GreenhouseFormAdapter,
 } from "./greenhouse";
 import { APPROVED_LEVER_HOST, LeverFormAdapter } from "./lever";
+import { APPROVED_SMARTRECRUITERS_HOST } from "./smartrecruiters";
 import { isWorkdayHost } from "./workday";
 
 /** Feed listing hosts stored by approved job sources — not downstream ATS apply URLs. */
@@ -19,6 +21,21 @@ export const FEED_LISTING_HOSTS: readonly string[] = Object.freeze([
   "remoteok.com",
 ]);
 
+/**
+ * Loopback-only synthetic path for production-entrypoint coverage-veto retain
+ * evidence. Never matches public hosts.
+ */
+export const LOOPBACK_COVERAGE_VETO_PATH =
+  "/__job-engine/coverage-veto/missing-adapter-evidence";
+
+function isLoopbackCoverageVetoFixture(url: URL): boolean {
+  const host = url.hostname.toLowerCase();
+  if (host !== "127.0.0.1" && host !== "localhost" && host !== "[::1]") {
+    return false;
+  }
+  const path = url.pathname.replace(/\/+$/, "") || "/";
+  return path === LOOPBACK_COVERAGE_VETO_PATH;
+}
 /**
  * Approved ATS apex domains. Used with {@link hostMatches} and infix checks to
  * detect hostile lookalikes — never as a substitute for exact host+path matching.
@@ -39,9 +56,18 @@ export const ATS_APEX_DOMAINS: readonly string[] = Object.freeze([
 export const APPROVED_EXACT_ATS_HOSTS: readonly string[] = Object.freeze([
   ...APPROVED_GREENHOUSE_HOSTS,
   APPROVED_LEVER_HOST,
-  "jobs.ashbyhq.com",
-  "jobs.smartrecruiters.com",
 ]);
+
+/**
+ * Exact ATS hosts whose matcher modules exist but remain unregistered until
+ * production-entrypoint evidence proves the family. Never fall through to
+ * generic AUTO_SUPPORTED merely because the DOM resembles the generic fixture.
+ */
+export const UNPROVEN_EXACT_ATS_HOSTS: Readonly<Record<string, string>> =
+  Object.freeze({
+    [APPROVED_ASHBY_HOST]: "ashby",
+    [APPROVED_SMARTRECRUITERS_HOST]: "smartrecruiters",
+  });
 
 /**
  * Documented first-party ATS hosts that are unbound (no adapter path approved).
@@ -95,6 +121,10 @@ function isUnboundFirstPartyAtsHost(host: string): boolean {
  * a suffix match on an ATS apex that is neither an approved exact host nor a
  * documented unbound first-party host.
  */
+function isUnprovenExactAtsHost(host: string): boolean {
+  return Object.prototype.hasOwnProperty.call(UNPROVEN_EXACT_ATS_HOSTS, host);
+}
+
 function hostileLookalikeReason(url: URL): PlatformCoverageReasonCode | null {
   const host = url.hostname.toLowerCase();
   for (const apex of ATS_APEX_DOMAINS) {
@@ -105,7 +135,11 @@ function hostileLookalikeReason(url: URL): PlatformCoverageReasonCode | null {
     if (!hostMatches(url, apex)) {
       continue;
     }
-    if (isApprovedExactAtsHost(host) || isUnboundFirstPartyAtsHost(host)) {
+    if (
+      isApprovedExactAtsHost(host) ||
+      isUnboundFirstPartyAtsHost(host) ||
+      isUnprovenExactAtsHost(host)
+    ) {
       continue;
     }
     // e.g. evil.boards.greenhouse.io or careers.lever.co impostors
@@ -175,6 +209,15 @@ export class AdapterRegistry {
       };
     }
 
+    if (isLoopbackCoverageVetoFixture(url)) {
+      return {
+        familyId: "ashby",
+        supportTier: "UNSUPPORTED",
+        reasonCode: "MISSING_ADAPTER_EVIDENCE",
+        adapter: null,
+      };
+    }
+
     if (isWorkdayHost(url)) {
       return {
         familyId: "workday",
@@ -188,6 +231,16 @@ export class AdapterRegistry {
     if (isUnboundFirstPartyAtsHost(host)) {
       return {
         familyId: "unbound_ats",
+        supportTier: "UNSUPPORTED",
+        reasonCode: "MISSING_ADAPTER_EVIDENCE",
+        adapter: null,
+      };
+    }
+
+    const unprovenFamily = UNPROVEN_EXACT_ATS_HOSTS[host];
+    if (unprovenFamily) {
+      return {
+        familyId: unprovenFamily,
         supportTier: "UNSUPPORTED",
         reasonCode: "MISSING_ADAPTER_EVIDENCE",
         adapter: null,
@@ -307,9 +360,9 @@ export function classificationVetoesAutomation(
 
 /**
  * Creates a registry with proven AUTO_SUPPORTED platform adapters and generic
- * fallback. Ashby and SmartRecruiters stay unregistered so generic keeps
- * handling those hosts until production-entrypoint evidence exists (CROSS-014
- * forbidden decision: do not add speculative adapters that hard-veto coverage).
+ * fallback. Ashby and SmartRecruiters stay unregistered; their exact hosts are
+ * hard-classified as MISSING_ADAPTER_EVIDENCE so they never fall through to
+ * generic until production-entrypoint evidence proves the family.
  */
 export function createDefaultAdapterRegistry(): AdapterRegistry {
   return new AdapterRegistry(

@@ -1,4 +1,5 @@
 import type { AdapterContext, FormAdapter } from "../adapters/contract";
+import { retainsEmbeddedViewOnPause } from "../adapters/coverage";
 import type { AdapterRegistry } from "../adapters/registry";
 import {
   selectAdapter as selectPlatformAdapter,
@@ -818,9 +819,17 @@ export class RuntimeCoordinator {
     }
     this.activeSession?.dispose();
     this.activeSession = null;
+    this.activeAdapter = null;
+    this.activeContext = null;
+    this.resumeBytes = null;
     this.busy = false;
     this.deps.viewManager.setReplacementBlocked(false);
-    this.deps.viewManager.closeApplication();
+
+    const retainView = retainsEmbeddedViewOnPause(reasonCode);
+    if (!retainView) {
+      this.deps.viewManager.closeApplication();
+    }
+
     this.publish({
       runId,
       phase: "paused",
@@ -830,6 +839,11 @@ export class RuntimeCoordinator {
           ? "paused_auth"
           : "needs_input",
     });
-    await this.dequeueIfIdle();
+
+    // Retained coverage/manual pauses must not auto-dequeue another run onto
+    // the still-visible page. Explicit owner open/close/replace still works.
+    if (!retainView) {
+      await this.dequeueIfIdle();
+    }
   }
 }

@@ -35,9 +35,10 @@ function isApprovedOrigin(url: URL): boolean {
 /**
  * SmartRecruiters host/path matcher module.
  *
- * Intentionally **not** registered in `createDefaultAdapterRegistry()` until a
- * production-entrypoint smoke proves AUTO_SUPPORTED. Unregistered hosts fall
- * through to the generic adapter.
+ * Intentionally **not** registered in `createDefaultAdapterRegistry()`. Exact
+ * `jobs.smartrecruiters.com` pages are hard-classified as UNSUPPORTED /
+ * MISSING_ADAPTER_EVIDENCE so they never fall through to generic AUTO_SUPPORTED
+ * until production-entrypoint evidence proves the family.
  */
 export class SmartRecruitersFormAdapter implements FormAdapter {
   readonly adapterId = SMARTRECRUITERS_ADAPTER_ID;

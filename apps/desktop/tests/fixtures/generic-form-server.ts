@@ -166,6 +166,12 @@ const PAGES: Record<string, string> = {
     </script>
   `,
 
+  /** Local fixture page for CROSS-014 coverage-veto retain production smoke. */
+  "/__job-engine/coverage-veto/missing-adapter-evidence": `
+    <h1>Unsupported application platform</h1>
+    <p>Synthetic Ashby-family page retained for assisted/manual continuation.</p>
+  `,
+
   "/generic/ambiguous-submit": `
     <h1>Apply</h1>
     <form>

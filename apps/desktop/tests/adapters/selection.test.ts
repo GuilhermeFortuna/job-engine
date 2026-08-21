@@ -92,6 +92,59 @@ describe("selectAdapter", () => {
     expect(result.vetoReason).toBe("FEED_LISTING_UNRESOLVED");
   });
 
+  it("vetoes Ashby and SmartRecruiters as missing adapter evidence", () => {
+    expect(
+      selectAdapter(
+        registry,
+        {
+          platform_adapter_id: "generic",
+          application_url: "https://jobs.ashbyhq.com/acme/role-1",
+          canonical_application_url: "https://boards.greenhouse.io/acme/jobs/1",
+        },
+        "https://jobs.ashbyhq.com/acme/role-1",
+      ),
+    ).toEqual({ adapter: null, vetoReason: "MISSING_ADAPTER_EVIDENCE" });
+    expect(
+      selectAdapter(
+        registry,
+        {
+          platform_adapter_id: "generic",
+          application_url: "https://jobs.smartrecruiters.com/acme/abc/slug",
+        },
+        "https://jobs.smartrecruiters.com/acme/abc/slug",
+      ),
+    ).toEqual({ adapter: null, vetoReason: "MISSING_ADAPTER_EVIDENCE" });
+  });
+
+  it("vetoes Workday via LEGAL_GATE even when canonical is Greenhouse", () => {
+    expect(
+      selectAdapter(
+        registry,
+        {
+          platform_adapter_id: "greenhouse",
+          application_url:
+            "https://acme.myworkdayjobs.com/en-US/careers/job/Role",
+          canonical_application_url: "https://boards.greenhouse.io/acme/jobs/1",
+        },
+        "https://acme.myworkdayjobs.com/en-US/careers/job/Role",
+      ),
+    ).toEqual({ adapter: null, vetoReason: "LEGAL_GATE" });
+  });
+
+  it("vetoes PLATFORM_DRIFT when visible and canonical disagree on family", () => {
+    const result = selectAdapter(
+      registry,
+      {
+        platform_adapter_id: "greenhouse",
+        application_url: "https://boards.greenhouse.io/acme/jobs/1",
+        canonical_application_url: "https://jobs.lever.co/acme/role/apply",
+      },
+      "https://boards.greenhouse.io/acme/jobs/1",
+    );
+    expect(result.adapter).toBeNull();
+    expect(result.vetoReason).toBe("PLATFORM_DRIFT");
+  });
+
   it("does not drive a loopback-named adapter that is capability-vetoed", () => {
     const registryWithAshby = new AdapterRegistry(
       [

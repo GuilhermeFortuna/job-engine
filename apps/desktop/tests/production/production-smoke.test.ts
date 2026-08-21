@@ -260,4 +260,72 @@ describe("production Electron runtime smoke", () => {
       await forms.close();
     }
   }, 240_000);
+
+  it("pauses a local coverage-veto fixture with exact reason while retaining the view", async () => {
+    assertProductionEntryIsFresh();
+
+    const forms = new MockGenericFormServer();
+    await forms.start();
+    const vetoUrl = forms.urlFor(
+      "/__job-engine/coverage-veto/missing-adapter-evidence",
+    );
+    const seeded: SeededCatalog = seedCatalog({
+      applicationUrl: vetoUrl,
+      canonicalUrl: vetoUrl,
+      sourceId: "coverage-veto-retain",
+    });
+    let api: RunningApi | null = null;
+    const renderer = new TrustedRendererServer();
+    let desktop: { stop: () => Promise<void> } | null = null;
+
+    try {
+      api = await startApi(seeded);
+      const created = await createApplicationRun(api.baseUrl, {
+        jobGroupId: seeded.jobGroupId,
+        resumeId: seeded.resumeId,
+        automationMode: "full_auto",
+      });
+
+      const origin = await renderer.start(created.id, api.baseUrl, "coverage_retain");
+      desktop = await launchProductionDesktop({
+        JOB_ENGINE_WEB_ORIGIN: origin,
+        JOB_ENGINE_API_BASE_URL: api.baseUrl,
+        JOB_ENGINE_RUNNER_SECRET: FIXTURE_RUNNER_SECRET,
+      });
+
+      const deadline = Date.now() + 90_000;
+      let probe: Record<string, unknown> = {};
+      while (Date.now() < deadline) {
+        const response = await fetch(`${origin}/__probe`);
+        if (response.ok) {
+          probe = (await response.json()) as Record<string, unknown>;
+          if (probe.ok === true || probe.ok === false) {
+            break;
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      expect(probe).toMatchObject({
+        ok: true,
+        phase: "paused",
+        reasonCode: "MISSING_ADAPTER_EVIDENCE",
+        runtimeRunId: created.id,
+        browserRunId: created.id,
+      });
+
+      const runResponse = await fetch(
+        `${api.baseUrl}/api/v1/application-runs/${created.id}`,
+      );
+      expect(runResponse.ok).toBe(true);
+      const run = (await runResponse.json()) as { status: string };
+      expect(run.status).toBe("needs_input");
+    } finally {
+      await desktop?.stop();
+      await renderer.stop();
+      await api?.stop();
+      teardownBackend(seeded);
+      await forms.close();
+    }
+  }, 240_000);
 });

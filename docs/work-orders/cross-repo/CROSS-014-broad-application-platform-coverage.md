@@ -1,6 +1,6 @@
 # CROSS-014: Broad Application-Platform Coverage
 
-**Status:** `BLOCKED`
+**Status:** `READY` (authoritative: [`docs/work-orders/STATUS.md`](../STATUS.md); any prior `BLOCKED` header text was stale)
 
 **Owner:** Unassigned
 
@@ -149,9 +149,10 @@ git diff --check
 
 ## Completion record
 
-- Commit: Pending owner review
-- Evidence: [`docs/automation/application-platform-coverage.md`](../../automation/application-platform-coverage.md), [`apps/api/tests/fixtures/application_platform_inventory.json`](../../apps/api/tests/fixtures/application_platform_inventory.json)
+- Commit: Pending owner review (PR remains draft; CROSS-014 is **not** acceptance-complete)
+- Evidence: [`docs/automation/application-platform-coverage.md`](../../automation/application-platform-coverage.md) (`cross-014-v4`), [`apps/api/tests/fixtures/application_platform_inventory.json`](../../apps/api/tests/fixtures/application_platform_inventory.json)
 - Independent reviewer: Pending platform-coverage review
-- Measurability: Owner option (b) applied via planning AskQuestion; vacuous resolvable slice triggers option (c) escalation — ≥95% not published
-- Integration: `RuntimeCoordinator` private `selectAdapter` delegates to `adapters/selection.ts` after rebase onto `development` (`4a45110`, includes post-FRONT-006 CI repairs)
-- Production numerator: 3/3 standard-form families via `test:production` (4 passed); feed inventory remains option (c)
+- Measurability: Owner option (b) → vacuous resolvable slice → option (c); **9 distinct URLs / 3 path families / 0 resolvable**; ≥95% **not published**
+- Integration: `RuntimeCoordinator` retains embedded view on coverage/manual pauses; `selectAdapter` hard-vetoes Ashby/SmartRecruiters/Workday/lookalikes/feed listings/platform drift
+- Production numerator: 3/3 standard-form families via `test:production`; Ashby/SR/Workday excluded; feed inventory remains option (c)
+- Prerequisite blocker: downstream application URLs must be resolved/stored before measured catalog coverage can be accepted (out of CROSS-014 ingestion scope)

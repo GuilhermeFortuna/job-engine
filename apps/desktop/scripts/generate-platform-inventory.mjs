@@ -15,6 +15,8 @@ const OUT = path.join(
   "apps/api/tests/fixtures/application_platform_inventory.json",
 );
 
+const EVIDENCE_REVISION = "cross-014-v4";
+
 const FEED_LISTING_HOSTS = new Set([
   "himalayas.app",
   "jobicy.com",
@@ -26,8 +28,11 @@ const APPROVED_EXACT_ATS_HOSTS = new Set([
   "job-boards.greenhouse.io",
   "boards.eu.greenhouse.io",
   "jobs.lever.co",
-  "jobs.ashbyhq.com",
-  "jobs.smartrecruiters.com",
+]);
+
+const UNPROVEN_EXACT_ATS_HOSTS = new Map([
+  ["jobs.ashbyhq.com", "ashby"],
+  ["jobs.smartrecruiters.com", "smartrecruiters"],
 ]);
 
 function normalizeUrl(rawUrl) {
@@ -37,7 +42,11 @@ function normalizeUrl(rawUrl) {
   } catch {
     return null;
   }
-  if (url.protocol !== "https:" && url.protocol !== "http:") {
+  // Fail closed: only HTTPS inventory entries are accepted.
+  if (url.protocol !== "https:") {
+    return null;
+  }
+  if (url.username !== "" || url.password !== "") {
     return null;
   }
   url.hash = "";
@@ -79,57 +88,87 @@ function pathFamily(url) {
 function classifyListingUrl(sourceId, rawUrl) {
   const url = normalizeUrl(rawUrl);
   if (!url) {
-    return {
-      source_id: sourceId,
-      normalized_host: "invalid",
-      path_family: "invalid",
-      provider: "unknown",
-      eligible: false,
-      support_tier: "UNSUPPORTED",
-      reason: "MISSING_ADAPTER_EVIDENCE",
-      evidence_revision: "cross-014-v2",
-    };
+    throw new Error(
+      `Malformed or non-HTTPS inventory URL for ${sourceId}: ${rawUrl}`,
+    );
   }
   const host = url.hostname.toLowerCase();
+  const sanitizedUrl = `${url.origin}${url.pathname}`.replace(/\/+$/, "") || url.origin;
+  const family = pathFamily(url);
   const isFeedListing = [...FEED_LISTING_HOSTS].some(
     (listingHost) => host === listingHost || host.endsWith(`.${listingHost}`),
   );
   if (isFeedListing) {
     return {
       source_id: sourceId,
+      sanitized_url: sanitizedUrl,
       normalized_host: host,
-      path_family: pathFamily(url),
+      path_family: family,
       provider: "feed_listing",
       eligible: false,
       support_tier: "UNSUPPORTED",
       reason: "FEED_LISTING_UNRESOLVED",
-      evidence_revision: "cross-014-v2",
+      evidence_revision: EVIDENCE_REVISION,
     };
   }
 
-  let provider = "generic_standard_html";
-  let supportTier = "AUTO_SUPPORTED";
-  let reason = null;
   if (host.endsWith("myworkdayjobs.com") || host === "myworkdayjobs.com") {
-    provider = "workday";
-    supportTier = "UNSUPPORTED";
-    reason = "LEGAL_GATE";
-  } else if (APPROVED_EXACT_ATS_HOSTS.has(host)) {
-    if (host.includes("greenhouse")) provider = "greenhouse";
-    else if (host.includes("lever")) provider = "lever";
-    else if (host.includes("ashby")) provider = "ashby";
-    else if (host.includes("smartrecruiters")) provider = "smartrecruiters";
+    return {
+      source_id: sourceId,
+      sanitized_url: sanitizedUrl,
+      normalized_host: host,
+      path_family: family,
+      provider: "workday",
+      eligible: false,
+      support_tier: "UNSUPPORTED",
+      reason: "LEGAL_GATE",
+      evidence_revision: EVIDENCE_REVISION,
+    };
   }
 
+  const unproven = UNPROVEN_EXACT_ATS_HOSTS.get(host);
+  if (unproven) {
+    return {
+      source_id: sourceId,
+      sanitized_url: sanitizedUrl,
+      normalized_host: host,
+      path_family: family,
+      provider: unproven,
+      eligible: false,
+      support_tier: "UNSUPPORTED",
+      reason: "MISSING_ADAPTER_EVIDENCE",
+      evidence_revision: EVIDENCE_REVISION,
+    };
+  }
+
+  if (APPROVED_EXACT_ATS_HOSTS.has(host)) {
+    let provider = "generic_standard_html";
+    if (host.includes("greenhouse")) provider = "greenhouse";
+    else if (host.includes("lever")) provider = "lever";
+    return {
+      source_id: sourceId,
+      sanitized_url: sanitizedUrl,
+      normalized_host: host,
+      path_family: family,
+      provider,
+      eligible: true,
+      support_tier: "AUTO_SUPPORTED",
+      reason: null,
+      evidence_revision: EVIDENCE_REVISION,
+    };
+  }
+
+  // Unknown / unproven providers default closed — never invent AUTO_SUPPORTED.
   return {
     source_id: sourceId,
+    sanitized_url: sanitizedUrl,
     normalized_host: host,
-    path_family: pathFamily(url),
-    provider,
-    eligible: supportTier === "AUTO_SUPPORTED",
-    support_tier: supportTier,
-    reason,
-    evidence_revision: "cross-014-v2",
+    path_family: family,
+    provider: "unknown",
+    eligible: false,
+    support_tier: "UNSUPPORTED",
+    reason: "MISSING_ADAPTER_EVIDENCE",
+    evidence_revision: EVIDENCE_REVISION,
   };
 }
 
@@ -164,18 +203,54 @@ function loadRemoteOk() {
     .map((job) => classifyListingUrl("remoteok", job.url));
 }
 
-function aggregateRows(rows) {
+/**
+ * One auditable row per distinct sanitized URL (query/fragment stripped).
+ * Duplicate observations of the same URL increment observation_count.
+ */
+function distinctUrlRows(observations) {
+  const byUrl = new Map();
+  for (const row of observations) {
+    const key = row.sanitized_url;
+    const existing = byUrl.get(key);
+    if (existing) {
+      existing.observation_count += 1;
+      continue;
+    }
+    byUrl.set(key, { ...row, observation_count: 1 });
+  }
+  return [...byUrl.values()].sort((a, b) =>
+    a.sanitized_url.localeCompare(b.sanitized_url),
+  );
+}
+
+/**
+ * Separate path-family aggregation. Shares are derived from observation counts.
+ */
+function aggregatePathFamilies(observations) {
   const byFamily = new Map();
-  for (const row of rows) {
+  for (const row of observations) {
     const key = `${row.source_id}|${row.path_family}|${row.provider}|${row.support_tier}|${row.reason}`;
     const existing = byFamily.get(key);
     if (existing) {
       existing.count += 1;
     } else {
-      byFamily.set(key, { ...row, count: 1 });
+      byFamily.set(key, {
+        source_id: row.source_id,
+        normalized_host: row.normalized_host,
+        path_family: row.path_family,
+        provider: row.provider,
+        support_tier: row.support_tier,
+        reason: row.reason,
+        evidence_revision: row.evidence_revision,
+        count: 1,
+      });
     }
   }
-  const aggregated = [...byFamily.values()];
+  const aggregated = [...byFamily.values()].sort((a, b) =>
+    `${a.source_id}|${a.path_family}`.localeCompare(
+      `${b.source_id}|${b.path_family}`,
+    ),
+  );
   const total = aggregated.reduce((sum, row) => sum + row.count, 0);
   for (const row of aggregated) {
     row.share = total === 0 ? 0 : Number((row.count / total).toFixed(6));
@@ -183,31 +258,35 @@ function aggregateRows(rows) {
   return { aggregated, total };
 }
 
-const rows = [...loadHimalayas(), ...loadJobicy(), ...loadRemoteOk()];
-const { aggregated, total } = aggregateRows(rows);
-const unresolvable = aggregated
-  .filter((row) => row.reason === "FEED_LISTING_UNRESOLVED")
-  .reduce((sum, row) => sum + row.count, 0);
-const resolvableRows = aggregated.filter(
+const observations = [...loadHimalayas(), ...loadJobicy(), ...loadRemoteOk()];
+const rows = distinctUrlRows(observations);
+const { aggregated: pathFamilies, total: sourceObservationCount } =
+  aggregatePathFamilies(observations);
+
+const unresolvable = observations.filter(
+  (row) => row.reason === "FEED_LISTING_UNRESOLVED",
+).length;
+const resolvableObservations = observations.filter(
   (row) => row.reason !== "FEED_LISTING_UNRESOLVED",
 );
-const resolvableCount = resolvableRows.reduce((sum, row) => sum + row.count, 0);
-const autoSupportedResolvable = resolvableRows
-  .filter((row) => row.support_tier === "AUTO_SUPPORTED")
-  .reduce((sum, row) => sum + row.count, 0);
+const resolvableCount = resolvableObservations.length;
+const autoSupportedResolvable = resolvableObservations.filter(
+  (row) => row.support_tier === "AUTO_SUPPORTED",
+).length;
 const pct =
   resolvableCount > 0
     ? Number(((autoSupportedResolvable / resolvableCount) * 100).toFixed(2))
     : null;
 
 const inventory = {
-  evidence_revision: "cross-014-v2",
+  evidence_revision: EVIDENCE_REVISION,
   owner_inventory_decision:
     "option_b_dual_number_reporting_with_vacuous_slice_fallback_to_c",
   owner_decision_source:
     "CROSS-014 planning session AskQuestion confirmation (2026-08-20)",
-  total_distinct_application_urls: aggregated.length,
-  total_source_url_count: total,
+  total_distinct_application_urls: rows.length,
+  total_distinct_path_families: pathFamilies.length,
+  total_source_url_count: sourceObservationCount,
   resolvable_application_url_count: resolvableCount,
   unresolvable_feed_listing_count: unresolvable,
   auto_supported_resolvable_count: autoSupportedResolvable,
@@ -216,43 +295,44 @@ const inventory = {
     resolvableCount === 0 ? "option_c_escalation" : "measured_resolvable_slice",
   measurability_note:
     resolvableCount === 0
-      ? "All catalog application URLs in the committed source fixtures are feed listing hosts (himalayas.app, jobicy.com, remoteok.com). The >=95% criterion is unmeasurable against the current ingestion contract until downstream ATS URLs are stored or resolved."
+      ? "All catalog application URLs in the committed source fixtures are feed listing hosts (himalayas.app, jobicy.com, remoteok.com). The >=95% criterion is unmeasurable against the current ingestion contract until downstream ATS URLs are stored or resolved. CROSS-014 is not acceptance-complete while that prerequisite remains."
       : "Resolvable slice present; percentage is auto_supported_resolvable_count / resolvable_application_url_count.",
   family_decisions: {
     generic_standard_html: {
       support_tier: "AUTO_SUPPORTED",
       reason: null,
       evidence:
-        "CROSS-010 fixture corpus; production-entrypoint smoke owned by CROSS-012 when landed",
+        "Production-entrypoint smoke via test:production (CROSS-012 harness) plus CROSS-010 fixture corpus",
     },
     greenhouse: {
       support_tier: "AUTO_SUPPORTED",
       reason: null,
       evidence:
-        "CROSS-007 unit + fixture corpus; production-entrypoint smoke owned by CROSS-012 when landed",
+        "Production-entrypoint smoke via test:production plus CROSS-007 fixture corpus",
     },
     lever: {
       support_tier: "AUTO_SUPPORTED",
       reason: null,
       evidence:
-        "CROSS-008 unit + fixture corpus; production-entrypoint smoke owned by CROSS-012 when landed",
+        "Production-entrypoint smoke via test:production plus CROSS-008 fixture corpus",
     },
     ashby: {
       support_tier: "UNSUPPORTED",
       reason: "MISSING_ADAPTER_EVIDENCE",
       evidence:
-        "Matcher module present but unregistered — generic keeps handling until production smoke",
+        "Matcher module present but unregistered; exact jobs.ashbyhq.com hard-vetoed — does not count toward auto-supported coverage",
     },
     smartrecruiters: {
       support_tier: "UNSUPPORTED",
       reason: "MISSING_ADAPTER_EVIDENCE",
       evidence:
-        "Matcher module present but unregistered — generic keeps handling until production smoke",
+        "Matcher module present but unregistered; exact jobs.smartrecruiters.com hard-vetoed — does not count toward auto-supported coverage",
     },
     workday: {
       support_tier: "UNSUPPORTED",
       reason: "LEGAL_GATE",
-      evidence: "platform_register RESEARCH_ONLY; mandatory tenant auth",
+      evidence:
+        "platform_register RESEARCH_ONLY; mandatory tenant auth — does not count toward auto-supported coverage",
     },
     feed_listing: {
       support_tier: "UNSUPPORTED",
@@ -260,10 +340,11 @@ const inventory = {
       evidence: "catalog stores listing URLs not downstream ATS apply hosts",
     },
   },
-  rows: aggregated,
+  path_families: pathFamilies,
+  rows,
 };
 
 writeFileSync(OUT, `${JSON.stringify(inventory, null, 2)}\n`);
 console.log(
-  `Wrote ${OUT} (${aggregated.length} families, ${total} source URLs, resolvable=${resolvableCount}, pct=${pct})`,
+  `Wrote ${OUT} (${rows.length} distinct URLs, ${pathFamilies.length} path families, ${sourceObservationCount} observations, resolvable=${resolvableCount}, pct=${pct})`,
 );
